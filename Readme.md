@@ -57,7 +57,7 @@ sudo zypper install git gcc-c++ cmake ncurses-devel
 #### Compilar y ejecutar
 
 ```bash
-git clone https://github.com/tu-usuario/Tenebrarium.git
+git clone https://github.com/N4t0-tech/Tenebrarium.git
 cd Tenebrarium
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -93,7 +93,7 @@ brew install cmake
 #### 4. Compilar y ejecutar
 
 ```bash
-git clone https://github.com/tu-usuario/Tenebrarium.git
+git clone https://github.com/N4t0-tech/Tenebrarium.git
 cd Tenebrarium
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -138,7 +138,7 @@ sudo apt install git build-essential cmake libncurses-dev
 **4. Compilar y ejecutar**
 
 ```bash
-git clone https://github.com/tu-usuario/Tenebrarium.git
+git clone https://github.com/N4t0-tech/Tenebrarium.git
 cd Tenebrarium
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -173,7 +173,7 @@ pacman -S git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ncurs
 **4. Compilar y ejecutar**
 
 ```bash
-git clone https://github.com/tu-usuario/Tenebrarium.git
+git clone https://github.com/N4t0-tech/Tenebrarium.git
 cd Tenebrarium
 
 cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
