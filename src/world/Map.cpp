@@ -25,7 +25,23 @@ const Tile& Map::at(int x, int y) const {
 bool Map::isWalkable(int x, int y) const {
     if (x < 0 || x >= width_ || y < 0 || y >= height_) return false;
     const Tile& t = tiles_[index(x, y)];
-    return t.type != TileType::Wall && t.type != TileType::Empty;
+    return t.type != TileType::Wall
+        && t.type != TileType::SecretWall
+        && t.type != TileType::Empty;
+}
+
+bool Map::isSecretWall(int x, int y) const {
+    if (x < 0 || x >= width_ || y < 0 || y >= height_) return false;
+    return tiles_[index(x, y)].type == TileType::SecretWall;
+}
+
+void Map::revealSecretWall(int x, int y) {
+    if (x < 0 || x >= width_ || y < 0 || y >= height_) return;
+    auto& tile = tiles_[index(x, y)];
+    if (tile.type == TileType::SecretWall) {
+        tile.type  = TileType::Floor;
+        tile.glyph = '.';
+    }
 }
 
 void Map::setPlayerPos(int x, int y) {
@@ -33,18 +49,55 @@ void Map::setPlayerPos(int x, int y) {
 }
 
 void Map::updateFov(int radius) {
-    // Mark all tiles as not visible
-    for (auto& tile : tiles_) tile.visible = false;
+    // LOS-based FOV: cast a Bresenham ray to every tile within radius.
+    // Walls/SecretWalls are opaque — they are visible themselves but block tiles beyond.
+    for (auto& t : tiles_) t.visible = false;
 
-    // Simple circular FOV: reveal tiles within radius of player
-    for (int dy = -radius; dy <= radius; dy++) {
-        for (int dx = -radius; dx <= radius; dx++) {
+    int px = playerPos_.x, py = playerPos_.y;
+    if (px < 0 || px >= width_ || py < 0 || py >= height_) return;
+
+    tiles_[index(px, py)].visible  = true;
+    tiles_[index(px, py)].explored = true;
+
+    auto isOpaque = [&](int x, int y) -> bool {
+        if (x < 0 || x >= width_ || y < 0 || y >= height_) return true;
+        TileType tt = tiles_[index(x, y)].type;
+        return tt == TileType::Wall || tt == TileType::SecretWall || tt == TileType::Empty;
+    };
+
+    for (int ty = std::max(0, py - radius); ty <= std::min(height_ - 1, py + radius); ty++) {
+        for (int tx = std::max(0, px - radius); tx <= std::min(width_ - 1, px + radius); tx++) {
+            if (tx == px && ty == py) continue;
+            int dx = tx - px, dy = ty - py;
             if (dx*dx + dy*dy > radius*radius) continue;
-            int nx = playerPos_.x + dx;
-            int ny = playerPos_.y + dy;
-            if (nx < 0 || nx >= width_ || ny < 0 || ny >= height_) continue;
-            tiles_[index(nx, ny)].visible  = true;
-            tiles_[index(nx, ny)].explored = true;
+
+            // Bresenham ray from player toward (tx, ty)
+            int x = px, y = py;
+            int adx = std::abs(dx), ady = std::abs(dy);
+            int sx = (dx > 0) ? 1 : ((dx < 0) ? -1 : 0);
+            int sy = (dy > 0) ? 1 : ((dy < 0) ? -1 : 0);
+            int err = adx - ady;
+            bool blocked = false;
+
+            while (x != tx || y != ty) {
+                int e2 = 2 * err;
+                if (e2 > -ady) { err -= ady; x += sx; }
+                if (e2 <  adx) { err += adx; y += sy; }
+                if (x < 0 || x >= width_ || y < 0 || y >= height_) { blocked = true; break; }
+                if (x == tx && y == ty) break;  // reached destination — check after loop
+                if (isOpaque(x, y)) {
+                    // This tile (a wall face) is visible but blocks further vision
+                    tiles_[index(x, y)].visible  = true;
+                    tiles_[index(x, y)].explored = true;
+                    blocked = true;
+                    break;
+                }
+            }
+
+            if (!blocked) {
+                tiles_[index(tx, ty)].visible  = true;
+                tiles_[index(tx, ty)].explored = true;
+            }
         }
     }
 }

@@ -17,6 +17,7 @@ public:
     bool isAlive() const { return hp_ > 0; }
 
     void takeDamage(int amount);
+    void takeDamageRaw(int amount);   // bypasses DEF (magic damage, special attacks)
     void heal(int amount);
 
 protected:

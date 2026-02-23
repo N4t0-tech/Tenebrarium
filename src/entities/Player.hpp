@@ -2,6 +2,8 @@
 
 #include "Entity.hpp"
 #include "inventory/Inventory.hpp"
+#include "combat/Art.hpp"
+#include <vector>
 
 enum class PlayerClass {
     Warrior,
@@ -16,13 +18,25 @@ public:
     PlayerClass getClass() const { return class_; }
     int getLevel() const { return level_; }
     int getXp() const { return xp_; }
-    int getMana() const { return mana_; }
-    int getMaxMana() const { return maxMana_; }
+    int getMana()         const { return mana_; }
+    int getMaxMana()      const { return maxMana_; }
+    int getCoins()        const { return coins_; }
+    int getKeys()         const { return keys_; }
+    int getDungeonFloor() const { return dungeonFloor_; }
 
     Inventory& getInventory() { return inventory_; }
     const Inventory& getInventory() const { return inventory_; }
 
     void gainXp(int amount);
+    bool useMana(int amount);
+    void restoreMana(int amount);
+    std::vector<Art> getAvailableArts() const;
+
+    void addCoins(int amount);
+    void addKey();
+    bool useKey();                       // false if no keys
+    void descendFloor();
+    void applyItemBonus(const Item& item); // equips item: applies stat bonus + adds to inventory
 
 private:
     PlayerClass class_;
@@ -31,6 +45,9 @@ private:
     int xpToNextLevel_;
     int mana_;
     int maxMana_;
+    int coins_;
+    int keys_;
+    int dungeonFloor_;
     Inventory inventory_;
 
     void levelUp();

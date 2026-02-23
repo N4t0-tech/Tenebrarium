@@ -6,6 +6,7 @@
 enum class TileType {
     Floor,
     Wall,
+    SecretWall,  // looks like '#' but is not walkable until revealed via E key
     Door,
     Trap,
     Stairs,
@@ -23,6 +24,14 @@ struct Position {
     int x, y;
 };
 
+// A renderable entity placed on the map (enemy, chest, door, stairs…)
+struct MapEntity {
+    Position pos;
+    char     glyph;
+    int      colorPair;  // ncurses color pair index
+    bool     bold = true;
+};
+
 // Represents a dungeon floor or overworld map as a 2D tile grid.
 class Map {
 public:
@@ -35,10 +44,12 @@ public:
     const Tile& at(int x, int y) const;
 
     bool isWalkable(int x, int y) const;
+    bool isSecretWall(int x, int y) const;
+    void revealSecretWall(int x, int y);  // changes SecretWall → Floor
     void setPlayerPos(int x, int y);
     Position getPlayerPos() const { return playerPos_; }
 
-    // Compute field-of-view from player position with given radius.
+    // Compute field-of-view from player position with given radius (LOS ray-cast).
     void updateFov(int radius = 8);
 
 private:

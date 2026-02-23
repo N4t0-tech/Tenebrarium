@@ -10,6 +10,10 @@ void Entity::takeDamage(int amount) {
     hp_ = std::max(0, hp_ - effective);
 }
 
+void Entity::takeDamageRaw(int amount) {
+    hp_ = std::max(0, hp_ - std::max(0, amount));
+}
+
 void Entity::heal(int amount) {
     hp_ = std::min(maxHp_, hp_ + amount);
 }

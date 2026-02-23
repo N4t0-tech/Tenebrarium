@@ -3,11 +3,14 @@
 #include "GameState.hpp"
 #include "MenuPhase.hpp"
 #include "entities/Player.hpp"
+#include "entities/Enemy.hpp"
+#include "combat/CombatSystem.hpp"
 #include "world/Map.hpp"
 #include "world/BSPDungeon.hpp"
 #include "ui/HudLayout.hpp"
 #include <string>
 #include <memory>
+#include <vector>
 
 // Central game class. Owns the main loop and all subsystems.
 class Game {
@@ -30,18 +33,56 @@ private:
 
     HudLayout     hudLayout_;
 
-    std::unique_ptr<Player>     player_;
-    std::unique_ptr<Map>        map_;
+    std::unique_ptr<Player>        player_;
+    std::unique_ptr<Map>           map_;
+    std::unique_ptr<CombatSystem>  combat_;
+    bool                           combatShowingArts_;
+    int                            combatArtSelection_;
+
+    // World enemies
+    struct WorldEnemy {
+        Position  pos;
+        EnemyType type;
+        bool      alive;
+    };
+    std::vector<WorldEnemy>  worldEnemies_;
+    int                      combatWorldEnemyIdx_;
+
+    // Loot types pre-assigned to each chest at spawn time
+    enum class ChestLoot { Coins, Item, Key };
+
+    struct WorldChest {
+        Position  pos;
+        bool      opened;
+        ChestLoot loot;
+        int       coins;  // if loot == Coins
+        Item      item;   // if loot == Item
+    };
+    std::vector<WorldChest>  worldChests_;
+
+    // Locked door and stairs
+    Position  lockedDoorPos_;
+    bool      lockedDoorExists_;
+    bool      lockedDoorOpen_;
+    Position  stairsPos_;
+
+    // Exploration message (shown until next key press)
+    std::string explorationMsg_;
 
     void processInput(int key);
     void update();
     void render();
 
     void setState(GameState newState);
+    void returnToExploration();
+    void openChest(WorldChest& chest);
+    // Places 1 secret room carved into the wall, with good loot inside.
+    void tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls);
 
     // Per-phase input handlers
     void inputTitle(int key);
     void inputNameInput(int key);
     void inputClassSelect(int key);
     void inputHudSelect(int key);
+    void inputCombat(int key);
 };
