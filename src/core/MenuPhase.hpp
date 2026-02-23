@@ -4,4 +4,5 @@ enum class MenuPhase {
     Title,
     NameInput,
     ClassSelect,
+    HudSelect,
 };
