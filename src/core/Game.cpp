@@ -1,8 +1,18 @@
 #include "Game.hpp"
 #include "ui/Renderer.hpp"
 #include "entities/Enemy.hpp"
-#include <ncurses.h>
-#include <locale.h>
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/event.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
+
+// Keycodes (formerly from ncurses.h)
+static constexpr int KEY_UP        = 0x103;
+static constexpr int KEY_DOWN      = 0x102;
+static constexpr int KEY_LEFT      = 0x104;
+static constexpr int KEY_RIGHT     = 0x105;
+static constexpr int KEY_BACKSPACE = 0x107;
+// KEY_ENTER == '\n', no se define para evitar duplicados en switch/case
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
@@ -10,22 +20,6 @@ static std::unique_ptr<Enemy> makeEnemy(EnemyType t);
 static int  xpForEnemy(EnemyType t);
 static Item pickWeapon(PlayerClass cls);
 static Item pickArmor(PlayerClass cls);
-
-// Color pair indices (defined here, used by Renderer)
-// 1 = normal, 2 = selected/highlight, 3 = title, 4 = stats, 5 = selected box
-static void initColors() {
-    if (!has_colors()) return;
-    start_color();
-    use_default_colors();
-    init_pair(1, COLOR_WHITE,  -1);           // normal
-    init_pair(2, COLOR_YELLOW, -1);           // highlighted option
-    init_pair(3, COLOR_CYAN,   -1);           // title
-    init_pair(4, COLOR_GREEN,  -1);           // stats
-    init_pair(5, COLOR_BLACK,  COLOR_CYAN);   // selected class box
-    init_pair(6, COLOR_RED,     -1);          // enemies
-    // Secret walls: mid-grey (244 in xterm-256) or dim white as fallback
-    init_pair(7, COLORS >= 256 ? 244 : COLOR_WHITE, -1);
-}
 
 Game::Game()
     : state_(GameState::MainMenu),
@@ -41,28 +35,32 @@ Game::Game()
       lockedDoorPos_({0,0}),
       lockedDoorExists_(false),
       lockedDoorOpen_(false),
-      stairsPos_({0,0})
+      stairsPos_({0,0}),
+      screen_(ftxui::ScreenInteractive::Fullscreen())
 {
-    setlocale(LC_ALL, "");
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(0);
-    initColors();
 }
 
-Game::~Game() {
-    endwin();
-}
+Game::~Game() {}
 
 void Game::run() {
-    while (running_) {
-        render();
-        int key = getch();
-        processInput(key);
-        update();
-    }
+    using namespace ftxui;
+    auto renderer = ftxui::Renderer([&] { return renderDocument(); });
+    auto handler  = CatchEvent(renderer, [&](Event ev) {
+        if (ev == Event::ArrowUp)    { processInput(KEY_UP);    return true; }
+        if (ev == Event::ArrowDown)  { processInput(KEY_DOWN);  return true; }
+        if (ev == Event::ArrowLeft)  { processInput(KEY_LEFT);  return true; }
+        if (ev == Event::ArrowRight) { processInput(KEY_RIGHT); return true; }
+        if (ev == Event::Return)     { processInput('\n');       return true; }
+        if (ev == Event::Tab)        { processInput('\t');       return true; }
+        if (ev == Event::Escape)     { processInput(27);         return true; }
+        if (ev == Event::Backspace)  { processInput(KEY_BACKSPACE); return true; }
+        if (ev.is_character()) {
+            processInput(ev.character()[0]);
+            return true;
+        }
+        return false;
+    });
+    screen_.Loop(handler);
 }
 
 void Game::processInput(int key) {
@@ -77,7 +75,7 @@ void Game::processInput(int key) {
             break;
         case GameState::Exploration: {
             explorationMsg_.clear();
-            if (key == 'q' || key == 'Q') { running_ = false; break; }
+            if (key == 'q' || key == 'Q') { screen_.ExitLoopClosure()(); break; }
             if (!map_) break;
             Position pos = map_->getPlayerPos();
 
@@ -157,13 +155,13 @@ void Game::processInput(int key) {
             inputCombat(key);
             break;
         case GameState::Inventory:
-            if (key == 'q' || key == 'Q') running_ = false;
+            if (key == 'q' || key == 'Q') screen_.ExitLoopClosure()();
             break;
         case GameState::QuestLog:
-            if (key == 'q' || key == 'Q') running_ = false;
+            if (key == 'q' || key == 'Q') screen_.ExitLoopClosure()();
             break;
         case GameState::GameOver:
-            if (key == '\n' || key == KEY_ENTER)
+            if (key == '\n' || key == '\n')
                 setState(GameState::MainMenu);
             break;
     }
@@ -178,28 +176,25 @@ void Game::inputTitle(int key) {
             menuSelection_ = (menuSelection_ + 1) % 2;
             break;
         case '\n':
-        case KEY_ENTER:
             if (menuSelection_ == 1) {
-                running_ = false;
+                screen_.ExitLoopClosure()();
             } else {
                 playerName_.clear();
                 menuPhase_ = MenuPhase::NameInput;
-                curs_set(1);
             }
             break;
         case 'q':
         case 'Q':
-            running_ = false;
+            screen_.ExitLoopClosure()();
             break;
     }
 }
 
 void Game::inputNameInput(int key) {
-    if (key == '\n' || key == KEY_ENTER) {
+    if (key == '\n' || key == '\n') {
         if (!playerName_.empty()) {
             classSelection_ = 0;
             menuPhase_ = MenuPhase::ClassSelect;
-            curs_set(0);
         }
         return;
     }
@@ -209,7 +204,6 @@ void Game::inputNameInput(int key) {
     }
     if (key == 27) {
         menuPhase_ = MenuPhase::Title;
-        curs_set(0);
         return;
     }
     if (key >= 32 && key <= 126 && static_cast<int>(playerName_.size()) < 16)
@@ -218,18 +212,16 @@ void Game::inputNameInput(int key) {
 
 void Game::inputClassSelect(int key) {
     switch (key) {
-        case KEY_LEFT:
+        case KEY_UP:
             classSelection_ = (classSelection_ + 2) % 3;
             break;
-        case KEY_RIGHT:
+        case KEY_DOWN:
             classSelection_ = (classSelection_ + 1) % 3;
             break;
         case 27:
             menuPhase_ = MenuPhase::NameInput;
-            curs_set(1);
             break;
         case '\n':
-        case KEY_ENTER:
             hudSelection_ = 0;
             menuPhase_ = MenuPhase::HudSelect;
             break;
@@ -245,8 +237,7 @@ void Game::inputHudSelect(int key) {
         case 27:
             menuPhase_ = MenuPhase::ClassSelect;
             break;
-        case '\n':
-        case KEY_ENTER: {
+        case '\n': {
             hudLayout_ = (hudSelection_ == 0) ? HudLayout::Sidebar : HudLayout::Bottom;
             PlayerClass cls;
             switch (classSelection_) {
@@ -265,63 +256,51 @@ void Game::update() {
     // per-frame game logic (placeholder)
 }
 
-void Game::render() {
-    clear();
-
+ftxui::Element Game::renderDocument() {
+    using namespace ftxui;
     switch (state_) {
         case GameState::MainMenu:
             switch (menuPhase_) {
                 case MenuPhase::Title:
-                    Renderer::drawTitle(menuSelection_);
-                    break;
+                    return Renderer::drawTitle(menuSelection_);
                 case MenuPhase::NameInput:
-                    Renderer::drawNameInput(playerName_);
-                    break;
+                    return Renderer::drawNameInput(playerName_);
                 case MenuPhase::ClassSelect:
-                    Renderer::drawClassSelect(classSelection_);
-                    break;
+                    return Renderer::drawClassSelect(classSelection_);
                 case MenuPhase::HudSelect:
-                    Renderer::drawHudSelect(hudSelection_);
-                    break;
+                    return Renderer::drawHudSelect(hudSelection_);
             }
             break;
         case GameState::Exploration:
             if (map_ && player_) {
                 std::vector<MapEntity> entities;
-                // Enemies — red
                 for (const auto& we : worldEnemies_)
                     if (we.alive)
                         entities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
-                // Chests (unopened) — yellow
                 for (const auto& ch : worldChests_)
                     if (!ch.opened)
                         entities.push_back({ch.pos, '$', 2, true});
-                // Locked door — white dim
                 if (lockedDoorExists_ && !lockedDoorOpen_)
                     entities.push_back({lockedDoorPos_, '+', 1, false});
-                // Stairs — cyan (only accessible when door is open or no door)
                 if (!lockedDoorExists_ || lockedDoorOpen_)
                     entities.push_back({stairsPos_, '>', 3, true});
-                Renderer::drawExploration(*map_, *player_, hudLayout_,
-                                          entities, explorationMsg_);
+                return Renderer::drawExploration(*map_, *player_, hudLayout_,
+                                                 entities, explorationMsg_);
             }
             break;
         case GameState::Combat:
             if (combat_ && player_)
-                Renderer::drawCombat(*combat_, *player_, combatShowingArts_, combatArtSelection_);
+                return Renderer::drawCombat(*combat_, *player_,
+                                            combatShowingArts_, combatArtSelection_);
             break;
         case GameState::Inventory:
-            Renderer::drawInventory();
-            break;
+            return Renderer::drawInventory();
         case GameState::QuestLog:
-            Renderer::drawQuestLog();
-            break;
+            return Renderer::drawQuestLog();
         case GameState::GameOver:
-            Renderer::drawGameOver();
-            break;
+            return Renderer::drawGameOver();
     }
-
-    refresh();
+    return ftxui::text("...");
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -367,7 +346,6 @@ void Game::setState(GameState newState) {
         playerName_.clear();
         worldEnemies_.clear();
         combat_.reset();
-        curs_set(0);
     }
 
     if (newState == GameState::Exploration) {
@@ -411,7 +389,7 @@ void Game::setState(GameState newState) {
         // Stairs in last room
         stairsPos_ = pickPos(n - 1);
 
-        // Locked door in second-to-last room (if ≥ 3 rooms)
+        // Locked door in second-to-last room (if >= 3 rooms)
         if (n >= 3) {
             lockedDoorPos_    = pickPos(n - 2);
             lockedDoorExists_ = true;
@@ -660,7 +638,6 @@ void Game::inputCombat(int key) {
                 combatArtSelection_ = (combatArtSelection_ + 1) % n;
                 break;
             case '\n':
-            case KEY_ENTER:
                 combat_->doArt(combatArtSelection_);
                 combatShowingArts_ = false;
                 break;

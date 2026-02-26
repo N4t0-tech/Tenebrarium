@@ -8,6 +8,8 @@
 #include "world/Map.hpp"
 #include "world/BSPDungeon.hpp"
 #include "ui/HudLayout.hpp"
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
 #include <string>
 #include <memory>
 #include <vector>
@@ -69,14 +71,16 @@ private:
     // Exploration message (shown until next key press)
     std::string explorationMsg_;
 
+    // FTXUI
+    ftxui::ScreenInteractive screen_;
+
     void processInput(int key);
     void update();
-    void render();
+    ftxui::Element renderDocument();
 
     void setState(GameState newState);
     void returnToExploration();
     void openChest(WorldChest& chest);
-    // Places 1 secret room carved into the wall, with good loot inside.
     void tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls);
 
     // Per-phase input handlers
