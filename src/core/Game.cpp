@@ -5,6 +5,10 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <queue>
+#include <chrono>
+#include <algorithm>
+#include <cstdlib>
 
 // Keycodes (formerly from ncurses.h)
 static constexpr int KEY_UP        = 0x103;
@@ -20,6 +24,7 @@ static std::unique_ptr<Enemy> makeEnemy(EnemyType t);
 static int  xpForEnemy(EnemyType t);
 static Item pickWeapon(PlayerClass cls);
 static Item pickArmor(PlayerClass cls);
+static Item pickPotion();
 
 Game::Game()
     : state_(GameState::MainMenu),
@@ -38,14 +43,28 @@ Game::Game()
       stairsPos_({0,0}),
       screen_(ftxui::ScreenInteractive::Fullscreen())
 {
+    aiRunning_ = true;
+    aiThread_  = std::thread(&Game::aiLoop, this);
 }
 
-Game::~Game() {}
+Game::~Game() {
+    aiRunning_ = false;
+    if (aiThread_.joinable()) aiThread_.join();
+}
 
 void Game::run() {
     using namespace ftxui;
     auto renderer = ftxui::Renderer([&] { return renderDocument(); });
     auto handler  = CatchEvent(renderer, [&](Event ev) {
+        if (ev == ftxui::Event::Custom) {
+            std::lock_guard<std::mutex> lk(worldMutex_);
+            if (pendingCombatEnemy_ >= 0 && state_ == GameState::Exploration) {
+                combatWorldEnemyIdx_ = pendingCombatEnemy_;
+                pendingCombatEnemy_  = -1;
+                setState(GameState::Combat);
+            }
+            return true;
+        }
         if (ev == Event::ArrowUp)    { processInput(KEY_UP);    return true; }
         if (ev == Event::ArrowDown)  { processInput(KEY_DOWN);  return true; }
         if (ev == Event::ArrowLeft)  { processInput(KEY_LEFT);  return true; }
@@ -79,6 +98,23 @@ void Game::processInput(int key) {
             if (!map_) break;
             Position pos = map_->getPlayerPos();
 
+            // Use a potion
+            if (key == 'p' || key == 'P') {
+                int healed = player_->useConsumable();
+                if (healed > 0)
+                    explorationMsg_ = "Usas una pocion: +" + std::to_string(healed) + " HP!";
+                else
+                    explorationMsg_ = "No tienes pociones.";
+                break;
+            }
+
+            // Open inventory
+            if (key == 'i' || key == 'I') {
+                inventorySelection_ = 0;
+                setState(GameState::Inventory);
+                break;
+            }
+
             // Search adjacent tiles for secret walls
             if (key == 'e' || key == 'E') {
                 const int sdx[] = {0, 0, -1, 1};
@@ -104,6 +140,14 @@ void Game::processInput(int key) {
             else if (key == KEY_RIGHT || key == 'd' || key == 'l') nx++;
             if (!map_->isWalkable(nx, ny)) break;
 
+            // Merchant tile → open shop
+            if (shopExists_ && nx == shopMerchantPos_.x && ny == shopMerchantPos_.y) {
+                generateShopStock();
+                shopSelection_ = 0;
+                setState(GameState::Shop);
+                break;
+            }
+
             // Locked door blocks movement
             if (lockedDoorExists_ && !lockedDoorOpen_ &&
                 lockedDoorPos_.x == nx && lockedDoorPos_.y == ny) {
@@ -116,22 +160,27 @@ void Game::processInput(int key) {
                 break;
             }
 
-            // Enemy collision → combat
+            // Enemy collision → combat (protected against AI thread)
             bool triggered = false;
-            for (int i = 0; i < static_cast<int>(worldEnemies_.size()); i++) {
-                auto& we = worldEnemies_[i];
-                if (we.alive && we.pos.x == nx && we.pos.y == ny) {
-                    combatWorldEnemyIdx_ = i;
-                    setState(GameState::Combat);
-                    triggered = true;
-                    break;
+            {
+                std::lock_guard<std::mutex> lk(worldMutex_);
+                for (int i = 0; i < static_cast<int>(worldEnemies_.size()); i++) {
+                    auto& we = worldEnemies_[i];
+                    if (we.alive && we.pos.x == nx && we.pos.y == ny) {
+                        combatWorldEnemyIdx_ = i;
+                        triggered = true;
+                        break;
+                    }
+                }
+                if (!triggered) {
+                    map_->setPlayerPos(nx, ny);
+                    map_->updateFov();
                 }
             }
-            if (triggered) break;
-
-            // Move player
-            map_->setPlayerPos(nx, ny);
-            map_->updateFov();
+            if (triggered) {
+                setState(GameState::Combat);
+                break;
+            }
 
             // Chest on new tile
             for (auto& ch : worldChests_) {
@@ -155,7 +204,7 @@ void Game::processInput(int key) {
             inputCombat(key);
             break;
         case GameState::Inventory:
-            if (key == 'q' || key == 'Q') screen_.ExitLoopClosure()();
+            inputInventory(key);
             break;
         case GameState::QuestLog:
             if (key == 'q' || key == 'Q') screen_.ExitLoopClosure()();
@@ -163,6 +212,9 @@ void Game::processInput(int key) {
         case GameState::GameOver:
             if (key == '\n' || key == '\n')
                 setState(GameState::MainMenu);
+            break;
+        case GameState::Shop:
+            inputShop(key);
             break;
     }
 }
@@ -284,6 +336,8 @@ ftxui::Element Game::renderDocument() {
                     entities.push_back({lockedDoorPos_, '+', 1, false});
                 if (!lockedDoorExists_ || lockedDoorOpen_)
                     entities.push_back({stairsPos_, '>', 3, true});
+                if (shopExists_)
+                    entities.push_back({shopMerchantPos_, '$', 4, true});
                 return Renderer::drawExploration(*map_, *player_, hudLayout_,
                                                  entities, explorationMsg_);
             }
@@ -293,8 +347,14 @@ ftxui::Element Game::renderDocument() {
                 return Renderer::drawCombat(*combat_, *player_,
                                             combatShowingArts_, combatArtSelection_);
             break;
+        case GameState::Shop:
+            if (player_)
+                return Renderer::drawShop(shopStock_, shopSelection_, *player_, explorationMsg_);
+            break;
         case GameState::Inventory:
-            return Renderer::drawInventory();
+            if (player_)
+                return Renderer::drawInventory(*player_, inventorySelection_);
+            break;
         case GameState::QuestLog:
             return Renderer::drawQuestLog();
         case GameState::GameOver:
@@ -335,10 +395,107 @@ static int xpForEnemy(EnemyType t) {
     return 5;
 }
 
+// ─── AI movement ─────────────────────────────────────────────────────────────
+
+// Returns the first step from 'from' toward 'to' avoiding non-walkable tiles.
+// Returns 'from' if no path exists or already at destination.
+static Position bfsStep(Position from, Position to, const Map& map) {
+    if (from.x == to.x && from.y == to.y) return from;
+    const int W = map.width(), H = map.height();
+    std::vector<int>      dist(W * H, -1);
+    std::vector<Position> prev(W * H, {-1, -1});
+    std::queue<Position>  q;
+    auto idx = [W](int x, int y){ return y * W + x; };
+    dist[idx(from.x, from.y)] = 0;
+    q.push(from);
+    const int dx[] = {0, 0, -1, 1};
+    const int dy[] = {-1, 1,  0, 0};
+    bool found = false;
+    while (!q.empty() && !found) {
+        auto [x, y] = q.front(); q.pop();
+        for (int d = 0; d < 4; d++) {
+            int nx = x + dx[d], ny = y + dy[d];
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+            if (dist[idx(nx, ny)] != -1) continue;
+            if (!map.isWalkable(nx, ny)) continue;
+            dist[idx(nx, ny)] = dist[idx(x, y)] + 1;
+            prev[idx(nx, ny)] = {x, y};
+            if (nx == to.x && ny == to.y) { found = true; break; }
+            q.push({nx, ny});
+        }
+    }
+    if (!found) return from;
+    Position cur = to;
+    while (prev[idx(cur.x, cur.y)].x != from.x || prev[idx(cur.x, cur.y)].y != from.y) {
+        Position p = prev[idx(cur.x, cur.y)];
+        if (p.x == -1) return from;
+        cur = p;
+    }
+    return cur;
+}
+
+void Game::aiLoop() {
+    while (aiRunning_) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
+        if (!aiRunning_) break;
+
+        {
+            std::lock_guard<std::mutex> lk(worldMutex_);
+            if ((state_ != GameState::Exploration && state_ != GameState::Shop) || !map_) continue;
+
+            Position player = map_->getPlayerPos();
+            bool playerInShop = (state_ == GameState::Shop);
+
+            for (int i = 0; i < static_cast<int>(worldEnemies_.size()); i++) {
+                auto& we = worldEnemies_[i];
+                if (!we.alive) continue;
+
+                // Player in shop → all enemies return to spawn
+                if (playerInShop) {
+                    if (we.pos.x == we.spawnPos.x && we.pos.y == we.spawnPos.y) continue;
+                    Position next = bfsStep(we.pos, we.spawnPos, *map_);
+                    if (next.x != we.pos.x || next.y != we.pos.y) we.pos = next;
+                    continue;
+                }
+
+                // Only chase player within Chebyshev distance 10
+                int dist = std::max(std::abs(we.pos.x - player.x),
+                                    std::abs(we.pos.y - player.y));
+                if (dist > 10) continue;
+
+                Position next = bfsStep(we.pos, player, *map_);
+
+                // Safe zone: block entry into shop room
+                if (shopExists_ && isInShopRoom(next)) continue;
+
+                // Next step lands on player → trigger combat
+                if (next.x == player.x && next.y == player.y) {
+                    if (pendingCombatEnemy_ < 0)
+                        pendingCombatEnemy_ = i;
+                    continue;
+                }
+
+                // Check no other enemy occupies 'next'
+                bool occupied = false;
+                for (int j = 0; j < static_cast<int>(worldEnemies_.size()); j++) {
+                    if (j == i || !worldEnemies_[j].alive) continue;
+                    if (worldEnemies_[j].pos.x == next.x &&
+                        worldEnemies_[j].pos.y == next.y) { occupied = true; break; }
+                }
+                if (!occupied && (next.x != we.pos.x || next.y != we.pos.y))
+                    we.pos = next;
+            }
+        }
+
+        screen_.PostEvent(ftxui::Event::Custom);
+    }
+}
+
 // ─── state transitions ────────────────────────────────────────────────────────
 
 void Game::setState(GameState newState) {
     if (newState == GameState::MainMenu) {
+        pendingCombatEnemy_ = -1;
         menuPhase_      = MenuPhase::Title;
         menuSelection_  = 0;
         classSelection_ = 0;
@@ -349,6 +506,7 @@ void Game::setState(GameState newState) {
     }
 
     if (newState == GameState::Exploration) {
+        pendingCombatEnemy_ = -1;
         worldEnemies_.clear();
         worldChests_.clear();
         lockedDoorExists_ = false;
@@ -395,11 +553,32 @@ void Game::setState(GameState newState) {
             lockedDoorExists_ = true;
         }
 
+        // Shop room: random room that is not rooms[0], rooms[n-1], or rooms[n-2]
+        shopExists_ = false;
+        shopStock_.clear();
+        {
+            std::vector<int> shopCandidates;
+            for (int i = 1; i < n - 1; i++) {
+                if (n >= 3 && i == n - 2) continue; // sala de locked door
+                shopCandidates.push_back(i);
+            }
+            if (!shopCandidates.empty()) {
+                int si = shopCandidates[std::rand() % static_cast<int>(shopCandidates.size())];
+                shopRoom_         = rooms[si];
+                shopMerchantPos_  = { shopRoom_.centerX(), shopRoom_.centerY() };
+                shopExists_       = true;
+                taken.push_back(shopMerchantPos_);
+            }
+        }
+
         // Enemies: ~50 % chance per non-start room, random type and position
         for (int i = 1; i < n; i++) {
+            // Skip the shop room — it is a safe zone
+            if (shopExists_ && rooms[i].x == shopRoom_.x && rooms[i].y == shopRoom_.y) continue;
             if (std::rand() % 2 == 0) {
                 EnemyType t = static_cast<EnemyType>(std::rand() % 3);
-                worldEnemies_.push_back({ pickPos(i), t, true });
+                Position epos = pickPos(i);
+                worldEnemies_.push_back({ epos, epos, t, true });
             }
         }
 
@@ -421,8 +600,13 @@ void Game::setState(GameState newState) {
             ChestLoot loot; int coins = 0; Item item{};
 
             if (roll < 50)       { loot = ChestLoot::Coins; coins = 1 + std::rand() % 50; }
-            else if (roll < 90)  { loot = ChestLoot::Item;
-                                   item = (std::rand() % 2 == 0) ? pickWeapon(cls) : pickArmor(cls); }
+            else if (roll < 90)  {
+                loot = ChestLoot::Item;
+                int r = std::rand() % 4;
+                if      (r == 0) item = pickPotion();
+                else if (r == 1) item = pickWeapon(cls);
+                else             item = pickArmor(cls);
+            }
             else                 { loot = ChestLoot::Key; keyInChest = true; }
 
             worldChests_.push_back({ pickPos(eligible[ci]), false, loot, coins, item });
@@ -468,10 +652,15 @@ void Game::openChest(WorldChest& chest) {
             explorationMsg_ = "Cofre: +" + std::to_string(chest.coins) + " monedas de oro!";
             break;
         case ChestLoot::Item:
-            player_->applyItemBonus(chest.item);
-            explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!  (+"
-                + std::to_string(chest.item.statBonus)
-                + (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
+            if (chest.item.type == ItemType::Consumable) {
+                player_->getInventory().addItem(chest.item);
+                explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!";
+            } else {
+                player_->applyItemBonus(chest.item);
+                explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!  (+"
+                    + std::to_string(chest.item.statBonus)
+                    + (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
+            }
             break;
         case ChestLoot::Key:
             player_->addKey();
@@ -513,6 +702,12 @@ static Item pickArmor(PlayerClass cls) {
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
     return a[ci][std::rand() % 2];
+}
+
+static Item pickPotion() {
+    if (std::rand() % 2 == 0)
+        return {"Pocion de Vida", "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40};
+    return     {"Pocion Mayor",   "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80};
 }
 
 void Game::tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls) {
@@ -586,8 +781,12 @@ void Game::tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls) {
 
         if (coinsPos.x != itemPos.x || coinsPos.y != itemPos.y) {
             taken.push_back(coinsPos);
-            int coins = 20 + std::rand() % 31;  // 20–50 coins
-            worldChests_.push_back({ coinsPos, false, ChestLoot::Coins, coins, {} });
+            if (std::rand() % 10 < 3)
+                worldChests_.push_back({ coinsPos, false, ChestLoot::Item, 0, pickPotion() });
+            else {
+                int coins = 20 + std::rand() % 31;  // 20–50 coins
+                worldChests_.push_back({ coinsPos, false, ChestLoot::Coins, coins, {} });
+            }
         }
 
         return;  // one secret room is enough per call
@@ -599,6 +798,99 @@ void Game::returnToExploration() {
     combat_.reset();
     combatWorldEnemyIdx_ = -1;
     state_ = GameState::Exploration;
+}
+
+void Game::inputInventory(int key) {
+    if (!player_) return;
+    const int bagSize = static_cast<int>(player_->getInventory().items().size());
+    const int total   = 2 + bagSize;
+    switch (key) {
+        case KEY_UP:
+            inventorySelection_ = (inventorySelection_ - 1 + total) % total;
+            break;
+        case KEY_DOWN:
+            inventorySelection_ = (inventorySelection_ + 1) % total;
+            break;
+        case 'e': case 'E': case '\n': {
+            int bagIdx = inventorySelection_ - 2;
+            if (bagIdx >= 0 && bagIdx < bagSize) {
+                player_->equipItem(bagIdx);
+                int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
+                if (inventorySelection_ >= newTotal)
+                    inventorySelection_ = std::max(0, newTotal - 1);
+            }
+            break;
+        }
+        case 'u': case 'U': {
+            int bagIdx = inventorySelection_ - 2;
+            if (bagIdx >= 0 && bagIdx < bagSize) {
+                const auto& items = player_->getInventory().items();
+                if (items[bagIdx].type == ItemType::Consumable) {
+                    std::string name  = items[bagIdx].name;
+                    int bonus         = items[bagIdx].statBonus;
+                    player_->getInventory().removeItem(name);
+                    int healed = std::min(bonus, player_->getMaxHp() - player_->getHp());
+                    player_->heal(healed);
+                    explorationMsg_ = "Usas " + name + ": +" + std::to_string(healed) + " HP!";
+                    int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
+                    if (inventorySelection_ >= newTotal)
+                        inventorySelection_ = std::max(0, newTotal - 1);
+                }
+            }
+            break;
+        }
+        case 27: case 'q': case 'Q':
+            state_ = GameState::Exploration;
+            break;
+    }
+}
+
+void Game::inputShop(int key) {
+    int n = static_cast<int>(shopStock_.size());
+    if (n == 0) { state_ = GameState::Exploration; return; }
+    switch (key) {
+        case KEY_UP:
+            shopSelection_ = (shopSelection_ - 1 + n) % n;
+            break;
+        case KEY_DOWN:
+            shopSelection_ = (shopSelection_ + 1) % n;
+            break;
+        case '\n': {
+            auto& s = shopStock_[shopSelection_];
+            if (s.sold) { explorationMsg_ = "Ya vendido."; break; }
+            if (player_->getCoins() < s.price) {
+                explorationMsg_ = "No tienes suficiente oro.";
+                break;
+            }
+            player_->addCoins(-s.price);
+            if (s.item.type == ItemType::Consumable)
+                player_->getInventory().addItem(s.item);
+            else
+                player_->applyItemBonus(s.item);
+            s.sold = true;
+            explorationMsg_ = "Compraste: " + s.item.name + "!";
+            break;
+        }
+        case 27: case 'q': case 'Q':
+            state_ = GameState::Exploration;
+            explorationMsg_.clear();
+            break;
+    }
+}
+
+void Game::generateShopStock() {
+    if (!shopStock_.empty()) return; // ya generado este piso
+    PlayerClass cls = player_->getClass();
+    shopStock_.push_back({ {"Pocion de Vida", "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40}, 25, false });
+    shopStock_.push_back({ {"Pocion Mayor",   "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80}, 50, false });
+    Item w = pickWeapon(cls); shopStock_.push_back({ w, w.value, false });
+    Item a = pickArmor(cls);  shopStock_.push_back({ a, a.value, false });
+}
+
+bool Game::isInShopRoom(Position p) const {
+    if (!shopExists_) return false;
+    return p.x >= shopRoom_.x && p.x < shopRoom_.x + shopRoom_.w &&
+           p.y >= shopRoom_.y && p.y < shopRoom_.y + shopRoom_.h;
 }
 
 void Game::inputCombat(int key) {
@@ -617,6 +909,12 @@ void Game::inputCombat(int key) {
                 if (std::rand() % 100 < 15) {
                     player_->addKey();
                     explorationMsg_ = "El enemigo solto una llave!";
+                }
+                // 15 % chance the enemy drops a potion
+                if (std::rand() % 100 < 15) {
+                    Item pot = pickPotion();
+                    player_->getInventory().addItem(pot);
+                    explorationMsg_ = "El enemigo solto una " + pot.name + "!";
                 }
             }
             returnToExploration();

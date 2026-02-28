@@ -4,6 +4,7 @@
 #include "inventory/Inventory.hpp"
 #include "combat/Art.hpp"
 #include <vector>
+#include <optional>
 
 enum class PlayerClass {
     Warrior,
@@ -27,6 +28,9 @@ public:
     Inventory& getInventory() { return inventory_; }
     const Inventory& getInventory() const { return inventory_; }
 
+    const std::optional<Item>& getEquippedWeapon() const { return equippedWeapon_; }
+    const std::optional<Item>& getEquippedArmor()  const { return equippedArmor_;  }
+
     void gainXp(int amount);
     bool useMana(int amount);
     void restoreMana(int amount);
@@ -36,7 +40,11 @@ public:
     void addKey();
     bool useKey();                       // false if no keys
     void descendFloor();
-    void applyItemBonus(const Item& item); // equips item: applies stat bonus + adds to inventory
+    void applyItemBonus(const Item& item); // delegates to pickupItem
+    bool pickupItem(const Item& item);    // auto-equip if slot free, else bag
+    void equipItem(int bagIdx);           // swap bag item into equipment slot
+    int  useConsumable();                // uses first potion; returns HP healed, 0 if none
+    int  countConsumables() const;
 
 private:
     PlayerClass class_;
@@ -48,6 +56,10 @@ private:
     int coins_;
     int keys_;
     int dungeonFloor_;
+    int baseAttack_;
+    int baseDefense_;
+    std::optional<Item> equippedWeapon_;
+    std::optional<Item> equippedArmor_;
     Inventory inventory_;
 
     void levelUp();

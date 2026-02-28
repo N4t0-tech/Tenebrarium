@@ -2,6 +2,7 @@
 
 #include "GameState.hpp"
 #include "MenuPhase.hpp"
+#include "ShopItem.hpp"
 #include "entities/Player.hpp"
 #include "entities/Enemy.hpp"
 #include "combat/CombatSystem.hpp"
@@ -13,6 +14,9 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
 // Central game class. Owns the main loop and all subsystems.
 class Game {
@@ -44,6 +48,7 @@ private:
     // World enemies
     struct WorldEnemy {
         Position  pos;
+        Position  spawnPos;
         EnemyType type;
         bool      alive;
     };
@@ -68,6 +73,16 @@ private:
     bool      lockedDoorOpen_;
     Position  stairsPos_;
 
+    // Inventory
+    int                     inventorySelection_{0};
+
+    // Shop
+    std::vector<ShopItem>   shopStock_;
+    int                     shopSelection_{0};
+    BSPDungeon::Room        shopRoom_{};
+    bool                    shopExists_{false};
+    Position                shopMerchantPos_{};
+
     // Exploration message (shown until next key press)
     std::string explorationMsg_;
 
@@ -89,4 +104,15 @@ private:
     void inputClassSelect(int key);
     void inputHudSelect(int key);
     void inputCombat(int key);
+    void inputInventory(int key);
+    void inputShop(int key);
+    void generateShopStock();
+    bool isInShopRoom(Position p) const;
+
+    // AI movement thread
+    std::thread          aiThread_;
+    std::mutex           worldMutex_;
+    std::atomic<bool>    aiRunning_{false};
+    int                  pendingCombatEnemy_{-1};
+    void aiLoop();
 };

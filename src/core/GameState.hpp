@@ -7,4 +7,5 @@ enum class GameState {
     Inventory,
     QuestLog,
     GameOver,
+    Shop,
 };

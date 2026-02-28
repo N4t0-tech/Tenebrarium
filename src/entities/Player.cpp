@@ -12,6 +12,8 @@ Player::Player(const std::string& name, PlayerClass playerClass)
       coins_(0),
       keys_(0),
       dungeonFloor_(1),
+      baseAttack_(baseAttack(playerClass)),
+      baseDefense_(baseDefense(playerClass)),
       inventory_(20)
 {}
 
@@ -28,8 +30,10 @@ void Player::levelUp() {
     xpToNextLevel_ = static_cast<int>(xpToNextLevel_ * 1.5);
     maxHp_ += 10;
     hp_ = maxHp_;
-    attack_ += 2;
-    defense_ += 1;
+    baseAttack_  += 2;
+    baseDefense_ += 1;
+    attack_  = baseAttack_  + (equippedWeapon_ ? equippedWeapon_->statBonus : 0);
+    defense_ = baseDefense_ + (equippedArmor_  ? equippedArmor_->statBonus  : 0);
     maxMana_ += 5;
     mana_ = maxMana_;
 }
@@ -66,10 +70,56 @@ void Player::addKey()              { keys_++; }
 bool Player::useKey()              { if (keys_ <= 0) return false; keys_--; return true; }
 void Player::descendFloor()        { dungeonFloor_++; }
 
-void Player::applyItemBonus(const Item& item) {
-    if (item.type == ItemType::Weapon) attack_  += item.statBonus;
-    else if (item.type == ItemType::Armor)  defense_ += item.statBonus;
-    inventory_.addItem(item);
+void Player::applyItemBonus(const Item& item) { pickupItem(item); }
+
+bool Player::pickupItem(const Item& item) {
+    if (item.type == ItemType::Weapon && !equippedWeapon_) {
+        equippedWeapon_ = item;
+        attack_ = baseAttack_ + item.statBonus;
+        return true;
+    }
+    if (item.type == ItemType::Armor && !equippedArmor_) {
+        equippedArmor_ = item;
+        defense_ = baseDefense_ + item.statBonus;
+        return true;
+    }
+    return inventory_.addItem(item);
+}
+
+void Player::equipItem(int idx) {
+    const auto& bag = inventory_.items();
+    if (idx < 0 || idx >= static_cast<int>(bag.size())) return;
+    Item chosen = bag[idx];  // copy before mutating
+    if (chosen.type == ItemType::Weapon) {
+        inventory_.removeItem(chosen.name);
+        if (equippedWeapon_) inventory_.addItem(*equippedWeapon_);
+        equippedWeapon_ = chosen;
+        attack_ = baseAttack_ + chosen.statBonus;
+    } else if (chosen.type == ItemType::Armor) {
+        inventory_.removeItem(chosen.name);
+        if (equippedArmor_) inventory_.addItem(*equippedArmor_);
+        equippedArmor_ = chosen;
+        defense_ = baseDefense_ + chosen.statBonus;
+    }
+}
+
+int Player::useConsumable() {
+    for (const auto& item : inventory_.items()) {
+        if (item.type == ItemType::Consumable) {
+            int healed = std::min(item.statBonus, maxHp_ - hp_);
+            hp_ += healed;
+            inventory_.removeItem(item.name);
+            return healed;
+        }
+    }
+    return 0;
+}
+
+int Player::countConsumables() const {
+    int count = 0;
+    for (const auto& item : inventory_.items())
+        if (item.type == ItemType::Consumable) count++;
+    return count;
 }
 
 bool Player::useMana(int amount) {

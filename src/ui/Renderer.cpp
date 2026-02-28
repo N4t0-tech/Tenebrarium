@@ -314,8 +314,12 @@ Element Renderer::makeHudPanel(const Player& player) {
         text("DEF  " + std::to_string(player.getDefense())),
         separator(),
         text("EQUIPO") | bold,
-        text("Arma    : -") | dim,
-        text("Armadura: -") | dim,
+        text("Arma    : " + (player.getEquippedWeapon()
+            ? player.getEquippedWeapon()->name.substr(0, 12) : std::string("-")))
+            | (player.getEquippedWeapon() ? color(Color::Yellow) : dim),
+        text("Armadura: " + (player.getEquippedArmor()
+            ? player.getEquippedArmor()->name.substr(0, 12) : std::string("-")))
+            | (player.getEquippedArmor() ? color(Color::Green) : dim),
         separator(),
         text("Inventario") | bold,
         text(std::to_string(player.getInventory().usedSlots()) + "/" +
@@ -324,9 +328,12 @@ Element Renderer::makeHudPanel(const Player& player) {
         separator(),
         text("$ " + std::to_string(player.getCoins()) + " monedas") | color(Color::Yellow) | bold,
         text("k " + std::to_string(player.getKeys()) + " llave(s)") | color(Color::Cyan),
+        text("+ " + std::to_string(player.countConsumables()) + " pocion(es)") | color(Color::Green),
         text("Piso " + std::to_string(player.getDungeonFloor())) | dim,
         separator(),
         text("WASD  mover") | dim,
+        text("  P   pocion") | dim,
+        text("  I   mochila") | dim,
         text("  Q   salir") | dim,
     }) | border | size(WIDTH, EQUAL, 22);
 }
@@ -350,8 +357,9 @@ Element Renderer::makeHudBar(const Player& player) {
             text(" DEF:") | dim, text(std::to_string(player.getDefense())) | dim,
             text("  $") | color(Color::Yellow), text(std::to_string(player.getCoins())) | color(Color::Yellow),
             text(" k") | color(Color::Cyan), text(std::to_string(player.getKeys())) | color(Color::Cyan),
+            text(" +") | color(Color::Green), text(std::to_string(player.countConsumables())) | color(Color::Green),
             text("  P") | dim, text(std::to_string(player.getDungeonFloor())) | dim,
-            text("  WASD:mover  Q:salir") | dim,
+            text("  WASD:mover  P:pocion  I:mochila  Q:salir") | dim,
         }),
     });
 }
@@ -578,8 +586,82 @@ Element Renderer::drawCombat(const CombatSystem& combat, const Player& player,
 
 // ─── stub screens ────────────────────────────────────────────────────────────
 
-Element Renderer::drawInventory() {
-    return text("[Inventario] - en construccion") | border;
+Element Renderer::drawInventory(const Player& player, int selection) {
+    Elements rows;
+
+    // ── Equipped slots (rows 0, 1) ────────────────────────────────────────────
+    rows.push_back(text("=== EQUIPO ===") | bold | color(Color::Cyan));
+
+    auto makeSlot = [&](int row, const char* label, const std::optional<Item>& slot) {
+        std::string line;
+        if (slot) {
+            std::string tag = (slot->type == ItemType::Weapon) ? "[ARMA]   " : "[ARMADURA]";
+            line = tag + " " + slot->name + "  +" + std::to_string(slot->statBonus)
+                 + (slot->type == ItemType::Weapon ? " ATK" : " DEF");
+        } else {
+            line = std::string(label) + "  (vacio)";
+        }
+        auto e = text(line);
+        if (slot) e = e | color(slot->type == ItemType::Weapon ? Color::Yellow : Color::Green);
+        else      e = e | dim;
+        if (selection == row) e = e | inverted;
+        return e;
+    };
+
+    rows.push_back(makeSlot(0, "Arma    ", player.getEquippedWeapon()));
+    rows.push_back(makeSlot(1, "Armadura", player.getEquippedArmor()));
+    rows.push_back(separator());
+
+    // ── Bag items (rows 2+) ───────────────────────────────────────────────────
+    rows.push_back(text("=== MOCHILA ===") | bold | color(Color::Cyan));
+
+    const auto& items = player.getInventory().items();
+    if (items.empty()) {
+        rows.push_back(text("  (vacia)") | dim);
+    } else {
+        for (int i = 0; i < static_cast<int>(items.size()); i++) {
+            const auto& item = items[i];
+            int row = 2 + i;
+
+            std::string tag;
+            Color col = Color::White;
+            switch (item.type) {
+                case ItemType::Weapon:
+                    tag = "[ARMA]   "; col = Color::Yellow; break;
+                case ItemType::Armor:
+                    tag = "[ARMADURA]"; col = Color::Green; break;
+                case ItemType::Consumable:
+                    tag = "[POCION] "; col = Color::Cyan; break;
+                default:
+                    tag = "[MISC]   "; break;
+            }
+
+            std::string line = tag + " " + item.name;
+            if (item.type != ItemType::Consumable)
+                line += "  +" + std::to_string(item.statBonus)
+                      + (item.type == ItemType::Weapon ? " ATK" : " DEF");
+            else
+                line += "  +" + std::to_string(item.statBonus) + " HP";
+
+            auto e = text(line) | color(col);
+            if (selection == row) e = e | inverted;
+            rows.push_back(e);
+        }
+    }
+
+    rows.push_back(separator());
+
+    // ── Stats footer ──────────────────────────────────────────────────────────
+    rows.push_back(hbox({
+        text("ATK:" + std::to_string(player.getAttack())) | color(Color::Green),
+        text("  DEF:" + std::to_string(player.getDefense())) | color(Color::Green),
+        text("  $" + std::to_string(player.getCoins())) | color(Color::Yellow),
+        text("  Slots:" + std::to_string(player.getInventory().usedSlots())
+             + "/" + std::to_string(player.getInventory().totalSlots())) | dim,
+    }));
+    rows.push_back(text("[↑↓] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar") | dim);
+
+    return vbox(std::move(rows)) | border | center;
 }
 
 Element Renderer::drawQuestLog() {
@@ -592,4 +674,40 @@ Element Renderer::drawGameOver() {
         text(""),
         text("ENTER para volver al menu") | hcenter | dim,
     }) | center | border;
+}
+
+// ─── shop screen ─────────────────────────────────────────────────────────────
+
+Element Renderer::drawShop(const std::vector<ShopItem>& stock,
+                            int selection, const Player& player,
+                            const std::string& message) {
+    Color orange = Color::RGB(255, 165, 0);
+
+    Elements rows;
+    rows.push_back(text("=== TIENDA DEL PISO ===") | hcenter | color(orange) | bold);
+    rows.push_back(text("$ " + std::to_string(player.getCoins()) + " monedas disponibles")
+                   | color(orange));
+    rows.push_back(separator());
+
+    for (int i = 0; i < static_cast<int>(stock.size()); i++) {
+        const auto& s = stock[i];
+        bool sel = (i == selection);
+        std::string prefix = s.sold ? "[VENDIDO] " : "          ";
+        std::string line   = prefix + s.item.name
+                           + "  -  " + std::to_string(s.price) + " $"
+                           + "   " + s.item.description;
+        auto e = text(line);
+        if      (s.sold) e = e | dim;
+        else if (sel)    e = e | color(orange) | bold | inverted;
+        else             e = e | color(Color::White);
+        rows.push_back(e);
+    }
+
+    rows.push_back(separator());
+    if (!message.empty())
+        rows.push_back(text(message) | color(Color::Green) | bold);
+    rows.push_back(text(""));
+    rows.push_back(text("- navegar  |  ENTER comprar  |  ESC salir") | hcenter | dim);
+
+    return vbox(std::move(rows)) | color(orange) | center | border;
 }
