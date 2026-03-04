@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/renato/Proyectos/Tenebrarium/build-raylib/_deps/raylib-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
