@@ -7,11 +7,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-FetchContent_Declare(ftxui
-  GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI
-  GIT_TAG v5.0.0
+FetchContent_Declare(raylib
+  GIT_REPOSITORY https://github.com/raysan5/raylib
+  GIT_TAG 5.0
+  GIT_SHALLOW TRUE
+  PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching CMakeLists"
+    COMMAND sed -i "s/cmake_minimum_required(VERSION 3.0)/cmake_minimum_required(VERSION 3.5)/" CMakeLists.txt || true
 )
-FetchContent_MakeAvailable(ftxui)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_GAMES    OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(raylib)
 
 find_package(ZLIB REQUIRED)
 
@@ -24,13 +29,11 @@ target_include_directories(tenebrarium PRIVATE
 )
 
 target_link_libraries(tenebrarium PRIVATE
-    ftxui::screen
-    ftxui::dom
-    ftxui::component
+    raylib
     ZLIB::ZLIB
 )
 
-target_compile_options(tenebrarium PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(tenebrarium PRIVATE -Wall -Wextra)
 
 target_compile_definitions(tenebrarium PRIVATE
     ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
