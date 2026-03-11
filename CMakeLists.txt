@@ -35,3 +35,11 @@ target_link_libraries(tenebrarium PRIVATE
 
 target_compile_options(tenebrarium PRIVATE -Wall -Wextra)
 
+# Symlink assets/ dentro del directorio de build para poder ejecutar desde ahí
+add_custom_command(TARGET tenebrarium POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_SOURCE_DIR}/assets
+        ${CMAKE_BINARY_DIR}/assets
+    COMMENT "Enlazando assets al directorio de build"
+)
+

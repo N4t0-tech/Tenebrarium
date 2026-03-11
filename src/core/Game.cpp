@@ -62,6 +62,10 @@ void Game::run() {
     // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
     assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
 
+    // Icono de ventana
+    Image icon = LoadImage((assetsDir() + "icon.png").c_str());
+    if (icon.data) { SetWindowIcon(icon); UnloadImage(icon); }
+
     // Centrar en el monitor principal (índice 0)
     int monX = GetMonitorPosition(0).x;
     int monY = GetMonitorPosition(0).y;
