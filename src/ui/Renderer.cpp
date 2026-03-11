@@ -275,7 +275,24 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
     drawCentered(scr, 1, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
     drawCentered(scr, 2, 0, scr.cols(), "Elige tu clase:", COL_WHITE);
 
-    int listCol = 2, boxW = 42, boxH = 8;
+    // Calcular boxW según el contenido más ancho de cualquier clase
+    int maxContent = 0;
+    for (int i = 0; i < 3; i++) {
+        const auto& c = kClasses[i];
+        std::string stats = "HP:" + std::to_string(c.hp) +
+                            " ATK:" + std::to_string(c.atk) +
+                            " DEF:" + std::to_string(c.def) +
+                            " MP:" + std::to_string(c.mana);
+        std::string role  = std::string("[ ") + c.role + " ]";
+        int w = std::max({ (int)std::string(c.name).size(),
+                           (int)role.size(),
+                           (int)stats.size(),
+                           (int)std::string(c.desc).size() });
+        maxContent = std::max(maxContent, w);
+    }
+    int boxW = maxContent + 4;  // 2 padding + 2 borde
+    int boxH = 8, listCol = 2;
+
     for (int i = 0; i < 3; i++) {
         const auto& c = kClasses[i];
         bool sel = (i == selection);
@@ -307,17 +324,67 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
 
 void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
-    drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
+    drawCentered(scr, cy - 10, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 4, 0, scr.cols(), "Elige el estilo de interfaz:", COL_WHITE);
-    const char* names[] = { "Panel lateral", "Barra inferior" };
-    for (int i = 0; i < 2; i++) {
-        bool sel = (i == selection);
-        Color c = sel ? COL_YELLOW : COL_GRAY;
-        uint8_t f = sel ? (CELL_BOLD | CELL_INVERTED) : CELL_DIM;
-        int x = (i == 0) ? cx - 20 : cx + 4;
-        scr.putStr(x, cy, names[i], c, COL_BLACK, f);
+    drawCentered(scr, cy - 8, 0, scr.cols(), "Elige el estilo de interfaz:", COL_WHITE);
+
+    // Preview sidebar (izquierda)
+    {
+        int px = cx - 38, py = cy - 6;
+        int pw = 24, ph = 8;
+        bool sel = (selection == 0);
+        Color bc = sel ? COL_YELLOW : COL_GRAY;
+        drawBorder(scr, px, py, pw, ph, bc);
+        // mapa simulado
+        const char* mapRows[] = {
+            "· · · · · · · · ·",
+            "· · · · · · · · ·",
+            "· · · ·@· · · · ·",
+            "· · · · · · · · ·",
+            "· · · · · · · · ·",
+        };
+        for (int r = 0; r < 5; r++)
+            scr.putStr(px + 1, py + 1 + r, mapRows[r], COL_GRAY, COL_BLACK, CELL_DIM);
+        // separador vertical interior
+        drawVSep(scr, px + pw - 7, py + 1, ph - 2, bc);
+        // panel lateral simulado
+        scr.putStr(px + pw - 5, py + 1, "Hero", COL_CYAN);
+        scr.putStr(px + pw - 5, py + 2, "Lv.1", COL_WHITE);
+        scr.putStr(px + pw - 5, py + 4, "HP\xe2\x96\x88\xe2\x96\x88", COL_GREEN);  // HP██
+        scr.putStr(px + pw - 5, py + 5, "MP\xe2\x96\x91\xe2\x96\x91", COL_CYAN);  // MP░░
+        // etiqueta
+        std::string label = "Panel lateral";
+        scr.putStr(px + (pw - (int)label.size()) / 2, py + ph,
+                   label, bc, COL_BLACK, sel ? CELL_BOLD : CELL_DIM);
     }
+
+    // Preview bottom bar (derecha)
+    {
+        int px = cx + 4, py = cy - 6;
+        int pw = 26, ph = 8;
+        bool sel = (selection == 1);
+        Color bc = sel ? COL_YELLOW : COL_GRAY;
+        drawBorder(scr, px, py, pw, ph, bc);
+        // mapa simulado
+        const char* mapRows[] = {
+            "· · · · · · · · · · ·",
+            "· · · · · · · · · · ·",
+            "· · · · · @· · · · ·",
+            "· · · · · · · · · · ·",
+        };
+        for (int r = 0; r < 4; r++)
+            scr.putStr(px + 1, py + 1 + r, mapRows[r], COL_GRAY, COL_BLACK, CELL_DIM);
+        // separador horizontal interior
+        drawHSep(scr, px + 1, py + 5, pw - 2, bc);
+        // barra inferior simulada
+        scr.putStr(px + 1, py + 6, "Hero Lv1 HP\xe2\x96\x88\xe2\x96\x88\xe2\x96\x91 MP\xe2\x96\x91\xe2\x96\x91",
+                   COL_WHITE, COL_BLACK, CELL_DIM);
+        // etiqueta
+        std::string label = "Barra inferior";
+        scr.putStr(px + (pw - (int)label.size()) / 2, py + ph,
+                   label, bc, COL_BLACK, sel ? CELL_BOLD : CELL_DIM);
+    }
+
     drawCentered(scr, cy + 4, 0, scr.cols(),
                  "Izq/Der navegar  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
