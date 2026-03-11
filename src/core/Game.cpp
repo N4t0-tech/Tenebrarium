@@ -1,4 +1,5 @@
 #include "Game.hpp"
+#include "core/Assets.hpp"
 #include "ui/Renderer.hpp"
 #include "entities/Enemy.hpp"
 #include <raylib.h>
@@ -17,11 +18,12 @@ static constexpr int GKEY_BACKSPACE = 0x1005;
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
-static std::unique_ptr<Enemy> makeEnemy(EnemyType t);
-static int  xpForEnemy(EnemyType t);
-static Item pickWeapon(PlayerClass cls);
-static Item pickArmor(PlayerClass cls);
-static Item pickPotion();
+static EnemyType pickEnemyType(int floor);
+static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor);
+static int  xpForEnemy(EnemyType t, int floor);
+static Item pickWeapon(PlayerClass cls, int floor);
+static Item pickArmor(PlayerClass cls, int floor);
+static Item pickPotion(int floor);
 
 Game::Game()
     : state_(GameState::MainMenu),
@@ -56,6 +58,9 @@ void Game::run() {
     InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
     SetTargetFPS(60);
     SetExitKey(0);  // desactivar cierre con ESC (lo manejamos nosotros)
+
+    // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
+    assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
 
     // Centrar en el monitor principal (índice 0)
     int monX = GetMonitorPosition(0).x;
@@ -99,7 +104,7 @@ void Game::run() {
     };
     for (int cp : extras) codepoints.push_back(cp);
 
-    Font font = LoadFontEx(ASSETS_DIR "/fonts/mono.ttf", 18,
+    Font font = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), 18,
                            codepoints.data(), static_cast<int>(codepoints.size()));
     SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
 
@@ -199,6 +204,13 @@ void Game::dispatchInput(int key) {
                 break;
             }
 
+            // Open quest log
+            if (key == 'm' || key == 'M') {
+                questLogSelection_ = 0;
+                setState(GameState::QuestLog);
+                break;
+            }
+
             // Search adjacent tiles for secret walls
             if (key == 'e' || key == 'E') {
                 const int sdx[] = {0, 0, -1, 1};
@@ -291,7 +303,7 @@ void Game::dispatchInput(int key) {
             inputInventory(key);
             break;
         case GameState::QuestLog:
-            if (key == 'q' || key == 'Q') quitRequested_ = true;
+            inputQuestLog(key);
             break;
         case GameState::GameOver:
             if (key == '\n' || key == '\n')
@@ -382,6 +394,7 @@ void Game::inputHudSelect(int key) {
                 default: cls = PlayerClass::Ranger; break;
             }
             player_ = std::make_unique<Player>(playerName_, cls);
+            initQuests();
             setState(GameState::Exploration);
             break;
         }
@@ -389,7 +402,68 @@ void Game::inputHudSelect(int key) {
 }
 
 void Game::update() {
-    // per-frame game logic (placeholder)
+    checkQuestProgress();
+}
+
+void Game::initQuests() {
+    quests_.clear();
+    enemiesKilled_ = 0;
+    chestsOpened_  = 0;
+
+    quests_.push_back({
+        "primer_sangre", "Primer Sangre",
+        "Derrota a tu primer enemigo en el Tenebrarium.",
+        QuestStatus::InProgress,
+        {{"Mata 1 enemigo", false}},
+        50, 0
+    });
+    quests_.push_back({
+        "cazador", "Cazador",
+        "Los monstruos del Tenebrarium son peligrosos. Demuestra que no te amedrentan.",
+        QuestStatus::InProgress,
+        {{"Mata 5 enemigos", false}},
+        150, 20
+    });
+    quests_.push_back({
+        "buscador", "Buscador de Tesoros",
+        "Las criptas estan llenas de riquezas olvidadas. Encuentralas.",
+        QuestStatus::InProgress,
+        {{"Abre 3 cofres", false}},
+        100, 30
+    });
+    quests_.push_back({
+        "descenso", "Descenso a las Profundidades",
+        "Las criaturas mas peligrosas habitan los pisos inferiores.",
+        QuestStatus::InProgress,
+        {{"Llega al piso 2", false}, {"Llega al piso 3", false}},
+        200, 50
+    });
+}
+
+void Game::checkQuestProgress() {
+    if (!player_) return;
+    int floor = player_->getDungeonFloor();
+
+    for (auto& q : quests_) {
+        if (q.status == QuestStatus::Completed || q.status == QuestStatus::Failed)
+            continue;
+        if (q.id == "primer_sangre") {
+            q.objectives[0].completed = (enemiesKilled_ >= 1);
+        } else if (q.id == "cazador") {
+            q.objectives[0].completed = (enemiesKilled_ >= 5);
+        } else if (q.id == "buscador") {
+            q.objectives[0].completed = (chestsOpened_ >= 3);
+        } else if (q.id == "descenso") {
+            q.objectives[0].completed = (floor >= 2);
+            q.objectives[1].completed = (floor >= 3);
+        }
+        if (q.allObjectivesComplete() && q.status == QuestStatus::InProgress) {
+            q.status = QuestStatus::Completed;
+            player_->gainXp(q.xpReward);
+            player_->addCoins(q.goldReward);
+            explorationMsg_ = "Mision completada: " + q.title + "!";
+        }
+    }
 }
 
 void Game::render(TerminalScreen& scr) {
@@ -440,7 +514,7 @@ void Game::render(TerminalScreen& scr) {
                 Renderer::drawInventory(scr, *player_, inventorySelection_);
             break;
         case GameState::QuestLog:
-            Renderer::drawQuestLog(scr);
+            Renderer::drawQuestLog(scr, quests_, questLogSelection_);
             break;
         case GameState::GameOver:
             Renderer::drawGameOver(scr);
@@ -459,25 +533,43 @@ static char glyphForEnemy(EnemyType t) {
     return '?';
 }
 
-static std::unique_ptr<Enemy> makeEnemy(EnemyType t) {
+// Tipo de enemigo según piso: goblins en pisos bajos, orcos en altos
+static EnemyType pickEnemyType(int floor) {
+    // floor 1: G=60% S=30% O=10%
+    // floor 5+: G=10% S=30% O=60%
+    int gobChance = std::max(10, 60 - (floor - 1) * 10);
+    int orcChance = std::min(60, (floor - 1) * 10);
+    int r = std::rand() % 100;
+    if (r < gobChance)              return EnemyType::Goblin;
+    if (r < gobChance + (100 - gobChance - orcChance)) return EnemyType::Skeleton;
+    return EnemyType::Orc;
+}
+
+// Stats escalan con el piso: +15% HP/ATK/DEF por piso
+static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor) {
+    float s = 1.0f + (floor - 1) * 0.15f;
+    auto sc = [s](int base) { return std::max(1, static_cast<int>(base * s)); };
     switch (t) {
         case EnemyType::Goblin:
-            return std::make_unique<Enemy>("Goblin",   125, 17, 4, 60, t, 1);
+            return std::make_unique<Enemy>("Goblin",   sc(125), sc(17), sc(4),  sc(60),  t, 1);
         case EnemyType::Skeleton:
-            return std::make_unique<Enemy>("Esqueleto",120, 16, 8, 60, t, 1);
+            return std::make_unique<Enemy>("Esqueleto",sc(120), sc(16), sc(8),  sc(60),  t, 1);
         case EnemyType::Orc:
-            return std::make_unique<Enemy>("Orco",     140, 20, 10, 120, t, 1);
+            return std::make_unique<Enemy>("Orco",     sc(140), sc(20), sc(10), sc(120), t, 2);
     }
     return std::make_unique<Enemy>("???", 10, 5, 1, 5, t, 1);
 }
 
-static int xpForEnemy(EnemyType t) {
+// XP escala con el piso
+static int xpForEnemy(EnemyType t, int floor) {
+    int base;
     switch (t) {
-        case EnemyType::Goblin:   return 20;
-        case EnemyType::Skeleton: return 15;
-        case EnemyType::Orc:      return 30;
+        case EnemyType::Goblin:   base = 20;  break;
+        case EnemyType::Skeleton: base = 15;  break;
+        case EnemyType::Orc:      base = 30;  break;
+        default:                  base = 5;   break;
     }
-    return 5;
+    return base + (floor - 1) * 5;
 }
 
 // ─── AI movement ─────────────────────────────────────────────────────────────
@@ -656,19 +748,23 @@ void Game::setState(GameState newState) {
             }
         }
 
-        // Enemies: ~50 % chance per non-start room, random type and position
+        // Enemies: spawn chance y tipo escalan con el piso
+        int floor = player_ ? player_->getDungeonFloor() : 1;
+        int spawnChance = std::min(85, 50 + (floor - 1) * 8); // 50%→85%
         for (int i = 1; i < n; i++) {
-            // Skip the shop room — it is a safe zone
             if (shopExists_ && rooms[i].x == shopRoom_.x && rooms[i].y == shopRoom_.y) continue;
-            if (std::rand() % 2 == 0) {
-                EnemyType t = static_cast<EnemyType>(std::rand() % 3);
-                Position epos = pickPos(i);
-                worldEnemies_.push_back({ epos, epos, t, true });
+            if (std::rand() % 100 < spawnChance) {
+                worldEnemies_.push_back({ pickPos(i), pickPos(i), pickEnemyType(floor), true });
+            }
+            // Pisos 3+: 20% extra de tener un segundo enemigo por sala
+            if (floor >= 3 && std::rand() % 100 < 20 + floor * 3) {
+                worldEnemies_.push_back({ pickPos(i), pickPos(i), pickEnemyType(floor), true });
             }
         }
 
         // Chests: 2–4 per floor in random rooms (skip start room and stairs room)
         PlayerClass cls = player_ ? player_->getClass() : PlayerClass::Warrior;
+        // floor ya definido arriba
         int chestCount = 2 + std::rand() % 3;
 
         // Build a shuffled list of eligible rooms (not start, not last)
@@ -684,13 +780,14 @@ void Game::setState(GameState newState) {
             int roll = std::rand() % 100;
             ChestLoot loot; int coins = 0; Item item{};
 
-            if (roll < 50)       { loot = ChestLoot::Coins; coins = 1 + std::rand() % 50; }
+            int baseCoins = 10 + std::rand() % 40;
+            if (roll < 50)       { loot = ChestLoot::Coins; coins = baseCoins * (1 + (floor-1)/2); }
             else if (roll < 90)  {
                 loot = ChestLoot::Item;
                 int r = std::rand() % 4;
-                if      (r == 0) item = pickPotion();
-                else if (r == 1) item = pickWeapon(cls);
-                else             item = pickArmor(cls);
+                if      (r == 0) item = pickPotion(floor);
+                else if (r == 1) item = pickWeapon(cls, floor);
+                else             item = pickArmor(cls, floor);
             }
             else                 { loot = ChestLoot::Key; keyInChest = true; }
 
@@ -715,13 +812,12 @@ void Game::setState(GameState newState) {
         combatArtSelection_ = 0;
 
         std::vector<std::unique_ptr<Enemy>> enemies;
+        int fl = player_ ? player_->getDungeonFloor() : 1;
         if (combatWorldEnemyIdx_ >= 0) {
-            // Fight the specific world enemy the player walked into
-            enemies.push_back(makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type));
+            enemies.push_back(makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type, fl));
         } else {
-            // Debug fight: Goblin + Esqueleto
-            enemies.push_back(makeEnemy(EnemyType::Goblin));
-            enemies.push_back(makeEnemy(EnemyType::Skeleton));
+            enemies.push_back(makeEnemy(EnemyType::Goblin, fl));
+            enemies.push_back(makeEnemy(EnemyType::Skeleton, fl));
         }
         combat_ = std::make_unique<CombatSystem>(*player_, std::move(enemies));
     }
@@ -731,6 +827,7 @@ void Game::setState(GameState newState) {
 
 void Game::openChest(WorldChest& chest) {
     chest.opened = true;
+    chestsOpened_++;
     switch (chest.loot) {
         case ChestLoot::Coins:
             player_->addCoins(chest.coins);
@@ -754,7 +851,8 @@ void Game::openChest(WorldChest& chest) {
     }
 }
 
-static Item pickWeapon(PlayerClass cls) {
+// Items con calidad escalada por piso: +1 statBonus cada 2 pisos
+static Item pickWeapon(PlayerClass cls, int floor) {
     static const Item w[3][3] = {
         // Warrior
         { {"Espada Corta",    "Un filo confiable.",   ItemType::Weapon, 30, 1, 3},
@@ -770,10 +868,12 @@ static Item pickWeapon(PlayerClass cls) {
           {"Ballesta",        "Poderosa y lenta.",    ItemType::Weapon, 80, 2, 7} },
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
-    return w[ci][std::rand() % 3];
+    Item item = w[ci][std::rand() % 3];
+    item.statBonus += (floor - 1) / 2;
+    return item;
 }
 
-static Item pickArmor(PlayerClass cls) {
+static Item pickArmor(PlayerClass cls, int floor) {
     static const Item a[3][2] = {
         // Warrior
         { {"Cota de Malla",      "Proteccion media.",  ItemType::Armor, 40, 1, 3},
@@ -786,13 +886,18 @@ static Item pickArmor(PlayerClass cls) {
           {"Armadura de Cuero", "Balance perfecto.",   ItemType::Armor, 55, 1, 4} },
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
-    return a[ci][std::rand() % 2];
+    Item item = a[ci][std::rand() % 2];
+    item.statBonus += (floor - 1) / 2;
+    return item;
 }
 
-static Item pickPotion() {
-    if (std::rand() % 2 == 0)
-        return {"Pocion de Vida", "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40};
-    return     {"Pocion Mayor",   "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80};
+// Pociones mejoran en pisos altos
+static Item pickPotion(int floor) {
+    if (floor >= 5 || std::rand() % 3 == 0)
+        return {"Pocion Mayor",      "Recupera 80 HP.",  ItemType::Consumable, 50, 1, 80};
+    if (floor >= 3 || std::rand() % 2 == 0)
+        return {"Pocion de Vida",    "Recupera 40 HP.",  ItemType::Consumable, 25, 1, 40};
+    return     {"Pocion Pequeña",    "Recupera 20 HP.",  ItemType::Consumable, 12, 1, 20};
 }
 
 void Game::tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls) {
@@ -861,13 +966,14 @@ void Game::tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls) {
         Position itemPos  = { startX + 1, startY + 1 };
         Position coinsPos = { endX - 1,   endY - 1   };
         taken.push_back(itemPos);
-        Item item = (std::rand() % 2 == 0) ? pickWeapon(cls) : pickArmor(cls);
+        int srFloor = player_ ? player_->getDungeonFloor() : 1;
+        Item item = (std::rand() % 2 == 0) ? pickWeapon(cls, srFloor) : pickArmor(cls, srFloor);
         worldChests_.push_back({ itemPos, false, ChestLoot::Item, 0, item });
 
         if (coinsPos.x != itemPos.x || coinsPos.y != itemPos.y) {
             taken.push_back(coinsPos);
             if (std::rand() % 10 < 3)
-                worldChests_.push_back({ coinsPos, false, ChestLoot::Item, 0, pickPotion() });
+                worldChests_.push_back({ coinsPos, false, ChestLoot::Item, 0, pickPotion(srFloor) });
             else {
                 int coins = 20 + std::rand() % 31;  // 20–50 coins
                 worldChests_.push_back({ coinsPos, false, ChestLoot::Coins, coins, {} });
@@ -930,6 +1036,21 @@ void Game::inputInventory(int key) {
     }
 }
 
+void Game::inputQuestLog(int key) {
+    int n = static_cast<int>(quests_.size());
+    switch (key) {
+        case GKEY_UP:
+            if (n > 0) questLogSelection_ = (questLogSelection_ - 1 + n) % n;
+            break;
+        case GKEY_DOWN:
+            if (n > 0) questLogSelection_ = (questLogSelection_ + 1) % n;
+            break;
+        case 27: case 'q': case 'Q':
+            setState(GameState::Exploration);
+            break;
+    }
+}
+
 void Game::inputShop(int key) {
     int n = static_cast<int>(shopStock_.size());
     if (n == 0) { state_ = GameState::Exploration; return; }
@@ -966,10 +1087,13 @@ void Game::inputShop(int key) {
 void Game::generateShopStock() {
     if (!shopStock_.empty()) return; // ya generado este piso
     PlayerClass cls = player_->getClass();
-    shopStock_.push_back({ {"Pocion de Vida", "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40}, 25, false });
-    shopStock_.push_back({ {"Pocion Mayor",   "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80}, 50, false });
-    Item w = pickWeapon(cls); shopStock_.push_back({ w, w.value, false });
-    Item a = pickArmor(cls);  shopStock_.push_back({ a, a.value, false });
+    int shopFloor = player_ ? player_->getDungeonFloor() : 1;
+    Item p1 = pickPotion(shopFloor);
+    Item p2 = pickPotion(shopFloor);
+    shopStock_.push_back({ p1, p1.value, false });
+    shopStock_.push_back({ p2, p2.value, false });
+    Item w = pickWeapon(cls, shopFloor); shopStock_.push_back({ w, w.value + shopFloor * 5, false });
+    Item a = pickArmor(cls, shopFloor);  shopStock_.push_back({ a, a.value + shopFloor * 5, false });
 }
 
 bool Game::isInShopRoom(Position p) const {
@@ -988,8 +1112,9 @@ void Game::inputCombat(int key) {
         } else if (combat_->playerWon()) {
             if (combatWorldEnemyIdx_ >= 0) {
                 auto& we = worldEnemies_[combatWorldEnemyIdx_];
-                player_->gainXp(xpForEnemy(we.type));
+                player_->gainXp(xpForEnemy(we.type, player_->getDungeonFloor()));
                 we.alive = false;
+                enemiesKilled_++;
                 // 15 % chance the enemy drops a key
                 if (std::rand() % 100 < 15) {
                     player_->addKey();
@@ -997,7 +1122,7 @@ void Game::inputCombat(int key) {
                 }
                 // 15 % chance the enemy drops a potion
                 if (std::rand() % 100 < 15) {
-                    Item pot = pickPotion();
+                    Item pot = pickPotion(player_->getDungeonFloor());
                     player_->getInventory().addItem(pot);
                     explorationMsg_ = "El enemigo solto una " + pot.name + "!";
                 }
@@ -1051,6 +1176,9 @@ void Game::inputCombat(int key) {
             break;
         case 'r': case 'R':
             combat_->doFlee();
+            break;
+        case 'u': case 'U':
+            combat_->doUseItem(0);
             break;
         case '\t':  // TAB
             combat_->cycleTarget();

@@ -6,6 +6,7 @@
 #include "combat/CombatSystem.hpp"
 #include "ui/HudLayout.hpp"
 #include "core/ShopItem.hpp"
+#include "quests/Quest.hpp"
 #include <string>
 #include <vector>
 
@@ -25,7 +26,7 @@ public:
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
-    static void drawQuestLog(TerminalScreen& scr);
+    static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
     static void drawGameOver(TerminalScreen& scr);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,

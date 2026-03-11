@@ -10,6 +10,7 @@
 #include "world/BSPDungeon.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
+#include "quests/Quest.hpp"
 #include <string>
 #include <memory>
 #include <vector>
@@ -82,6 +83,12 @@ private:
     // Exploration message
     std::string explorationMsg_;
 
+    // Quest system
+    std::vector<Quest> quests_;
+    int                questLogSelection_{0};
+    int                enemiesKilled_{0};
+    int                chestsOpened_{0};
+
     void dispatchInput(int key);
     void processInput();
     void update();
@@ -100,8 +107,12 @@ private:
     void inputCombat(int key);
     void inputInventory(int key);
     void inputShop(int key);
+    void inputQuestLog(int key);
     void generateShopStock();
     bool isInShopRoom(Position p) const;
+
+    void initQuests();
+    void checkQuestProgress();
 
     // AI movement thread
     std::thread          aiThread_;

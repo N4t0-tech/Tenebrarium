@@ -133,7 +133,13 @@ void CombatSystem::doDefend() {
 void CombatSystem::doUseItem(int /*i*/) {
     if (phase_ != CombatPhase::PlayerTurn) return;
     if (!hasEnoughAp(1)) { logMessage("PA insuficientes."); return; }
-    logMessage("Uso de objetos aun no implementado.");
+    int healed = player_.useConsumable();
+    if (healed == 0) {
+        logMessage("No tienes pociones.");
+        return;
+    }
+    logMessage(player_.getName() + " usa una pocion y recupera " +
+               std::to_string(healed) + " HP.");
     currentAp_--;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }

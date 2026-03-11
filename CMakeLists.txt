@@ -35,6 +35,3 @@ target_link_libraries(tenebrarium PRIVATE
 
 target_compile_options(tenebrarium PRIVATE -Wall -Wextra)
 
-target_compile_definitions(tenebrarium PRIVATE
-    ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
-)

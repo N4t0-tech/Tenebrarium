@@ -1,5 +1,6 @@
 #include "Renderer.hpp"
 #include "ui/XpLoader.hpp"
+#include "core/Assets.hpp"
 #include <raylib.h>
 #include <string>
 #include <vector>
@@ -135,7 +136,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
         return;
     }
     try {
-        XpFile xp = loadXp(std::string(ASSETS_DIR) + "/art/" + filename);
+        XpFile xp = loadXp(assetsDir() + "art/" + filename);
         if (xp.layers.empty()) throw std::runtime_error("vacio");
         xpDrawHalfBlock(scr, xp.layers[0], col, row);
     } catch (...) {
@@ -177,12 +178,16 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
     put("k " + std::to_string(player.getKeys()) + " llave(s)", COL_CYAN);
     put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
-    put("Piso " + std::to_string(player.getDungeonFloor()), COL_GRAY, CELL_DIM);
+    int fl = player.getDungeonFloor();
+    std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
+    Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
+    put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, 20);
-    put("WASD  mover",   COL_GRAY, CELL_DIM);
-    put("  P   pocion",  COL_GRAY, CELL_DIM);
-    put("  I   mochila", COL_GRAY, CELL_DIM);
-    put("  Q   salir",   COL_GRAY, CELL_DIM);
+    put("WASD  mover",    COL_GRAY, CELL_DIM);
+    put("  P   pocion",   COL_GRAY, CELL_DIM);
+    put("  I   mochila",  COL_GRAY, CELL_DIM);
+    put("  M   misiones", COL_GRAY, CELL_DIM);
+    put("  Q   salir",    COL_GRAY, CELL_DIM);
 }
 
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
@@ -207,14 +212,14 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
     b("  $" + std::to_string(player.getCoins()), COL_YELLOW);
     b("  k" + std::to_string(player.getKeys()), COL_CYAN);
     b("  +" + std::to_string(player.countConsumables()), COL_GREEN);
-    b("  WASD:mover  P:pocion  I:mochila  Q:salir", COL_GRAY, CELL_DIM);
+    b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
 
 void Renderer::drawTitle(TerminalScreen& scr, int selection) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
-    std::ifstream f(ASSETS_DIR "/title.txt");
+    std::ifstream f(assetsDir() + "title.txt");
     std::string line;
     int ty = cy - 8;
     while (std::getline(f, line)) {
@@ -241,7 +246,7 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection) {
 // ─── drawNameInput ────────────────────────────────────────────────────────────
 
 void Renderer::drawNameInput(TerminalScreen& scr, const std::string& name) {
-    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    int cy = scr.rows() / 2;
     drawCentered(scr, cy - 4, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
     drawCentered(scr, cy - 2, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
@@ -271,7 +276,6 @@ static constexpr ClassInfo kClasses[3] = {
 };
 
 void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
-    int cx = scr.cols() / 2;
     drawCentered(scr, 1, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
     drawCentered(scr, 2, 0, scr.cols(), "Elige tu clase:", COL_WHITE);
 
@@ -497,7 +501,10 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(cols / 2, br++, "[D] Defender  1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,        br,   "[SPACE] Fin turno", COL_WHITE);
         scr.putStr(cols / 2, br++, "[R] Huir  3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
-        scr.putStr(1, br, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
+        int pots = player.countConsumables();
+        std::string uLabel = "[U] Usar pocion (" + std::to_string(pots) + ")";
+        scr.putStr(1,        br,   uLabel, pots > 0 ? COL_CYAN : COL_GRAY);
+        scr.putStr(cols / 2, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
         if (combat.getPhase() == CombatPhase::EnemyTurn)
             drawCentered(scr, br + 1, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);
         if (combat.isOver()) {
@@ -594,9 +601,94 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
 
 // ─── drawQuestLog ─────────────────────────────────────────────────────────────
 
-void Renderer::drawQuestLog(TerminalScreen& scr) {
-    drawCentered(scr, scr.rows() / 2, 0, scr.cols(),
-                 "[Misiones] - en construccion", COL_WHITE);
+void Renderer::drawQuestLog(TerminalScreen& scr,
+                             const std::vector<Quest>& quests, int selection) {
+    int w  = std::min(scr.cols() - 4, 70);
+    int x0 = (scr.cols() - w) / 2;
+    int y0 = 1;
+    int h  = scr.rows() - 2;
+    drawBorder(scr, x0, y0, w, h);
+    drawCentered(scr, y0, x0, w, " DIARIO DE MISIONES ", COL_CYAN, CELL_BOLD);
+
+    if (quests.empty()) {
+        drawCentered(scr, y0 + h / 2, x0, w, "(Sin misiones activas)", COL_GRAY, CELL_DIM);
+        drawCentered(scr, y0 + h - 1, x0, w, "ESC volver", COL_GRAY, CELL_DIM);
+        return;
+    }
+
+    // Lista izquierda
+    int listW  = w / 2 - 1;
+    int detailX = x0 + listW + 1;
+    int detailW = w - listW - 1;
+    drawVSep(scr, x0 + listW, y0 + 1, h - 2);
+
+    int listY = y0 + 1;
+    for (int i = 0; i < static_cast<int>(quests.size()); i++) {
+        const auto& q = quests[i];
+        Color c; std::string icon;
+        switch (q.status) {
+            case QuestStatus::Completed:  c = COL_GREEN;  icon = "[+] "; break;
+            case QuestStatus::InProgress: c = COL_YELLOW; icon = "[~] "; break;
+            case QuestStatus::Failed:     c = COL_RED;    icon = "[x] "; break;
+            default:                      c = COL_GRAY;   icon = "[ ] "; break;
+        }
+        std::string line = icon + q.title;
+        if ((int)line.size() > listW - 2) line = line.substr(0, listW - 5) + "...";
+        uint8_t f = (i == selection) ? CELL_INVERTED : 0;
+        scr.putStr(x0 + 1, listY + i, line, c, COL_BLACK, f);
+    }
+
+    // Detalle derecho
+    if (selection >= 0 && selection < (int)quests.size()) {
+        const auto& q = quests[selection];
+        int dy = y0 + 1;
+        // Título
+        std::string title = q.title;
+        if ((int)title.size() > detailW - 2) title = title.substr(0, detailW - 5) + "...";
+        scr.putStr(detailX + 1, dy++, title, COL_YELLOW, COL_BLACK, CELL_BOLD);
+        dy++;
+        // Estado
+        std::string statusStr;
+        Color sc;
+        switch (q.status) {
+            case QuestStatus::Completed:  statusStr = "COMPLETADA";  sc = COL_GREEN;  break;
+            case QuestStatus::InProgress: statusStr = "EN PROGRESO"; sc = COL_YELLOW; break;
+            case QuestStatus::Failed:     statusStr = "FALLIDA";     sc = COL_RED;    break;
+            default:                      statusStr = "PENDIENTE";   sc = COL_GRAY;   break;
+        }
+        scr.putStr(detailX + 1, dy++, statusStr, sc, COL_BLACK, CELL_BOLD);
+        dy++;
+        // Descripción (wrap simple)
+        std::string desc = q.description;
+        while (!desc.empty() && dy < y0 + h - 4) {
+            int take = std::min((int)desc.size(), detailW - 2);
+            // no cortar a mitad de palabra
+            if (take < (int)desc.size() && desc[take] != ' ')
+                while (take > 0 && desc[take-1] != ' ') take--;
+            scr.putStr(detailX + 1, dy++, desc.substr(0, take), COL_WHITE);
+            desc = (take < (int)desc.size()) ? desc.substr(take) : "";
+            if (!desc.empty() && desc[0] == ' ') desc = desc.substr(1);
+        }
+        dy++;
+        // Objetivos
+        scr.putStr(detailX + 1, dy++, "Objetivos:", COL_CYAN, COL_BLACK, CELL_BOLD);
+        for (const auto& obj : q.objectives) {
+            if (dy >= y0 + h - 2) break;
+            std::string objLine = (obj.completed ? "\xe2\x96\xa0 " : "\xe2\x96\xa1 ") + obj.description;
+            Color oc = obj.completed ? COL_GREEN : COL_GRAY;
+            if ((int)objLine.size() > detailW - 2) objLine = objLine.substr(0, detailW - 5) + "...";
+            scr.putStr(detailX + 1, dy++, objLine, oc);
+        }
+        // Recompensas
+        if (dy < y0 + h - 2) {
+            dy++;
+            scr.putStr(detailX + 1, dy, "XP: " + std::to_string(q.xpReward) +
+                       "   Oro: " + std::to_string(q.goldReward), COL_YELLOW);
+        }
+    }
+
+    drawCentered(scr, y0 + h - 1, x0, w,
+                 " Arriba/Abajo navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawGameOver ─────────────────────────────────────────────────────────────
