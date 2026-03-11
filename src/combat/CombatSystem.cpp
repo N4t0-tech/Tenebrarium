@@ -50,10 +50,16 @@ void CombatSystem::doAttack() {
     int rawAtk = player_.getAttack();
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
     int dmg = std::max(1, rawAtk - target->getDefense());
+    bool crit = rollCritical();
+    if (crit) dmg = dmg * 3 / 2;
     target->takeDamageRaw(dmg);
 
-    logMessage(player_.getName() + " ataca a " + target->getName()
-               + " por " + ts(dmg) + " daño.");
+    if (crit)
+        logMessage("CRITICO! " + player_.getName() + " ataca a " + target->getName()
+                   + " por " + ts(dmg) + " daño.");
+    else
+        logMessage(player_.getName() + " ataca a " + target->getName()
+                   + " por " + ts(dmg) + " daño.");
     if (!target->isAlive()) {
         logMessage("  " + target->getName() + " derrotado!");
         advanceTarget();
@@ -76,10 +82,16 @@ void CombatSystem::doHeavyAttack() {
     int rawAtk = static_cast<int>(player_.getAttack() * 1.8f);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
     int dmg = std::max(1, rawAtk - target->getDefense());
+    bool crit = rollCritical();
+    if (crit) dmg = dmg * 3 / 2;
     target->takeDamageRaw(dmg);
 
-    logMessage(player_.getName() + " Ataque Fuerte a " + target->getName()
-               + " por " + ts(dmg) + " daño!");
+    if (crit)
+        logMessage("CRITICO! " + player_.getName() + " Ataque Fuerte a " + target->getName()
+                   + " por " + ts(dmg) + " daño!");
+    else
+        logMessage(player_.getName() + " Ataque Fuerte a " + target->getName()
+                   + " por " + ts(dmg) + " daño!");
     if (!target->isAlive()) {
         logMessage("  " + target->getName() + " derrotado!");
         advanceTarget();
@@ -262,6 +274,23 @@ void CombatSystem::processEnemyTurn() {
             logMessage(enemy->getName() + " ataca a " + player_.getName()
                        + " por " + ts(rawDmg) + " daño.");
 
+            // Araña: envenena al golpear
+            if (enemy->getType() == EnemyType::Spider) {
+                bool already = std::any_of(playerEffects_.begin(), playerEffects_.end(),
+                    [](const StatusEffect& fx){ return fx.type == StatusEffect::Type::Poisoned; });
+                if (!already) {
+                    StatusEffect p; p.type = StatusEffect::Type::Poisoned; p.turnsLeft = 3; p.magnitude = 5;
+                    playerEffects_.push_back(p);
+                    logMessage("La Arana te envenena!");
+                }
+            }
+            // Vampiro: se cura 30% del daño infligido
+            if (enemy->getType() == EnemyType::Vampire) {
+                int heal = std::max(1, rawDmg * 30 / 100);
+                enemy->heal(heal);
+                logMessage(enemy->getName() + " drena " + ts(heal) + " HP!");
+            }
+
             if (!player_.isAlive()) {
                 logMessage(player_.getName() + " ha caido en batalla...");
                 phase_ = CombatPhase::CombatOver;
@@ -278,7 +307,13 @@ void CombatSystem::processEnemyTurn() {
 }
 
 void CombatSystem::tickPlayerEffects() {
-    for (auto& fx : playerEffects_) fx.turnsLeft--;
+    for (auto& fx : playerEffects_) {
+        if (fx.type == StatusEffect::Type::Poisoned) {
+            player_.takeDamageRaw(fx.magnitude);
+            logMessage(player_.getName() + " sufre " + ts(fx.magnitude) + " daño por veneno.");
+        }
+        fx.turnsLeft--;
+    }
     playerEffects_.erase(
         std::remove_if(playerEffects_.begin(), playerEffects_.end(),
             [](const StatusEffect& fx) { return fx.turnsLeft <= 0; }),
@@ -429,6 +464,11 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
     }
+}
+
+bool CombatSystem::rollCritical() const {
+    int chance = (player_.getClass() == PlayerClass::Ranger) ? 20 : 15;
+    return (std::rand() % 100) < chance;
 }
 
 bool CombatSystem::isPlayerAttackBoosted() const {

@@ -423,7 +423,8 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
 // ─── drawCombat ──────────────────────────────────────────────────────────────
 
 void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
-                           const Player& player, bool showingArts, int artSelection) {
+                           const Player& player, bool showingArts, int artSelection,
+                           bool isBoss) {
     int cols = scr.cols(), rows = scr.rows();
     int halfW = cols / 2;
 
@@ -439,7 +440,9 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             scr.putStr(2, er++, e->getName() + " [MUERTO]", COL_GRAY, COL_BLACK, CELL_DIM);
             continue;
         }
-        Color nc = tgt ? COL_YELLOW : COL_WHITE;
+        if (isBoss && i == 0)
+            scr.putStr(2, er++, "[JEFE]", COL_RED, COL_BLACK, CELL_BOLD);
+        Color nc = (isBoss && i == 0) ? COL_RED : (tgt ? COL_YELLOW : COL_WHITE);
         scr.putStr(2, er++, (tgt ? "> " : "  ") + e->getName(),
                    nc, COL_BLACK, tgt ? CELL_BOLD : 0);
         scr.putStr(2, er, "HP " + std::to_string(e->getHp()) + "/" +

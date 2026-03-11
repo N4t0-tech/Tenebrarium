@@ -76,4 +76,5 @@ private:
 
     bool isPlayerAttackBoosted()  const;
     int  getPlayerAttackBoost()   const;
+    bool rollCritical()           const;
 };

@@ -50,6 +50,7 @@ private:
         Position  spawnPos;
         EnemyType type;
         bool      alive;
+        bool      isBoss = false;
     };
     std::vector<WorldEnemy>  worldEnemies_;
     int                      combatWorldEnemyIdx_;

@@ -19,7 +19,7 @@ static constexpr int GKEY_BACKSPACE = 0x1005;
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
 static EnemyType pickEnemyType(int floor);
-static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor);
+static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor, bool isBoss = false);
 static int  xpForEnemy(EnemyType t, int floor);
 static Item pickWeapon(PlayerClass cls, int floor);
 static Item pickArmor(PlayerClass cls, int floor);
@@ -504,9 +504,11 @@ void Game::render(TerminalScreen& scr) {
             }
             break;
         case GameState::Combat:
-            if (combat_ && player_)
+            if (combat_ && player_) {
+                bool boss = combatWorldEnemyIdx_ >= 0 && worldEnemies_[combatWorldEnemyIdx_].isBoss;
                 Renderer::drawCombat(scr, *combat_, *player_,
-                                     combatShowingArts_, combatArtSelection_);
+                                     combatShowingArts_, combatArtSelection_, boss);
+            }
             break;
         case GameState::Shop:
             if (player_)
@@ -533,35 +535,66 @@ static char glyphForEnemy(EnemyType t) {
         case EnemyType::Goblin:   return 'g';
         case EnemyType::Skeleton: return 's';
         case EnemyType::Orc:      return 'o';
+        case EnemyType::Spider:   return 'a';
+        case EnemyType::Vampire:  return 'V';
     }
     return '?';
 }
 
-// Tipo de enemigo según piso: goblins en pisos bajos, orcos en altos
+// Tipo de enemigo según piso con pesos dinámicos
 static EnemyType pickEnemyType(int floor) {
-    // floor 1: G=60% S=30% O=10%
-    // floor 5+: G=10% S=30% O=60%
-    int gobChance = std::max(10, 60 - (floor - 1) * 10);
-    int orcChance = std::min(60, (floor - 1) * 10);
-    int r = std::rand() % 100;
-    if (r < gobChance)              return EnemyType::Goblin;
-    if (r < gobChance + (100 - gobChance - orcChance)) return EnemyType::Skeleton;
-    return EnemyType::Orc;
+    bool spiderAvail  = (floor >= 2);
+    bool vampireAvail = (floor >= 4);
+    int gobW = std::max(5,  55 - (floor - 1) * 8);
+    int skeW = 15;
+    int orcW = std::min(30, (floor - 1) * 5);
+    int spiW = spiderAvail  ? std::min(30, (floor - 2) * 7) : 0;
+    int vapW = vampireAvail ? std::min(20, (floor - 4) * 5) : 0;
+    int total = gobW + skeW + orcW + spiW + vapW;
+    int r = std::rand() % total;
+    if (r < gobW)              return EnemyType::Goblin;
+    r -= gobW;
+    if (r < skeW)              return EnemyType::Skeleton;
+    r -= skeW;
+    if (r < orcW)              return EnemyType::Orc;
+    r -= orcW;
+    if (r < spiW)              return EnemyType::Spider;
+    return EnemyType::Vampire;
 }
 
 // Stats escalan con el piso: +15% HP/ATK/DEF por piso
-static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor) {
+static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor, bool isBoss) {
     float s = 1.0f + (floor - 1) * 0.15f;
     auto sc = [s](int base) { return std::max(1, static_cast<int>(base * s)); };
+    std::string name; int hp, atk, def, xp; int pa = 1;
     switch (t) {
         case EnemyType::Goblin:
-            return std::make_unique<Enemy>("Goblin",   sc(125), sc(17), sc(4),  sc(60),  t, 1);
+            name="Goblin";   hp=sc(125); atk=sc(17); def=sc(4);  xp=sc(60);  pa=1; break;
         case EnemyType::Skeleton:
-            return std::make_unique<Enemy>("Esqueleto",sc(120), sc(16), sc(8),  sc(60),  t, 1);
+            name="Esqueleto";hp=sc(120); atk=sc(16); def=sc(8);  xp=sc(60);  pa=1; break;
         case EnemyType::Orc:
-            return std::make_unique<Enemy>("Orco",     sc(140), sc(20), sc(10), sc(120), t, 2);
+            name="Orco";     hp=sc(140); atk=sc(20); def=sc(10); xp=sc(120); pa=2; break;
+        case EnemyType::Spider:
+            name="Arana";    hp=sc(80);  atk=sc(12); def=sc(2);  xp=sc(40);  pa=1; break;
+        case EnemyType::Vampire:
+            name="Vampiro";  hp=sc(110); atk=sc(18); def=sc(6);  xp=sc(80);  pa=1; break;
+        default:
+            name="???";      hp=10;      atk=5;      def=1;      xp=5;       pa=1; break;
     }
-    return std::make_unique<Enemy>("???", 10, 5, 1, 5, t, 1);
+    if (isBoss) {
+        hp  = static_cast<int>(hp  * 2.5f);
+        atk = static_cast<int>(atk * 2.5f);
+        def = static_cast<int>(def * 2.5f);
+        switch (t) {
+            case EnemyType::Goblin:   name = "Rey Goblin";       break;
+            case EnemyType::Skeleton: name = "Senor Liche";      break;
+            case EnemyType::Orc:      name = "Gran Orco";        break;
+            case EnemyType::Spider:   name = "Reina Arana";      break;
+            case EnemyType::Vampire:  name = "Vampiro Anciano";  break;
+            default: break;
+        }
+    }
+    return std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
 }
 
 // XP escala con el piso
@@ -571,6 +604,8 @@ static int xpForEnemy(EnemyType t, int floor) {
         case EnemyType::Goblin:   base = 20;  break;
         case EnemyType::Skeleton: base = 15;  break;
         case EnemyType::Orc:      base = 30;  break;
+        case EnemyType::Spider:   base = 40;  break;
+        case EnemyType::Vampire:  base = 80;  break;
         default:                  base = 5;   break;
     }
     return base + (floor - 1) * 5;
@@ -809,6 +844,11 @@ void Game::setState(GameState newState) {
         int numSecret = 1 + std::rand() % 2;
         for (int i = 0; i < numSecret; i++)
             tryPlaceSecretRoom(taken, cls);
+
+        // Boss cada 5 pisos en el penúltimo cuarto
+        if (floor % 5 == 0 && floor > 0 && n >= 3) {
+            worldEnemies_.push_back({ pickPos(n - 2), pickPos(n - 2), pickEnemyType(floor), true, true });
+        }
     }
 
     if (newState == GameState::Combat && player_) {
@@ -818,7 +858,8 @@ void Game::setState(GameState newState) {
         std::vector<std::unique_ptr<Enemy>> enemies;
         int fl = player_ ? player_->getDungeonFloor() : 1;
         if (combatWorldEnemyIdx_ >= 0) {
-            enemies.push_back(makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type, fl));
+            bool boss = worldEnemies_[combatWorldEnemyIdx_].isBoss;
+            enemies.push_back(makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type, fl, boss));
         } else {
             enemies.push_back(makeEnemy(EnemyType::Goblin, fl));
             enemies.push_back(makeEnemy(EnemyType::Skeleton, fl));
@@ -1116,21 +1157,32 @@ void Game::inputCombat(int key) {
         } else if (combat_->playerWon()) {
             if (combatWorldEnemyIdx_ >= 0) {
                 auto& we = worldEnemies_[combatWorldEnemyIdx_];
-                player_->gainXp(xpForEnemy(we.type, player_->getDungeonFloor()));
+                int baseXp = xpForEnemy(we.type, player_->getDungeonFloor());
+                int xpGained = we.isBoss ? baseXp * 5 : baseXp;
+                player_->gainXp(xpGained);
                 we.alive = false;
                 enemiesKilled_++;
-                // 15 % chance the enemy drops a key
-                if (std::rand() % 100 < 15) {
+                int lootChance = we.isBoss ? 45 : 15;
+                // chance the enemy drops a key
+                if (std::rand() % 100 < lootChance) {
                     player_->addKey();
                     explorationMsg_ = "El enemigo solto una llave!";
                 }
-                // 15 % chance the enemy drops a potion
-                if (std::rand() % 100 < 15) {
+                // chance the enemy drops a potion
+                if (std::rand() % 100 < lootChance) {
                     Item pot = pickPotion(player_->getDungeonFloor());
                     player_->getInventory().addItem(pot);
                     explorationMsg_ = "El enemigo solto una " + pot.name + "!";
                 }
             }
+            // Regeneración post-combate
+            int hpRegen = std::max(1, player_->getMaxHp()  * 15 / 100);
+            int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
+            player_->heal(hpRegen);
+            player_->restoreMana(mpRegen);
+            if (explorationMsg_.empty())
+                explorationMsg_ = "Recuperas " + std::to_string(hpRegen)
+                                  + " HP y " + std::to_string(mpRegen) + " MP.";
             returnToExploration();
         } else {
             setState(GameState::GameOver);
