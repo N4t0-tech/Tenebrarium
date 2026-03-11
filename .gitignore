@@ -1,5 +1,6 @@
-build/
+build*/
 saves/
 compile_commands.json
-build-raylib/
-build/
+Tenebrarium-linux/
+Tenebrarium-linux.tar.gz
+*.png
