@@ -9,8 +9,7 @@
 #include "world/Map.hpp"
 #include "world/BSPDungeon.hpp"
 #include "ui/HudLayout.hpp"
-#include <ftxui/component/screen_interactive.hpp>
-#include <ftxui/dom/elements.hpp>
+#include "ui/TerminalScreen.hpp"
 #include <string>
 #include <memory>
 #include <vector>
@@ -18,7 +17,6 @@
 #include <mutex>
 #include <atomic>
 
-// Central game class. Owns the main loop and all subsystems.
 class Game {
 public:
     Game();
@@ -29,13 +27,13 @@ public:
 private:
     GameState     state_;
     MenuPhase     menuPhase_;
-    bool          running_;
+    bool          quitRequested_;
 
     // Menu state
-    int           menuSelection_;   // title: 0=Nueva Partida, 1=Salir
-    std::string   playerName_;      // being typed in NameInput
-    int           classSelection_;  // 0=Warrior, 1=Mage, 2=Ranger
-    int           hudSelection_;    // 0=Sidebar, 1=Bottom
+    int           menuSelection_;
+    std::string   playerName_;
+    int           classSelection_;
+    int           hudSelection_;
 
     HudLayout     hudLayout_;
 
@@ -55,15 +53,13 @@ private:
     std::vector<WorldEnemy>  worldEnemies_;
     int                      combatWorldEnemyIdx_;
 
-    // Loot types pre-assigned to each chest at spawn time
     enum class ChestLoot { Coins, Item, Key };
-
     struct WorldChest {
         Position  pos;
         bool      opened;
         ChestLoot loot;
-        int       coins;  // if loot == Coins
-        Item      item;   // if loot == Item
+        int       coins;
+        Item      item;
     };
     std::vector<WorldChest>  worldChests_;
 
@@ -74,7 +70,7 @@ private:
     Position  stairsPos_;
 
     // Inventory
-    int                     inventorySelection_{0};
+    int       inventorySelection_{0};
 
     // Shop
     std::vector<ShopItem>   shopStock_;
@@ -83,15 +79,13 @@ private:
     bool                    shopExists_{false};
     Position                shopMerchantPos_{};
 
-    // Exploration message (shown until next key press)
+    // Exploration message
     std::string explorationMsg_;
 
-    // FTXUI
-    ftxui::ScreenInteractive screen_;
-
-    void processInput(int key);
+    void dispatchInput(int key);
+    void processInput();
     void update();
-    ftxui::Element renderDocument();
+    void render(TerminalScreen& scr);
 
     void setState(GameState newState);
     void returnToExploration();
@@ -113,6 +107,7 @@ private:
     std::thread          aiThread_;
     std::mutex           worldMutex_;
     std::atomic<bool>    aiRunning_{false};
+    std::atomic<bool>    pendingRedraw_{false};
     int                  pendingCombatEnemy_{-1};
     void aiLoop();
 };

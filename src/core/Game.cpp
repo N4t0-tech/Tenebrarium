@@ -1,22 +1,19 @@
 #include "Game.hpp"
 #include "ui/Renderer.hpp"
 #include "entities/Enemy.hpp"
-#include <ftxui/component/component.hpp>
-#include <ftxui/component/event.hpp>
-#include <ftxui/component/screen_interactive.hpp>
-#include <ftxui/dom/elements.hpp>
+#include <raylib.h>
 #include <queue>
+#include <vector>
 #include <chrono>
 #include <algorithm>
 #include <cstdlib>
 
-// Keycodes (formerly from ncurses.h)
-static constexpr int KEY_UP        = 0x103;
-static constexpr int KEY_DOWN      = 0x102;
-static constexpr int KEY_LEFT      = 0x104;
-static constexpr int KEY_RIGHT     = 0x105;
-static constexpr int KEY_BACKSPACE = 0x107;
-// KEY_ENTER == '\n', no se define para evitar duplicados en switch/case
+// Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
+static constexpr int GKEY_UP        = 0x1001;
+static constexpr int GKEY_DOWN      = 0x1002;
+static constexpr int GKEY_LEFT      = 0x1003;
+static constexpr int GKEY_RIGHT     = 0x1004;
+static constexpr int GKEY_BACKSPACE = 0x1005;
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
@@ -29,7 +26,7 @@ static Item pickPotion();
 Game::Game()
     : state_(GameState::MainMenu),
       menuPhase_(MenuPhase::Title),
-      running_(true),
+      quitRequested_(false),
       menuSelection_(0),
       classSelection_(0),
       hudSelection_(0),
@@ -40,8 +37,7 @@ Game::Game()
       lockedDoorPos_({0,0}),
       lockedDoorExists_(false),
       lockedDoorOpen_(false),
-      stairsPos_({0,0}),
-      screen_(ftxui::ScreenInteractive::Fullscreen())
+      stairsPos_({0,0})
 {
     aiRunning_ = true;
     aiThread_  = std::thread(&Game::aiLoop, this);
@@ -53,36 +49,124 @@ Game::~Game() {
 }
 
 void Game::run() {
-    using namespace ftxui;
-    auto renderer = ftxui::Renderer([&] { return renderDocument(); });
-    auto handler  = CatchEvent(renderer, [&](Event ev) {
-        if (ev == ftxui::Event::Custom) {
+    const int SCREEN_W = 1280;
+    const int SCREEN_H = 720;
+
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
+    SetTargetFPS(60);
+    SetExitKey(0);  // desactivar cierre con ESC (lo manejamos nosotros)
+
+    // Centrar en el monitor principal (índice 0)
+    int monX = GetMonitorPosition(0).x;
+    int monY = GetMonitorPosition(0).y;
+    int monW = GetMonitorWidth(0);
+    int monH = GetMonitorHeight(0);
+    SetWindowPosition(monX + (monW - SCREEN_W) / 2,
+                      monY + (monH - SCREEN_H) / 2);
+
+    // Codepoints necesarios: ASCII + dibujo de caja + bloques + algunos CP437
+    std::vector<int> codepoints;
+    // ASCII imprimible
+    for (int i = 32; i < 127; i++) codepoints.push_back(i);
+    // Dibujo de caja: ─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼  (U+2500–U+257F)
+    for (int i = 0x2500; i <= 0x257F; i++) codepoints.push_back(i);
+    // Elementos de bloque: █ ░ ▒ ▓ ▀ ▄ etc. (U+2580–U+259F)
+    for (int i = 0x2580; i <= 0x259F; i++) codepoints.push_back(i);
+    // Símbolos misceláneos usados por CP437 (flechas, caras, etc.)
+    int extras[] = {
+        0x263A, 0x263B, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022, 0x25D8,
+        0x25CB, 0x25D9, 0x2642, 0x2640, 0x266A, 0x266B, 0x263C, 0x25BA,
+        0x25C4, 0x2195, 0x203C, 0x2191, 0x2193, 0x2192, 0x2190, 0x221F,
+        0x2194, 0x25B2, 0x25BC, 0x2302, 0x2310, 0x00AC, 0x00BD, 0x00BC,
+        0x00AB, 0x00BB, 0x03B1, 0x00DF, 0x0393, 0x03C0, 0x03A3, 0x03C3,
+        0x03C4, 0x03A6, 0x0398, 0x03A9, 0x03B4, 0x221E, 0x03C6, 0x03B5,
+        0x2229, 0x2261, 0x00B1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00F7,
+        0x2248, 0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0,
+        // letras latinas extendidas comunes
+        0x00C7, 0x00FC, 0x00E9, 0x00E2, 0x00E4, 0x00E0, 0x00E5, 0x00E7,
+        0x00EA, 0x00EB, 0x00E8, 0x00EF, 0x00EE, 0x00EC, 0x00C4, 0x00C5,
+        0x00C9, 0x00E6, 0x00C6, 0x00F4, 0x00F6, 0x00F2, 0x00FB, 0x00F9,
+        0x00FF, 0x00D6, 0x00DC, 0x00A2, 0x00A3, 0x00A5, 0x00E1, 0x00ED,
+        0x00F3, 0x00FA, 0x00F1, 0x00D1, 0x00AA, 0x00BA, 0x00BF, 0x00A1,
+        // doble línea CP437
+        0x2550, 0x2551, 0x2552, 0x2553, 0x2554, 0x2555, 0x2556, 0x2557,
+        0x2558, 0x2559, 0x255A, 0x255B, 0x255C, 0x255D, 0x255E, 0x255F,
+        0x2560, 0x2561, 0x2562, 0x2563, 0x2564, 0x2565, 0x2566, 0x2567,
+        0x2568, 0x2569, 0x256A, 0x256B, 0x256C,
+        // círculos para PA ● ○
+        0x25CF, 0x25CB,
+    };
+    for (int cp : extras) codepoints.push_back(cp);
+
+    Font font = LoadFontEx(ASSETS_DIR "/fonts/mono.ttf", 18,
+                           codepoints.data(), static_cast<int>(codepoints.size()));
+    SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+
+    // Calcular tamaño de celda
+    Vector2 gs = MeasureTextEx(font, "M", 18, 0);
+    int cellW = static_cast<int>(gs.x);
+    int cellH = static_cast<int>(gs.y) + 2;
+
+    while (!WindowShouldClose() && !quitRequested_) {
+        // Recalcular grid si la ventana cambió de tamaño
+        int cols = GetScreenWidth()  / cellW;
+        int rows = GetScreenHeight() / cellH;
+        if (cols < 1) cols = 1;
+        if (rows < 1) rows = 1;
+
+        // Procesar IA pending
+        if (pendingRedraw_.load(std::memory_order_acquire)) {
+            pendingRedraw_.store(false, std::memory_order_release);
             std::lock_guard<std::mutex> lk(worldMutex_);
             if (pendingCombatEnemy_ >= 0 && state_ == GameState::Exploration) {
                 combatWorldEnemyIdx_ = pendingCombatEnemy_;
                 pendingCombatEnemy_  = -1;
                 setState(GameState::Combat);
             }
-            return true;
         }
-        if (ev == Event::ArrowUp)    { processInput(KEY_UP);    return true; }
-        if (ev == Event::ArrowDown)  { processInput(KEY_DOWN);  return true; }
-        if (ev == Event::ArrowLeft)  { processInput(KEY_LEFT);  return true; }
-        if (ev == Event::ArrowRight) { processInput(KEY_RIGHT); return true; }
-        if (ev == Event::Return)     { processInput('\n');       return true; }
-        if (ev == Event::Tab)        { processInput('\t');       return true; }
-        if (ev == Event::Escape)     { processInput(27);         return true; }
-        if (ev == Event::Backspace)  { processInput(KEY_BACKSPACE); return true; }
-        if (ev.is_character()) {
-            processInput(ev.character()[0]);
-            return true;
-        }
-        return false;
-    });
-    screen_.Loop(handler);
+
+        processInput();
+        update();
+
+        TerminalScreen scr(cols, rows, cellW, cellH, font);
+        scr.clear();
+        render(scr);
+
+        BeginDrawing();
+        ClearBackground(BLACK);
+        scr.render();
+        EndDrawing();
+    }
+
+    UnloadFont(font);
+    CloseWindow();
 }
 
-void Game::processInput(int key) {
+void Game::processInput() {
+    // Raylib keycode → código interno del juego
+    // Los valores numéricos son los de KeyboardKey en raylib.h
+    struct { int rl; int g; } mapping[] = {
+        {265, GKEY_UP},        // KEY_UP
+        {264, GKEY_DOWN},      // KEY_DOWN
+        {263, GKEY_LEFT},      // KEY_LEFT
+        {262, GKEY_RIGHT},     // KEY_RIGHT
+        {257, '\n'},           // KEY_ENTER
+        {335, '\n'},           // KEY_KP_ENTER
+        {256, 27},             // KEY_ESCAPE
+        {258, '\t'},           // KEY_TAB
+        {259, GKEY_BACKSPACE}, // KEY_BACKSPACE
+        {32,  ' '},            // KEY_SPACE
+    };
+    for (auto& m : mapping) {
+        if (IsKeyPressed(m.rl)) { dispatchInput(m.g); return; }
+    }
+    // Carácter Unicode (letras, números, etc.)
+    int cp = GetCharPressed();
+    if (cp > 0) dispatchInput(cp);
+}
+
+void Game::dispatchInput(int key) {
     switch (state_) {
         case GameState::MainMenu:
             switch (menuPhase_) {
@@ -94,7 +178,7 @@ void Game::processInput(int key) {
             break;
         case GameState::Exploration: {
             explorationMsg_.clear();
-            if (key == 'q' || key == 'Q') { screen_.ExitLoopClosure()(); break; }
+            if (key == 'q' || key == 'Q') { quitRequested_ = true; break; }
             if (!map_) break;
             Position pos = map_->getPlayerPos();
 
@@ -134,10 +218,10 @@ void Game::processInput(int key) {
             }
 
             int nx = pos.x, ny = pos.y;
-            if      (key == KEY_UP    || key == 'w' || key == 'k') ny--;
-            else if (key == KEY_DOWN  || key == 's' || key == 'j') ny++;
-            else if (key == KEY_LEFT  || key == 'a' || key == 'h') nx--;
-            else if (key == KEY_RIGHT || key == 'd' || key == 'l') nx++;
+            if      (key == GKEY_UP    || key == 'w' || key == 'k') ny--;
+            else if (key == GKEY_DOWN  || key == 's' || key == 'j') ny++;
+            else if (key == GKEY_LEFT  || key == 'a' || key == 'h') nx--;
+            else if (key == GKEY_RIGHT || key == 'd' || key == 'l') nx++;
             if (!map_->isWalkable(nx, ny)) break;
 
             // Merchant tile → open shop
@@ -207,7 +291,7 @@ void Game::processInput(int key) {
             inputInventory(key);
             break;
         case GameState::QuestLog:
-            if (key == 'q' || key == 'Q') screen_.ExitLoopClosure()();
+            if (key == 'q' || key == 'Q') quitRequested_ = true;
             break;
         case GameState::GameOver:
             if (key == '\n' || key == '\n')
@@ -221,15 +305,15 @@ void Game::processInput(int key) {
 
 void Game::inputTitle(int key) {
     switch (key) {
-        case KEY_UP:
-        case KEY_LEFT:
-        case KEY_DOWN:
-        case KEY_RIGHT:
+        case GKEY_UP:
+        case GKEY_LEFT:
+        case GKEY_DOWN:
+        case GKEY_RIGHT:
             menuSelection_ = (menuSelection_ + 1) % 2;
             break;
         case '\n':
             if (menuSelection_ == 1) {
-                screen_.ExitLoopClosure()();
+                quitRequested_ = true;
             } else {
                 playerName_.clear();
                 menuPhase_ = MenuPhase::NameInput;
@@ -237,7 +321,7 @@ void Game::inputTitle(int key) {
             break;
         case 'q':
         case 'Q':
-            screen_.ExitLoopClosure()();
+            quitRequested_ = true;
             break;
     }
 }
@@ -250,7 +334,7 @@ void Game::inputNameInput(int key) {
         }
         return;
     }
-    if (key == KEY_BACKSPACE || key == 127 || key == 8) {
+    if (key == GKEY_BACKSPACE || key == 127 || key == 8) {
         if (!playerName_.empty()) playerName_.pop_back();
         return;
     }
@@ -264,10 +348,10 @@ void Game::inputNameInput(int key) {
 
 void Game::inputClassSelect(int key) {
     switch (key) {
-        case KEY_UP:
+        case GKEY_UP:
             classSelection_ = (classSelection_ + 2) % 3;
             break;
-        case KEY_DOWN:
+        case GKEY_DOWN:
             classSelection_ = (classSelection_ + 1) % 3;
             break;
         case 27:
@@ -282,8 +366,8 @@ void Game::inputClassSelect(int key) {
 
 void Game::inputHudSelect(int key) {
     switch (key) {
-        case KEY_LEFT:
-        case KEY_RIGHT:
+        case GKEY_LEFT:
+        case GKEY_RIGHT:
             hudSelection_ = (hudSelection_ + 1) % 2;
             break;
         case 27:
@@ -308,19 +392,18 @@ void Game::update() {
     // per-frame game logic (placeholder)
 }
 
-ftxui::Element Game::renderDocument() {
-    using namespace ftxui;
+void Game::render(TerminalScreen& scr) {
     switch (state_) {
         case GameState::MainMenu:
             switch (menuPhase_) {
                 case MenuPhase::Title:
-                    return Renderer::drawTitle(menuSelection_);
+                    Renderer::drawTitle(scr, menuSelection_); break;
                 case MenuPhase::NameInput:
-                    return Renderer::drawNameInput(playerName_);
+                    Renderer::drawNameInput(scr, playerName_); break;
                 case MenuPhase::ClassSelect:
-                    return Renderer::drawClassSelect(classSelection_);
+                    Renderer::drawClassSelect(scr, classSelection_); break;
                 case MenuPhase::HudSelect:
-                    return Renderer::drawHudSelect(hudSelection_);
+                    Renderer::drawHudSelect(scr, hudSelection_); break;
             }
             break;
         case GameState::Exploration:
@@ -338,29 +421,31 @@ ftxui::Element Game::renderDocument() {
                     entities.push_back({stairsPos_, '>', 3, true});
                 if (shopExists_)
                     entities.push_back({shopMerchantPos_, '$', 4, true});
-                return Renderer::drawExploration(*map_, *player_, hudLayout_,
-                                                 entities, explorationMsg_);
+                Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
+                                          entities, explorationMsg_);
             }
             break;
         case GameState::Combat:
             if (combat_ && player_)
-                return Renderer::drawCombat(*combat_, *player_,
-                                            combatShowingArts_, combatArtSelection_);
+                Renderer::drawCombat(scr, *combat_, *player_,
+                                     combatShowingArts_, combatArtSelection_);
             break;
         case GameState::Shop:
             if (player_)
-                return Renderer::drawShop(shopStock_, shopSelection_, *player_, explorationMsg_);
+                Renderer::drawShop(scr, shopStock_, shopSelection_,
+                                   *player_, explorationMsg_);
             break;
         case GameState::Inventory:
             if (player_)
-                return Renderer::drawInventory(*player_, inventorySelection_);
+                Renderer::drawInventory(scr, *player_, inventorySelection_);
             break;
         case GameState::QuestLog:
-            return Renderer::drawQuestLog();
+            Renderer::drawQuestLog(scr);
+            break;
         case GameState::GameOver:
-            return Renderer::drawGameOver();
+            Renderer::drawGameOver(scr);
+            break;
     }
-    return ftxui::text("...");
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -487,7 +572,7 @@ void Game::aiLoop() {
             }
         }
 
-        screen_.PostEvent(ftxui::Event::Custom);
+        pendingRedraw_.store(true, std::memory_order_release);
     }
 }
 
@@ -805,10 +890,10 @@ void Game::inputInventory(int key) {
     const int bagSize = static_cast<int>(player_->getInventory().items().size());
     const int total   = 2 + bagSize;
     switch (key) {
-        case KEY_UP:
+        case GKEY_UP:
             inventorySelection_ = (inventorySelection_ - 1 + total) % total;
             break;
-        case KEY_DOWN:
+        case GKEY_DOWN:
             inventorySelection_ = (inventorySelection_ + 1) % total;
             break;
         case 'e': case 'E': case '\n': {
@@ -849,10 +934,10 @@ void Game::inputShop(int key) {
     int n = static_cast<int>(shopStock_.size());
     if (n == 0) { state_ = GameState::Exploration; return; }
     switch (key) {
-        case KEY_UP:
+        case GKEY_UP:
             shopSelection_ = (shopSelection_ - 1 + n) % n;
             break;
-        case KEY_DOWN:
+        case GKEY_DOWN:
             shopSelection_ = (shopSelection_ + 1) % n;
             break;
         case '\n': {
@@ -929,10 +1014,10 @@ void Game::inputCombat(int key) {
         auto arts = player_->getAvailableArts();
         int n = static_cast<int>(arts.size());
         switch (key) {
-            case KEY_UP:
+            case GKEY_UP:
                 combatArtSelection_ = (combatArtSelection_ - 1 + n) % n;
                 break;
-            case KEY_DOWN:
+            case GKEY_DOWN:
                 combatArtSelection_ = (combatArtSelection_ + 1) % n;
                 break;
             case '\n':

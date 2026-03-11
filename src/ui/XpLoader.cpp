@@ -1,12 +1,9 @@
 #include "XpLoader.hpp"
-#include <ftxui/dom/elements.hpp>
 #include <fstream>
 #include <vector>
 #include <stdexcept>
 #include <zlib.h>
 #include <cstring>
-
-using namespace ftxui;
 
 static const char32_t kCp437[256] = {
     0x0000, 0x263A, 0x263B, 0x2665, 0x2666, 0x2663, 0x2660, 0x2022,
@@ -43,28 +40,6 @@ static const char32_t kCp437[256] = {
     0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0, 0x00A0,
 };
 
-static std::string cp437ToUtf8(char32_t cp) {
-    std::string result;
-    if (cp == 0) {
-        result += ' ';  // null → espacio
-    } else if (cp < 0x80) {
-        result += static_cast<char>(cp);
-    } else if (cp < 0x800) {
-        result += static_cast<char>(0xC0 | (cp >> 6));
-        result += static_cast<char>(0x80 | (cp & 0x3F));
-    } else if (cp < 0x10000) {
-        result += static_cast<char>(0xE0 | (cp >> 12));
-        result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        result += static_cast<char>(0x80 | (cp & 0x3F));
-    } else {
-        result += static_cast<char>(0xF0 | (cp >> 18));
-        result += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-        result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        result += static_cast<char>(0x80 | (cp & 0x3F));
-    }
-    return result;
-}
-
 static int32_t readInt32(const uint8_t* data, size_t& offset) {
     int32_t val;
     std::memcpy(&val, data + offset, 4);
@@ -73,7 +48,6 @@ static int32_t readInt32(const uint8_t* data, size_t& offset) {
 }
 
 XpFile loadXp(const std::string& path) {
-    // 1. Descomprimir directamente con gzopen (soporta gzip y zlib)
     gzFile gz = gzopen(path.c_str(), "rb");
     if (!gz) throw std::runtime_error("Cannot open .xp file: " + path);
 
@@ -84,9 +58,8 @@ XpFile loadXp(const std::string& path) {
         data.insert(data.end(), buf, buf + n);
     gzclose(gz);
 
-    // 3. Parsear binario
     size_t offset = 0;
-    /*int32_t version =*/ readInt32(data.data(), offset);  // ignoramos version
+    /*int32_t version =*/ readInt32(data.data(), offset);
     int32_t numLayers = readInt32(data.data(), offset);
 
     XpFile xp;
@@ -94,10 +67,8 @@ XpFile loadXp(const std::string& path) {
         XpLayer layer;
         layer.width  = readInt32(data.data(), offset);
         layer.height = readInt32(data.data(), offset);
-
         layer.cells.resize(layer.width * layer.height);
 
-        // Células en orden columna-mayor: columna 0 primero (todas sus filas), luego col 1, etc.
         for (int x = 0; x < layer.width; x++) {
             for (int y = 0; y < layer.height; y++) {
                 XpCell cell;
@@ -110,67 +81,35 @@ XpFile loadXp(const std::string& path) {
                 cell.bg_r = data[offset++];
                 cell.bg_g = data[offset++];
                 cell.bg_b = data[offset++];
-                // Almacenar en orden fila-mayor para acceso fácil
                 layer.cells[y * layer.width + x] = cell;
             }
         }
-
         xp.layers.push_back(std::move(layer));
     }
-
     return xp;
 }
 
-ftxui::Element xpToElement(const XpLayer& layer, int stepX, int stepY) {
-    if (stepX < 1) stepX = 1;
-    if (stepY < 1) stepY = 1;
-    Elements rows;
-    for (int y = 0; y < layer.height; y += stepY) {
-        Elements cells;
-        for (int x = 0; x < layer.width; x += stepX) {
-            const XpCell& cell = layer.cells[y * layer.width + x];
-            std::string glyph = cp437ToUtf8(cell.glyph);
-            if (glyph.empty()) glyph = " ";
-
-            auto elem = text(glyph)
-                | color(Color::RGB(cell.fg_r, cell.fg_g, cell.fg_b))
-                | bgcolor(Color::RGB(cell.bg_r, cell.bg_g, cell.bg_b));
-            cells.push_back(elem);
-        }
-        rows.push_back(hbox(std::move(cells)));
-    }
-    return vbox(std::move(rows));
-}
-
-// Devuelve el color "efectivo" de una celda para el half-block:
-// celdas de bloque lleno (█) o glifo nulo usan fg; espacios usan bg.
-static Color effectiveColor(const XpCell& c) {
-    // glyph U+2588 = █ (full block, CP437 219); glyph 0 = nulo → bg
+// Color efectivo de una celda para half-block
+static Color effectiveRl(const XpCell& c) {
     if (c.glyph == 0 || c.glyph == U' ')
-        return Color::RGB(c.bg_r, c.bg_g, c.bg_b);
-    // Para el resto confiamos en el fg como color dominante
-    return Color::RGB(c.fg_r, c.fg_g, c.fg_b);
+        return Color{ c.bg_r, c.bg_g, c.bg_b, 255 };
+    return Color{ c.fg_r, c.fg_g, c.fg_b, 255 };
 }
 
-ftxui::Element xpToElementHalfBlock(const XpLayer& layer) {
-    Elements rows;
-    // Procesamos de 2 en 2 filas; si la altura es impar la última fila va sola
+void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row) {
+    // U+2580 = ▀  (upper half block)
+    static constexpr int UPPER_HALF = 0x2580;
     for (int y = 0; y < layer.height; y += 2) {
-        Elements cells;
         for (int x = 0; x < layer.width; x++) {
             const XpCell& top = layer.cells[y * layer.width + x];
-            Color topCol = effectiveColor(top);
+            Color topCol = effectiveRl(top);
             Color botCol;
             if (y + 1 < layer.height) {
-                const XpCell& bot = layer.cells[(y + 1) * layer.width + x];
-                botCol = effectiveColor(bot);
+                botCol = effectiveRl(layer.cells[(y + 1) * layer.width + x]);
             } else {
-                botCol = Color::RGB(0, 0, 0);
+                botCol = BLACK;
             }
-            // ▀ pinta la mitad superior con fg y la inferior con bg
-            cells.push_back(text("▀") | color(topCol) | bgcolor(botCol));
+            scr.put(col + x, row + y / 2, UPPER_HALF, topCol, botCol);
         }
-        rows.push_back(hbox(std::move(cells)));
     }
-    return vbox(std::move(rows));
 }
