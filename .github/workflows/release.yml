@@ -109,6 +109,15 @@ jobs:
       - name: Crear release en GitHub
         uses: softprops/action-gh-release@v2
         with:
+          name: "Tenebrarium ${{ github.ref_name }}"
+          body: |
+            ## Tenebrarium ${{ github.ref_name }}
+
+            RPG de mazmorras por turnos con estética TUI.
+
+            ### Descarga
+            - **Linux** → `tenebrarium-linux.tar.gz` — extrae y ejecuta `./tenebrarium`
+            - **Windows** → `tenebrarium-windows.zip` — extrae y ejecuta `tenebrarium.exe`
           files: |
             tenebrarium-linux.tar.gz
             tenebrarium-windows.zip
