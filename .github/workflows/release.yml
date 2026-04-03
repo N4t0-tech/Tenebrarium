@@ -71,10 +71,14 @@ jobs:
           key: windows-deps-${{ hashFiles('CMakeLists.txt') }}
 
       - name: Configurar
-        run: cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Compilar
-        run: cmake --build build -j$(nproc)
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          cmake --build build -j$(nproc)
 
       - name: Empaquetar
         run: |
