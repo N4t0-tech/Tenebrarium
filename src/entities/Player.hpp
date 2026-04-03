@@ -13,6 +13,7 @@ enum class PlayerClass {
 };
 
 class Player : public Entity {
+    friend class Game;
 public:
     Player(const std::string& name, PlayerClass playerClass);
 

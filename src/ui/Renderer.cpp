@@ -217,7 +217,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
 
-void Renderer::drawTitle(TerminalScreen& scr, int selection) {
+void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
     std::ifstream f(assetsDir() + "title.txt");
     std::string line;
@@ -229,8 +229,11 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection) {
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
     ty++;
-    const char* opts[] = { "Nueva Partida", "Salir" };
-    for (int i = 0; i < 2; i++) {
+    const char* opts3[] = { "Continuar", "Nueva Partida", "Salir" };
+    const char* opts2[] = { "Nueva Partida", "Salir" };
+    int n = hasSave ? 3 : 2;
+    const char** opts = hasSave ? opts3 : opts2;
+    for (int i = 0; i < n; i++) {
         std::string label = std::string("  ") + opts[i] + "  ";
         int x = cx - static_cast<int>(label.size()) / 2;
         Color c = (i == selection) ? COL_YELLOW : COL_WHITE;

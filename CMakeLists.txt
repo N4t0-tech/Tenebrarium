@@ -11,8 +11,6 @@ FetchContent_Declare(raylib
   GIT_REPOSITORY https://github.com/raysan5/raylib
   GIT_TAG 5.0
   GIT_SHALLOW TRUE
-  PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching CMakeLists"
-    COMMAND sed -i "s/cmake_minimum_required(VERSION 3.0)/cmake_minimum_required(VERSION 3.5)/" CMakeLists.txt || true
 )
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_GAMES    OFF CACHE BOOL "" FORCE)
@@ -37,6 +35,7 @@ target_compile_options(tenebrarium PRIVATE -Wall -Wextra)
 
 # Symlink assets/ dentro del directorio de build para poder ejecutar desde ahí
 add_custom_command(TARGET tenebrarium POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/assets
     COMMAND ${CMAKE_COMMAND} -E create_symlink
         ${CMAKE_SOURCE_DIR}/assets
         ${CMAKE_BINARY_DIR}/assets

@@ -90,6 +90,11 @@ private:
     int                enemiesKilled_{0};
     int                chestsOpened_{0};
 
+    void saveGame();
+    bool loadGame();
+    bool hasSave() const;
+    std::string savePath() const;
+
     void dispatchInput(int key);
     void processInput();
     void update();

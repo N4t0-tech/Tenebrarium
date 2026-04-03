@@ -13,7 +13,7 @@
 class Renderer {
 public:
     // Menu screens
-    static void drawTitle(TerminalScreen& scr, int selection);
+    static void drawTitle(TerminalScreen& scr, int selection, bool hasSave);
     static void drawNameInput(TerminalScreen& scr, const std::string& name);
     static void drawClassSelect(TerminalScreen& scr, int selection);
     static void drawHudSelect(TerminalScreen& scr, int selection);

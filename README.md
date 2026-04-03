@@ -14,6 +14,7 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - Diario de misiones
 - Retratos de clase en truecolor (REXPaint `.xp`)
 - 2 modos de HUD: panel lateral o barra inferior
+- Guardado automático al bajar de piso — continúa desde el menú principal
 
 ## Build & Run
 

@@ -8,6 +8,8 @@
 #include <chrono>
 #include <algorithm>
 #include <cstdlib>
+#include <fstream>
+#include <filesystem>
 
 // Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_UP        = 0x1001;
@@ -297,6 +299,7 @@ void Game::dispatchInput(int key) {
                 setState(GameState::Exploration);
                 explorationMsg_ = "Desciendes al piso " +
                                   std::to_string(player_->getDungeonFloor()) + "...";
+                saveGame();
             }
             break;
         }
@@ -320,19 +323,25 @@ void Game::dispatchInput(int key) {
 }
 
 void Game::inputTitle(int key) {
+    const bool hs = hasSave();
+    const int n   = hs ? 3 : 2;
     switch (key) {
         case GKEY_UP:
         case GKEY_LEFT:
+            menuSelection_ = (menuSelection_ - 1 + n) % n;
+            break;
         case GKEY_DOWN:
         case GKEY_RIGHT:
-            menuSelection_ = (menuSelection_ + 1) % 2;
+            menuSelection_ = (menuSelection_ + 1) % n;
             break;
         case '\n':
-            if (menuSelection_ == 1) {
-                quitRequested_ = true;
+            if (hs) {
+                if      (menuSelection_ == 0) { loadGame(); }
+                else if (menuSelection_ == 1) { playerName_.clear(); menuPhase_ = MenuPhase::NameInput; }
+                else                          { quitRequested_ = true; }
             } else {
-                playerName_.clear();
-                menuPhase_ = MenuPhase::NameInput;
+                if (menuSelection_ == 0) { playerName_.clear(); menuPhase_ = MenuPhase::NameInput; }
+                else                     { quitRequested_ = true; }
             }
             break;
         case 'q':
@@ -475,7 +484,7 @@ void Game::render(TerminalScreen& scr) {
         case GameState::MainMenu:
             switch (menuPhase_) {
                 case MenuPhase::Title:
-                    Renderer::drawTitle(scr, menuSelection_); break;
+                    Renderer::drawTitle(scr, menuSelection_, hasSave()); break;
                 case MenuPhase::NameInput:
                     Renderer::drawNameInput(scr, playerName_); break;
                 case MenuPhase::ClassSelect:
@@ -1240,4 +1249,325 @@ void Game::inputCombat(int key) {
             combat_->cycleTarget();
             break;
     }
+}
+
+// ─── save / load ──────────────────────────────────────────────────────────────
+
+std::string Game::savePath() const {
+    return std::string(GetApplicationDirectory()) + "saves/save.dat";
+}
+
+bool Game::hasSave() const {
+    return std::ifstream(savePath()).good();
+}
+
+// Write a length-prefixed string: "<len> <chars>"
+static void wstr(std::ostream& o, const std::string& s) {
+    o << s.size() << ' ';
+    o.write(s.data(), static_cast<std::streamsize>(s.size()));
+    o << ' ';
+}
+
+// Read a length-prefixed string
+static bool rstr(std::istream& in, std::string& s) {
+    size_t n;
+    if (!(in >> n)) return false;
+    char sp; in.get(sp);
+    s.resize(n);
+    return n == 0 || in.read(&s[0], static_cast<std::streamsize>(n)).good();
+}
+
+static void witem(std::ostream& o, const Item& item) {
+    wstr(o, item.name);
+    wstr(o, item.description);
+    o << static_cast<int>(item.type) << ' ' << item.value << ' '
+      << item.slots << ' ' << item.statBonus << '\n';
+}
+
+static bool ritem(std::istream& in, Item& item) {
+    if (!rstr(in, item.name) || !rstr(in, item.description)) return false;
+    int t;
+    if (!(in >> t >> item.value >> item.slots >> item.statBonus)) return false;
+    item.type = static_cast<ItemType>(t);
+    return true;
+}
+
+static char glyphForTile(TileType t) {
+    switch (t) {
+        case TileType::Wall:       return '#';
+        case TileType::SecretWall: return '#';
+        case TileType::Floor:      return '.';
+        case TileType::Door:       return '+';
+        case TileType::Trap:       return '^';
+        case TileType::Stairs:     return '>';
+        case TileType::Empty:      return ' ';
+    }
+    return ' ';
+}
+
+void Game::saveGame() {
+    std::filesystem::create_directories(
+        std::string(GetApplicationDirectory()) + "saves");
+
+    std::ofstream f(savePath());
+    if (!f || !player_ || !map_) return;
+
+    f << 1 << '\n'; // version
+
+    // Player
+    wstr(f, player_->name_);
+    f << '\n' << static_cast<int>(player_->class_) << '\n';
+    f << player_->level_ << ' ' << player_->xp_ << ' ' << player_->xpToNextLevel_ << ' '
+      << player_->hp_    << ' ' << player_->maxHp_   << ' '
+      << player_->mana_  << ' ' << player_->maxMana_ << ' '
+      << player_->coins_ << ' ' << player_->keys_    << ' ' << player_->dungeonFloor_ << ' '
+      << player_->attack_    << ' ' << player_->defense_    << ' '
+      << player_->baseAttack_ << ' ' << player_->baseDefense_ << '\n';
+
+    f << (player_->equippedWeapon_.has_value() ? 1 : 0) << '\n';
+    if (player_->equippedWeapon_) witem(f, *player_->equippedWeapon_);
+
+    f << (player_->equippedArmor_.has_value() ? 1 : 0) << '\n';
+    if (player_->equippedArmor_) witem(f, *player_->equippedArmor_);
+
+    const auto& invItems = player_->getInventory().items();
+    f << invItems.size() << '\n';
+    for (const auto& item : invItems) witem(f, item);
+
+    // Map
+    f << map_->width() << ' ' << map_->height() << '\n';
+    Position pp = map_->getPlayerPos();
+    f << pp.x << ' ' << pp.y << '\n';
+    for (int y = 0; y < map_->height(); y++) {
+        for (int x = 0; x < map_->width(); x++) {
+            const Tile& t = map_->at(x, y);
+            f << static_cast<int>(t.type) << ' '
+              << static_cast<int>(t.explored) << ' '
+              << static_cast<int>(t.visible);
+            f << (x < map_->width() - 1 ? ' ' : '\n');
+        }
+    }
+
+    // World enemies
+    f << worldEnemies_.size() << '\n';
+    for (const auto& we : worldEnemies_) {
+        f << we.pos.x << ' ' << we.pos.y << ' '
+          << we.spawnPos.x << ' ' << we.spawnPos.y << ' '
+          << static_cast<int>(we.type) << ' '
+          << static_cast<int>(we.alive) << ' '
+          << static_cast<int>(we.isBoss) << '\n';
+    }
+
+    // World chests
+    f << worldChests_.size() << '\n';
+    for (const auto& ch : worldChests_) {
+        f << ch.pos.x << ' ' << ch.pos.y << ' '
+          << static_cast<int>(ch.opened) << ' '
+          << static_cast<int>(ch.loot) << ' '
+          << ch.coins << ' ';
+        witem(f, ch.item);
+    }
+
+    // Locked door
+    f << static_cast<int>(lockedDoorExists_) << ' ';
+    if (lockedDoorExists_)
+        f << lockedDoorPos_.x << ' ' << lockedDoorPos_.y << ' '
+          << static_cast<int>(lockedDoorOpen_);
+    f << '\n';
+
+    // Stairs
+    f << stairsPos_.x << ' ' << stairsPos_.y << '\n';
+
+    // Shop
+    f << static_cast<int>(shopExists_) << '\n';
+    if (shopExists_) {
+        f << shopMerchantPos_.x << ' ' << shopMerchantPos_.y << ' '
+          << shopRoom_.x << ' ' << shopRoom_.y << ' '
+          << shopRoom_.w << ' ' << shopRoom_.h << '\n';
+    }
+    f << shopStock_.size() << '\n';
+    for (const auto& s : shopStock_) {
+        f << static_cast<int>(s.sold) << ' ' << s.price << ' ';
+        witem(f, s.item);
+    }
+
+    // Quests
+    f << enemiesKilled_ << ' ' << chestsOpened_ << '\n';
+    f << quests_.size() << '\n';
+    for (const auto& q : quests_) {
+        f << static_cast<int>(q.status) << ' ' << q.objectives.size();
+        for (const auto& obj : q.objectives)
+            f << ' ' << static_cast<int>(obj.completed);
+        f << '\n';
+    }
+
+    // HUD layout
+    f << static_cast<int>(hudLayout_) << '\n';
+}
+
+bool Game::loadGame() {
+    std::ifstream f(savePath());
+    if (!f) return false;
+
+    int version;
+    if (!(f >> version) || version != 1) return false;
+
+    // Player
+    std::string name;
+    if (!rstr(f, name)) return false;
+    int cls;
+    if (!(f >> cls)) return false;
+
+    int level, xp, xpNext, hp, maxHp, mana, maxMana, coins, keys, floor,
+        atk, def, baseAtk, baseDef;
+    if (!(f >> level >> xp >> xpNext >> hp >> maxHp >> mana >> maxMana
+             >> coins >> keys >> floor >> atk >> def >> baseAtk >> baseDef))
+        return false;
+
+    PlayerClass playerClass = static_cast<PlayerClass>(cls);
+    player_ = std::make_unique<Player>(name, playerClass);
+    player_->level_         = level;
+    player_->xp_            = xp;
+    player_->xpToNextLevel_ = xpNext;
+    player_->hp_            = hp;
+    player_->maxHp_         = maxHp;
+    player_->mana_          = mana;
+    player_->maxMana_       = maxMana;
+    player_->coins_         = coins;
+    player_->keys_          = keys;
+    player_->dungeonFloor_  = floor;
+    player_->attack_        = atk;
+    player_->defense_       = def;
+    player_->baseAttack_    = baseAtk;
+    player_->baseDefense_   = baseDef;
+
+    int hasWeapon;
+    if (!(f >> hasWeapon)) return false;
+    if (hasWeapon) {
+        Item w;
+        if (!ritem(f, w)) return false;
+        player_->equippedWeapon_ = w;
+    }
+
+    int hasArmor;
+    if (!(f >> hasArmor)) return false;
+    if (hasArmor) {
+        Item a;
+        if (!ritem(f, a)) return false;
+        player_->equippedArmor_ = a;
+    }
+
+    size_t invCount;
+    if (!(f >> invCount)) return false;
+    for (size_t i = 0; i < invCount; i++) {
+        Item item;
+        if (!ritem(f, item)) return false;
+        player_->getInventory().addItem(item);
+    }
+
+    // Map
+    int mapW, mapH, px, py;
+    if (!(f >> mapW >> mapH >> px >> py)) return false;
+    map_ = std::make_unique<Map>(mapW, mapH);
+    map_->setPlayerPos(px, py);
+    for (int y = 0; y < mapH; y++) {
+        for (int x = 0; x < mapW; x++) {
+            int type, explored, visible;
+            if (!(f >> type >> explored >> visible)) return false;
+            Tile& t = map_->at(x, y);
+            t.type     = static_cast<TileType>(type);
+            t.glyph    = glyphForTile(t.type);
+            t.explored = explored;
+            t.visible  = visible;
+        }
+    }
+    map_->updateFov();
+
+    // World enemies
+    size_t enemyCount;
+    if (!(f >> enemyCount)) return false;
+    worldEnemies_.resize(enemyCount);
+    for (auto& we : worldEnemies_) {
+        int type, alive, boss;
+        if (!(f >> we.pos.x >> we.pos.y >> we.spawnPos.x >> we.spawnPos.y
+               >> type >> alive >> boss)) return false;
+        we.type   = static_cast<EnemyType>(type);
+        we.alive  = alive;
+        we.isBoss = boss;
+    }
+
+    // World chests
+    size_t chestCount;
+    if (!(f >> chestCount)) return false;
+    worldChests_.resize(chestCount);
+    for (auto& ch : worldChests_) {
+        int opened, loot;
+        if (!(f >> ch.pos.x >> ch.pos.y >> opened >> loot >> ch.coins)) return false;
+        ch.opened = opened;
+        ch.loot   = static_cast<ChestLoot>(loot);
+        if (!ritem(f, ch.item)) return false;
+    }
+
+    // Locked door
+    int ldExists;
+    if (!(f >> ldExists)) return false;
+    lockedDoorExists_ = ldExists;
+    lockedDoorOpen_   = false;
+    if (lockedDoorExists_) {
+        int ldOpen;
+        if (!(f >> lockedDoorPos_.x >> lockedDoorPos_.y >> ldOpen)) return false;
+        lockedDoorOpen_ = ldOpen;
+    }
+
+    // Stairs
+    if (!(f >> stairsPos_.x >> stairsPos_.y)) return false;
+
+    // Shop
+    int shopEx;
+    if (!(f >> shopEx)) return false;
+    shopExists_ = shopEx;
+    if (shopExists_) {
+        if (!(f >> shopMerchantPos_.x >> shopMerchantPos_.y
+               >> shopRoom_.x >> shopRoom_.y >> shopRoom_.w >> shopRoom_.h))
+            return false;
+    }
+    size_t shopCount;
+    if (!(f >> shopCount)) return false;
+    shopStock_.resize(shopCount);
+    for (auto& s : shopStock_) {
+        int sold;
+        if (!(f >> sold >> s.price)) return false;
+        s.sold = sold;
+        if (!ritem(f, s.item)) return false;
+    }
+
+    // Quests
+    if (!(f >> enemiesKilled_ >> chestsOpened_)) return false;
+    size_t questCount;
+    if (!(f >> questCount)) return false;
+    initQuests(); // restore titles/descriptions from code
+    for (size_t i = 0; i < std::min(questCount, quests_.size()); i++) {
+        int status, objCount;
+        if (!(f >> status >> objCount)) return false;
+        quests_[i].status = static_cast<QuestStatus>(status);
+        for (int j = 0; j < objCount && j < static_cast<int>(quests_[i].objectives.size()); j++) {
+            int completed;
+            if (!(f >> completed)) return false;
+            quests_[i].objectives[j].completed = completed;
+        }
+    }
+
+    // HUD
+    int hud;
+    if (!(f >> hud)) return false;
+    hudLayout_ = static_cast<HudLayout>(hud);
+
+    // Restore runtime state
+    combat_.reset();
+    combatWorldEnemyIdx_ = -1;
+    pendingCombatEnemy_  = -1;
+    explorationMsg_.clear();
+    state_ = GameState::Exploration;
+
+    return true;
 }
