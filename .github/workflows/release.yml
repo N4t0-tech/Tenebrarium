@@ -62,6 +62,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-ninja
             git
 
       - name: Cachear dependencias de CMake (Raylib)
@@ -71,14 +72,10 @@ jobs:
           key: windows-deps-${{ hashFiles('CMakeLists.txt') }}
 
       - name: Configurar
-        run: |
-          export PATH="/mingw64/bin:$PATH"
-          cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Compilar
-        run: |
-          export PATH="/mingw64/bin:$PATH"
-          cmake --build build -j$(nproc)
+        run: cmake --build build -j$(nproc)
 
       - name: Empaquetar
         run: |
