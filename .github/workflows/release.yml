@@ -82,7 +82,7 @@ jobs:
           mkdir -p package/tenebrarium-windows
           cp build/tenebrarium.exe package/tenebrarium-windows/
           cp -r assets package/tenebrarium-windows/
-          cd package && 7z a ../tenebrarium-windows.zip tenebrarium-windows/
+          cd package && zip -r ../tenebrarium-windows.zip tenebrarium-windows/
 
       - name: Subir artefacto
         uses: actions/upload-artifact@v4
