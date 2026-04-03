@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake zlib1g-dev \
+            libgl1-mesa-dev libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev \
+            libasound2-dev libwayland-dev libxkbcommon-dev
+
+      - name: Cachear dependencias de CMake (Raylib)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: linux-deps-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configurar
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+      - name: Compilar
+        run: cmake --build build -j$(nproc)
+
+      - name: Empaquetar
+        run: |
+          mkdir -p package/tenebrarium-linux
+          cp build/tenebrarium package/tenebrarium-linux/
+          cp -r assets package/tenebrarium-linux/
+          cd package && tar -czf ../tenebrarium-linux.tar.gz tenebrarium-linux/
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenebrarium-linux
+          path: tenebrarium-linux.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-zlib
+            git
+
+      - name: Cachear dependencias de CMake (Raylib)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: windows-deps-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configurar
+        run: cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+      - name: Compilar
+        run: cmake --build build -j$(nproc)
+
+      - name: Empaquetar
+        run: |
+          mkdir -p package/tenebrarium-windows
+          cp build/tenebrarium.exe package/tenebrarium-windows/
+          cp -r assets package/tenebrarium-windows/
+          cd package && 7z a ../tenebrarium-windows.zip tenebrarium-windows/
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenebrarium-windows
+          path: tenebrarium-windows.zip
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Descargar artefacto Linux
+        uses: actions/download-artifact@v4
+        with:
+          name: tenebrarium-linux
+
+      - name: Descargar artefacto Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: tenebrarium-windows
+
+      - name: Crear release en GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            tenebrarium-linux.tar.gz
+            tenebrarium-windows.zip
