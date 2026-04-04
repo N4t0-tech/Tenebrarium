@@ -20,7 +20,11 @@ find_package(ZLIB REQUIRED)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-add_executable(tenebrarium ${SOURCES})
+if(WIN32)
+    add_executable(tenebrarium WIN32 ${SOURCES})
+else()
+    add_executable(tenebrarium ${SOURCES})
+endif()
 
 target_include_directories(tenebrarium PRIVATE
     src
