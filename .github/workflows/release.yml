@@ -83,6 +83,12 @@ jobs:
           mkdir -p package/tenebrarium-windows
           cp build/tenebrarium.exe package/tenebrarium-windows/
           cp -r assets package/tenebrarium-windows/
+          # Copiar DLLs de MinGW necesarias para ejecutar en Windows sin MinGW instalado
+          MINGW_BIN=/mingw64/bin
+          cp "$MINGW_BIN/zlib1.dll"            package/tenebrarium-windows/
+          cp "$MINGW_BIN/libstdc++-6.dll"      package/tenebrarium-windows/
+          cp "$MINGW_BIN/libwinpthread-1.dll"  package/tenebrarium-windows/
+          cp "$MINGW_BIN/libgcc_s_seh-1.dll"  package/tenebrarium-windows/
           cd package && zip -r ../tenebrarium-windows.zip tenebrarium-windows/
 
       - name: Subir artefacto
