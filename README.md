@@ -16,6 +16,15 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - 2 modos de HUD: panel lateral o barra inferior
 - Guardado automático al bajar de piso — continúa desde el menú principal
 
+## Descarga
+
+Descarga el ejecutable desde la [página de releases](../../releases/latest):
+
+- **Linux** → `tenebrarium-linux.tar.gz` — extrae y ejecuta `./tenebrarium`
+- **Windows** → `tenebrarium-windows.zip` — extrae y ejecuta `tenebrarium.exe`
+
+> **Nota Windows:** requiere OpenGL 3.3. En VMs sin soporte, coloca `opengl32.dll` de [Mesa3D](https://fdossena.com/?p=mesa/index.frag) junto al `.exe`.
+
 ## Build & Run
 
 **Dependencias del sistema:** `cmake` `zlib` `git`
