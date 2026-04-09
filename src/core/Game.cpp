@@ -182,6 +182,7 @@ void Game::dispatchInput(int key) {
         case GameState::MainMenu:
             switch (menuPhase_) {
                 case MenuPhase::Title:       inputTitle(key);       break;
+                case MenuPhase::Credits:     inputCredits(key);     break;
                 case MenuPhase::NameInput:   inputNameInput(key);   break;
                 case MenuPhase::ClassSelect: inputClassSelect(key); break;
                 case MenuPhase::HudSelect:   inputHudSelect(key);   break;
@@ -324,7 +325,7 @@ void Game::dispatchInput(int key) {
 
 void Game::inputTitle(int key) {
     const bool hs = hasSave();
-    const int n   = hs ? 3 : 2;
+    const int n   = hs ? 4 : 3;
     switch (key) {
         case GKEY_UP:
         case GKEY_LEFT:
@@ -338,16 +339,25 @@ void Game::inputTitle(int key) {
             if (hs) {
                 if      (menuSelection_ == 0) { loadGame(); }
                 else if (menuSelection_ == 1) { playerName_.clear(); menuPhase_ = MenuPhase::NameInput; }
+                else if (menuSelection_ == 2) { menuPhase_ = MenuPhase::Credits; }
                 else                          { quitRequested_ = true; }
             } else {
-                if (menuSelection_ == 0) { playerName_.clear(); menuPhase_ = MenuPhase::NameInput; }
-                else                     { quitRequested_ = true; }
+                if      (menuSelection_ == 0) { playerName_.clear(); menuPhase_ = MenuPhase::NameInput; }
+                else if (menuSelection_ == 1) { menuPhase_ = MenuPhase::Credits; }
+                else                          { quitRequested_ = true; }
             }
             break;
         case 'q':
         case 'Q':
             quitRequested_ = true;
             break;
+    }
+}
+
+void Game::inputCredits(int key) {
+    if (key == 27 || key == '\n') {
+        menuSelection_ = 0;
+        menuPhase_ = MenuPhase::Title;
     }
 }
 
@@ -485,6 +495,8 @@ void Game::render(TerminalScreen& scr) {
             switch (menuPhase_) {
                 case MenuPhase::Title:
                     Renderer::drawTitle(scr, menuSelection_, hasSave()); break;
+                case MenuPhase::Credits:
+                    Renderer::drawCredits(scr); break;
                 case MenuPhase::NameInput:
                     Renderer::drawNameInput(scr, playerName_); break;
                 case MenuPhase::ClassSelect:
@@ -907,22 +919,35 @@ void Game::openChest(WorldChest& chest) {
 
 // Items con calidad escalada por piso: +1 statBonus cada 2 pisos
 static Item pickWeapon(PlayerClass cls, int floor) {
-    static const Item w[3][3] = {
-        // Warrior
-        { {"Espada Corta",    "Un filo confiable.",   ItemType::Weapon, 30, 1, 3},
-          {"Hacha de Mano",   "Golpea con fuerza.",   ItemType::Weapon, 50, 1, 5},
-          {"Mandoble",        "Lenta pero letal.",    ItemType::Weapon, 80, 2, 8} },
-        // Mage
-        { {"Varita de Roble", "Canaliza magia.",      ItemType::Weapon, 30, 1, 2},
-          {"Baculo de Cristal","Poder arcano.",        ItemType::Weapon, 50, 1, 4},
-          {"Grimorio Oscuro",  "Magia devastadora.",  ItemType::Weapon, 80, 2, 6} },
-        // Ranger
-        { {"Arco Corto",      "Rapido y preciso.",    ItemType::Weapon, 30, 1, 3},
-          {"Arco Largo",      "Mayor alcance.",       ItemType::Weapon, 50, 1, 5},
-          {"Ballesta",        "Poderosa y lenta.",    ItemType::Weapon, 80, 2, 7} },
+    static const std::vector<Item> warrior = {
+        {"Espada Corta",  "Un filo confiable.",       ItemType::Weapon, 30, 1, 3},
+        {"Estoque",       "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3},
+        {"Hacha de Mano", "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5},
+        {"Espada",        "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5},
+        {"Mandoble",      "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8},
+        {"Lanza",         "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7},
     };
-    int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
-    Item item = w[ci][std::rand() % 3];
+    static const std::vector<Item> mage = {
+        {"Varita de Roble",    "Canaliza magia.",          ItemType::Weapon, 30, 1, 2},
+        {"Varita de Sauco",    "Madera antigua y potente.",ItemType::Weapon, 30, 1, 2},
+        {"Baculo de Cristal",  "Poder arcano.",             ItemType::Weapon, 50, 1, 4},
+        {"Baculo de Rayos",    "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4},
+        {"Grimorio Oscuro",    "Magia devastadora.",        ItemType::Weapon, 80, 2, 6},
+        {"Grimorio Demoniaco", "Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7},
+    };
+    static const std::vector<Item> ranger = {
+        {"Arco Corto",     "Rapido y preciso.",      ItemType::Weapon, 30, 1, 3},
+        {"Honda",          "Simple pero efectiva.",  ItemType::Weapon, 30, 1, 2},
+        {"Arco Largo",     "Mayor alcance.",         ItemType::Weapon, 50, 1, 5},
+        {"Arco Elfico",    "Tallado en madera elfica.",ItemType::Weapon,50, 1, 5},
+        {"Ballesta",       "Poderosa y lenta.",      ItemType::Weapon, 80, 2, 7},
+        {"Arco Encantado", "Flechas magicas.",        ItemType::Weapon, 80, 2, 7},
+        {"Arco Celestial", "Bendecido por los dioses.",ItemType::Weapon,80, 2, 8},
+    };
+    const auto& pool = (cls == PlayerClass::Warrior) ? warrior
+                     : (cls == PlayerClass::Mage)    ? mage
+                                                      : ranger;
+    Item item = pool[std::rand() % pool.size()];
     item.statBonus += (floor - 1) / 2;
     return item;
 }

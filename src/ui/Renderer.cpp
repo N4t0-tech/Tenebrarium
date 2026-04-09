@@ -229,9 +229,9 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave) {
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
     ty++;
-    const char* opts3[] = { "Continuar", "Nueva Partida", "Salir" };
-    const char* opts2[] = { "Nueva Partida", "Salir" };
-    int n = hasSave ? 3 : 2;
+    const char* opts3[] = { "Continuar", "Nueva Partida", "Creditos", "Salir" };
+    const char* opts2[] = { "Nueva Partida", "Creditos", "Salir" };
+    int n = hasSave ? 4 : 3;
     const char** opts = hasSave ? opts3 : opts2;
     for (int i = 0; i < n; i++) {
         std::string label = std::string("  ") + opts[i] + "  ";
@@ -244,6 +244,28 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave) {
     drawCentered(scr, ty, 0, scr.cols(),
                  "Flechas para navegar  |  ENTER para confirmar",
                  COL_GRAY, CELL_DIM);
+}
+
+// ─── drawCredits ─────────────────────────────────────────────────────────────
+
+void Renderer::drawCredits(TerminalScreen& scr) {
+    int cx = scr.cols() / 2;
+    int cy = scr.rows() / 2;
+
+    drawCentered(scr, cy - 8, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
+    drawCentered(scr, cy - 6, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
+
+    int y = cy - 4;
+    drawCentered(scr, y++, 0, scr.cols(), "Desarrollo", COL_YELLOW, CELL_BOLD);
+    drawCentered(scr, y++, 0, scr.cols(), "Renato 'Nato' Campos", COL_WHITE);
+    y++;
+    drawCentered(scr, y++, 0, scr.cols(), "Arte", COL_YELLOW, CELL_BOLD);
+    drawCentered(scr, y++, 0, scr.cols(), "ary 'HalleyKite' ", COL_WHITE);
+    y++;
+    drawCentered(scr, y++, 0, scr.cols(), "Disenio", COL_YELLOW, CELL_BOLD);
+    drawCentered(scr, y++, 0, scr.cols(), "Renato 'Nato' Campos", COL_WHITE);
+    y++;
+    drawCentered(scr, y,   0, scr.cols(), "ESC para volver", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawNameInput ────────────────────────────────────────────────────────────
