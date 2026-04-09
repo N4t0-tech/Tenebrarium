@@ -43,6 +43,8 @@ private:
     std::unique_ptr<CombatSystem>  combat_;
     bool                           combatShowingArts_;
     int                            combatArtSelection_;
+    int                            combatFlashIdx_;
+    double                         combatFlashEndTime_;
 
     // World enemies
     struct WorldEnemy {

@@ -445,11 +445,18 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     }
 }
 
+static Color hpColor(int hp, int maxHp) {
+    float pct = (maxHp > 0) ? static_cast<float>(hp) / maxHp : 0.f;
+    if (pct > 0.5f) return COL_GREEN;
+    if (pct > 0.25f) return COL_YELLOW;
+    return COL_RED;
+}
+
 // ─── drawCombat ──────────────────────────────────────────────────────────────
 
 void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
-                           bool isBoss) {
+                           bool isBoss, int flashIdx) {
     int cols = scr.cols(), rows = scr.rows();
     int halfW = cols / 2;
 
@@ -467,12 +474,16 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         }
         if (isBoss && i == 0)
             scr.putStr(2, er++, "[JEFE]", COL_RED, COL_BLACK, CELL_BOLD);
+        bool flash = (i == flashIdx);
         Color nc = (isBoss && i == 0) ? COL_RED : (tgt ? COL_YELLOW : COL_WHITE);
+        Color nameBg = flash ? COL_RED : COL_BLACK;
+        uint8_t nameFlags = (tgt ? CELL_BOLD : 0) | (flash ? CELL_INVERTED : 0);
         scr.putStr(2, er++, (tgt ? "> " : "  ") + e->getName(),
-                   nc, COL_BLACK, tgt ? CELL_BOLD : 0);
+                   nc, nameBg, nameFlags);
+        Color hpc = hpColor(e->getHp(), e->getMaxHp());
         scr.putStr(2, er, "HP " + std::to_string(e->getHp()) + "/" +
-                   std::to_string(e->getMaxHp()) + " ", COL_GREEN);
-        drawStatBar(scr, 14, er++, e->getHp(), e->getMaxHp(), 12, COL_GREEN);
+                   std::to_string(e->getMaxHp()) + " ", hpc);
+        drawStatBar(scr, 14, er++, e->getHp(), e->getMaxHp(), 12, hpc);
         const auto& efx = combat.getEnemyEffects(i);
         std::string tags;
         for (const auto& fx : efx) {
@@ -512,9 +523,10 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
     scr.putStr(1, br, player.getName() + " [" + className(player) + "]",
                COL_CYAN, COL_BLACK, CELL_BOLD);
-    scr.putStr(20, br, "HP:", COL_GREEN, COL_BLACK, CELL_BOLD);
+    Color phpc = hpColor(player.getHp(), player.getMaxHp());
+    scr.putStr(20, br, "HP:", phpc, COL_BLACK, CELL_BOLD);
     scr.putStr(24, br, std::to_string(player.getHp()) + "/" +
-               std::to_string(player.getMaxHp()), COL_GREEN);
+               std::to_string(player.getMaxHp()), phpc);
     scr.putStr(35, br, "MP:", COL_CYAN, COL_BLACK, CELL_BOLD);
     scr.putStr(39, br++, std::to_string(player.getMana()) + "/" +
                std::to_string(player.getMaxMana()), COL_CYAN);

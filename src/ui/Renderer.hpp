@@ -26,7 +26,7 @@ public:
                                 const std::string& message = "");
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
-                           bool isBoss = false);
+                           bool isBoss = false, int flashIdx = -1);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
     static void drawGameOver(TerminalScreen& scr);
