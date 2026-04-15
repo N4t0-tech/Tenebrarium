@@ -249,15 +249,35 @@ void Game::run()
     int cellW = static_cast<int>(gs.x);
     int cellH = static_cast<int>(gs.y) + 2;
 
+    // Shader CRT
+    Shader crtShader = LoadShader(0, (assetsDir() + "shaders/crt.frag").c_str());
+    int resLoc = GetShaderLocation(crtShader, "resolution");
+
+    // Render texture offscreen
+    RenderTexture2D renderTarget = LoadRenderTexture(SCREEN_W, SCREEN_H);
+    int rtW = SCREEN_W, rtH = SCREEN_H;
+
     while (!WindowShouldClose() && !quitRequested_)
     {
         // Recalcular grid si la ventana cambió de tamaño
-        int cols = GetScreenWidth() / cellW;
-        int rows = GetScreenHeight() / cellH;
-        if (cols < 1)
-            cols = 1;
-        if (rows < 1)
-            rows = 1;
+        int screenW = GetScreenWidth();
+        int screenH = GetScreenHeight();
+        int cols = screenW / cellW;
+        int rows = screenH / cellH;
+        if (cols < 1) cols = 1;
+        if (rows < 1) rows = 1;
+
+        // Recrear render texture si la ventana cambió de tamaño
+        if (IsWindowResized() && (screenW != rtW || screenH != rtH)) {
+            UnloadRenderTexture(renderTarget);
+            renderTarget = LoadRenderTexture(screenW, screenH);
+            rtW = screenW;
+            rtH = screenH;
+        }
+
+        // Actualizar uniform de resolución
+        float res[2] = { (float)rtW, (float)rtH };
+        SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
 
         // Procesar IA pending
         if (pendingRedraw_.load(std::memory_order_acquire))
@@ -279,12 +299,29 @@ void Game::run()
         scr.clear();
         render(scr);
 
-        BeginDrawing();
+        // 1) Renderizar juego al texture offscreen
+        BeginTextureMode(renderTarget);
         ClearBackground(BLACK);
         scr.render();
+        EndTextureMode();
+
+        // 2) Dibujar texture con shader CRT
+        BeginDrawing();
+        ClearBackground(BLACK);
+        BeginShaderMode(crtShader);
+        // La RenderTexture está volteada verticalmente en Raylib
+        DrawTexturePro(
+            renderTarget.texture,
+            { 0, 0, (float)rtW, -(float)rtH },
+            { 0, 0, (float)screenW, (float)screenH },
+            { 0, 0 }, 0.0f, WHITE
+        );
+        EndShaderMode();
         EndDrawing();
     }
 
+    UnloadRenderTexture(renderTarget);
+    UnloadShader(crtShader);
     UnloadFont(font);
     CloseWindow();
 }
