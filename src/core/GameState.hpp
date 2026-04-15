@@ -8,4 +8,5 @@ enum class GameState {
     QuestLog,
     GameOver,
     Shop,
+    QuitDialog,
 };

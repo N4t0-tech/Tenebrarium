@@ -13,9 +13,9 @@
 class Renderer {
 public:
     // Menu screens
-    static void drawTitle(TerminalScreen& scr, int selection, bool hasSave);
+    static void drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink);
     static void drawCredits(TerminalScreen& scr);
-    static void drawNameInput(TerminalScreen& scr, const std::string& name);
+    static void drawNameInput(TerminalScreen& scr, const std::string& name, bool blink);
     static void drawClassSelect(TerminalScreen& scr, int selection);
     static void drawHudSelect(TerminalScreen& scr, int selection);
 
@@ -30,6 +30,7 @@ public:
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
     static void drawGameOver(TerminalScreen& scr);
+    static void drawQuitDialog(TerminalScreen& scr, int selection);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
                          const std::string& message);

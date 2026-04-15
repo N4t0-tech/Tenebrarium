@@ -217,7 +217,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
 
-void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave) {
+void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
     std::ifstream f(assetsDir() + "title.txt");
     std::string line;
@@ -236,8 +236,11 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave) {
     for (int i = 0; i < n; i++) {
         std::string label = std::string("  ") + opts[i] + "  ";
         int x = cx - static_cast<int>(label.size()) / 2;
-        Color c = (i == selection) ? COL_YELLOW : COL_WHITE;
-        uint8_t fl = (i == selection) ? (CELL_BOLD | CELL_INVERTED) : 0;
+        bool sel = (i == selection);
+        Color c = sel ? COL_YELLOW : COL_WHITE;
+        uint8_t fl = sel ? CELL_BOLD : 0;
+        // El item seleccionado parpadea entre invertido y normal
+        if (sel && blink) fl |= CELL_INVERTED;
         scr.putStr(x, ty++, label, c, COL_BLACK, fl);
     }
     ty++;
@@ -270,12 +273,12 @@ void Renderer::drawCredits(TerminalScreen& scr) {
 
 // ─── drawNameInput ────────────────────────────────────────────────────────────
 
-void Renderer::drawNameInput(TerminalScreen& scr, const std::string& name) {
+void Renderer::drawNameInput(TerminalScreen& scr, const std::string& name, bool blink) {
     int cy = scr.rows() / 2;
     drawCentered(scr, cy - 4, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
     drawCentered(scr, cy - 2, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
-    std::string display = "> " + name + "_";
+    std::string display = "> " + name + (blink ? "_" : " ");
     drawCentered(scr, cy, 0, scr.cols(), display, COL_YELLOW);
     drawCentered(scr, cy + 2, 0, scr.cols(),
                  "ENTER para continuar  |  ESC para volver",
@@ -739,6 +742,26 @@ void Renderer::drawGameOver(TerminalScreen& scr) {
                  COL_YELLOW, CELL_BOLD);
     drawCentered(scr, cy + 1, 0, scr.cols(), "ENTER para volver al menu",
                  COL_GRAY, CELL_DIM);
+}
+
+// ─── drawQuitDialog ───────────────────────────────────────────────────────────
+
+void Renderer::drawQuitDialog(TerminalScreen& scr, int selection) {
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    int w = 36, h = 7;
+    int bx = cx - w / 2, by = cy - h / 2;
+    drawBorder(scr, bx, by, w, h, COL_YELLOW);
+    drawCentered(scr, by + 1, bx, w, "Salir del juego", COL_WHITE, CELL_BOLD);
+    drawCentered(scr, by + 2, bx, w, "Que deseas hacer?", COL_GRAY, CELL_DIM);
+    const char* opts[] = { "Menu Principal", "Salir al escritorio" };
+    for (int i = 0; i < 2; i++) {
+        bool sel = (i == selection);
+        std::string label = std::string("  ") + opts[i] + "  ";
+        Color c = sel ? COL_YELLOW : COL_WHITE;
+        uint8_t fl = sel ? (CELL_BOLD | CELL_INVERTED) : 0;
+        drawCentered(scr, by + 4 + i, bx, w, label, c, fl);
+    }
+    drawCentered(scr, by + h - 1, bx, w, "ESC para cancelar", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawShop ─────────────────────────────────────────────────────────────────

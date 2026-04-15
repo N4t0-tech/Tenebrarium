@@ -8,6 +8,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <fstream>
 #include <filesystem>
 
@@ -389,7 +390,8 @@ void Game::dispatchInput(int key)
         explorationMsg_.clear();
         if (key == 'q' || key == 'Q')
         {
-            quitRequested_ = true;
+            menuSelection_ = 0;
+            setState(GameState::QuitDialog);
             break;
         }
         if (!map_)
@@ -546,6 +548,9 @@ void Game::dispatchInput(int key)
     case GameState::Shop:
         inputShop(key);
         break;
+    case GameState::QuitDialog:
+        inputQuitDialog(key);
+        break;
     }
 }
 
@@ -614,6 +619,29 @@ void Game::inputCredits(int key)
     {
         menuSelection_ = 0;
         menuPhase_ = MenuPhase::Title;
+    }
+}
+
+void Game::inputQuitDialog(int key)
+{
+    switch (key) {
+        case GKEY_UP:
+        case GKEY_LEFT:
+            menuSelection_ = (menuSelection_ - 1 + 2) % 2;
+            break;
+        case GKEY_DOWN:
+        case GKEY_RIGHT:
+            menuSelection_ = (menuSelection_ + 1) % 2;
+            break;
+        case '\n':
+            if (menuSelection_ == 0)
+                setState(GameState::MainMenu);
+            else
+                quitRequested_ = true;
+            break;
+        case 27:  // ESC — cancelar
+            setState(GameState::Exploration);
+            break;
     }
 }
 
@@ -760,13 +788,15 @@ void Game::render(TerminalScreen &scr)
         switch (menuPhase_)
         {
         case MenuPhase::Title:
-            Renderer::drawTitle(scr, menuSelection_, hasSave());
+            Renderer::drawTitle(scr, menuSelection_, hasSave(),
+                                std::fmod(GetTime(), 1.0) < 0.5);
             break;
         case MenuPhase::Credits:
             Renderer::drawCredits(scr);
             break;
         case MenuPhase::NameInput:
-            Renderer::drawNameInput(scr, playerName_);
+            Renderer::drawNameInput(scr, playerName_,
+                                    std::fmod(GetTime(), 0.8) < 0.4);
             break;
         case MenuPhase::ClassSelect:
             Renderer::drawClassSelect(scr, classSelection_);
@@ -819,6 +849,9 @@ void Game::render(TerminalScreen &scr)
         break;
     case GameState::GameOver:
         Renderer::drawGameOver(scr);
+        break;
+    case GameState::QuitDialog:
+        Renderer::drawQuitDialog(scr, menuSelection_);
         break;
     }
 }

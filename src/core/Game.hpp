@@ -110,6 +110,7 @@ private:
     // Per-phase input handlers
     void inputTitle(int key);
     void inputCredits(int key);
+    void inputQuitDialog(int key);
     void inputNameInput(int key);
     void inputClassSelect(int key);
     void inputHudSelect(int key);
