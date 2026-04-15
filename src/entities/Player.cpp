@@ -10,7 +10,6 @@ Player::Player(const std::string& name, PlayerClass playerClass)
       mana_(baseMana(playerClass)),
       maxMana_(baseMana(playerClass)),
       coins_(0),
-      keys_(0),
       dungeonFloor_(1),
       baseAttack_(baseAttack(playerClass)),
       baseDefense_(baseDefense(playerClass)),
@@ -66,11 +65,10 @@ int Player::baseDefense(PlayerClass c) {
 }
 
 void Player::addCoins(int amount)  { coins_ += amount; }
-void Player::addKey()              { keys_++; }
-bool Player::useKey()              { if (keys_ <= 0) return false; keys_--; return true; }
+
 void Player::descendFloor()        { dungeonFloor_++; }
 
-void Player::applyItemBonus(const Item& item) { pickupItem(item); }
+
 
 bool Player::pickupItem(const Item& item) {
     if (item.type == ItemType::Weapon && !equippedWeapon_) {

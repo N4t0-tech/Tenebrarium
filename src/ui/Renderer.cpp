@@ -196,7 +196,6 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, 20);
     put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
-    put("k " + std::to_string(player.getKeys()) + " llave(s)", COL_CYAN);
     put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
     int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
@@ -230,7 +229,6 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
     b("ATK:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
     b(" DEF:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
     b("  $" + std::to_string(player.getCoins()), COL_YELLOW);
-    b("  k" + std::to_string(player.getKeys()), COL_CYAN);
     b("  +" + std::to_string(player.countConsumables()), COL_GREEN);
     b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir", COL_GRAY, CELL_DIM);
 }

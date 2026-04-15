@@ -6,8 +6,6 @@ enum class ItemType {
     Weapon,
     Armor,
     Consumable,
-    Quest,
-    Misc,
 };
 
 struct Item {

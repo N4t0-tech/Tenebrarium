@@ -79,6 +79,7 @@ void CombatSystem::doHeavyAttack() {
     auto& target = enemies_[currentTarget_];
     if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
 
+    if (!player_.useMana(8)) { logMessage("Mana insuficiente para Ataque Fuerte (necesitas 8)."); return; }
     int rawAtk = static_cast<int>(player_.getAttack() * 1.8f);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
     int dmg = std::max(1, rawAtk - target->getDefense());
@@ -142,7 +143,7 @@ void CombatSystem::doDefend() {
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }
 
-void CombatSystem::doUseItem(int /*i*/) {
+void CombatSystem::doUseItem() {
     if (phase_ != CombatPhase::PlayerTurn) return;
     if (!hasEnoughAp(1)) { logMessage("PA insuficientes."); return; }
     int healed = player_.useConsumable();
@@ -171,7 +172,7 @@ void CombatSystem::doFlee() {
     }
 
     currentAp_ -= 3;
-    if ((std::rand() % 100) < 70) {
+    if ((std::rand() % 100) < 45) {
         fled_ = true;
         logMessage(player_.getName() + " huye del combate!");
         phase_ = CombatPhase::CombatOver;
@@ -357,9 +358,9 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::GolpeDemoledor: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, player_.getAttack());  // ignores DEF
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.4f) - target->getDefense() / 2);
             target->takeDamageRaw(dmg);
-            logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora DEF).");
+            logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
             if (!target->isAlive()) {
                 logMessage("  " + target->getName() + " derrotado!");
                 advanceTarget();

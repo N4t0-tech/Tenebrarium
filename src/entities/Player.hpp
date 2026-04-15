@@ -23,7 +23,6 @@ public:
     int getMana()         const { return mana_; }
     int getMaxMana()      const { return maxMana_; }
     int getCoins()        const { return coins_; }
-    int getKeys()         const { return keys_; }
     int getDungeonFloor() const { return dungeonFloor_; }
 
     Inventory& getInventory() { return inventory_; }
@@ -38,10 +37,7 @@ public:
     std::vector<Art> getAvailableArts() const;
 
     void addCoins(int amount);
-    void addKey();
-    bool useKey();                       // false if no keys
     void descendFloor();
-    void applyItemBonus(const Item& item); // delegates to pickupItem
     bool pickupItem(const Item& item);    // auto-equip if slot free, else bag
     void equipItem(int bagIdx);           // swap bag item into equipment slot
     int  useConsumable();                // uses first potion; returns HP healed, 0 if none
@@ -55,7 +51,6 @@ private:
     int mana_;
     int maxMana_;
     int coins_;
-    int keys_;
     int dungeonFloor_;
     int baseAttack_;
     int baseDefense_;

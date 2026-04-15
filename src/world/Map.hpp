@@ -7,10 +7,7 @@ enum class TileType {
     Floor,
     Wall,
     SecretWall,  // looks like '#' but is not walkable until revealed via E key
-    Door,
-    Trap,
     Stairs,
-    Empty,
 };
 
 struct Tile {

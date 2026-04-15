@@ -57,7 +57,7 @@ private:
     std::vector<WorldEnemy>  worldEnemies_;
     int                      combatWorldEnemyIdx_;
 
-    enum class ChestLoot { Coins, Item, Key };
+    enum class ChestLoot { Coins, Item };
     struct WorldChest {
         Position  pos;
         bool      opened;

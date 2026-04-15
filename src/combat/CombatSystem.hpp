@@ -46,7 +46,7 @@ public:
     void doHeavyAttack();       // 2 PA — ATK*1.8 - DEF
     void doArt(int idx);        // variable PA — resolves art by ArtEffect
     void doDefend();            // 1 PA — Defending status for 1 enemy turn
-    void doUseItem(int i);      // 1 PA — placeholder
+    void doUseItem();
     void doEndTurn();           // 0 PA — force enemy turn
     void doFlee();              // 3 PA — 70% chance to escape
     void cycleTarget();         // TAB — cycle to next alive enemy

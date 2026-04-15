@@ -10,7 +10,6 @@ struct QuestObjective {
 };
 
 enum class QuestStatus {
-    NotStarted,
     InProgress,
     Completed,
     Failed,

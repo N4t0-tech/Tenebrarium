@@ -26,8 +26,7 @@ bool Map::isWalkable(int x, int y) const {
     if (x < 0 || x >= width_ || y < 0 || y >= height_) return false;
     const Tile& t = tiles_[index(x, y)];
     return t.type != TileType::Wall
-        && t.type != TileType::SecretWall
-        && t.type != TileType::Empty;
+        && t.type != TileType::SecretWall;
 }
 
 bool Map::isSecretWall(int x, int y) const {
@@ -62,7 +61,7 @@ void Map::updateFov(int radius) {
     auto isOpaque = [&](int x, int y) -> bool {
         if (x < 0 || x >= width_ || y < 0 || y >= height_) return true;
         TileType tt = tiles_[index(x, y)].type;
-        return tt == TileType::Wall || tt == TileType::SecretWall || tt == TileType::Empty;
+        return tt == TileType::Wall || tt == TileType::SecretWall;
     };
 
     for (int ty = std::max(0, py - radius); ty <= std::min(height_ - 1, py + radius); ty++) {

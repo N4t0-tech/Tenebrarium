@@ -472,15 +472,7 @@ void Game::dispatchInput(int key)
         if (lockedDoorExists_ && !lockedDoorOpen_ &&
             lockedDoorPos_.x == nx && lockedDoorPos_.y == ny)
         {
-            if (player_->useKey())
-            {
-                lockedDoorOpen_ = true;
-                explorationMsg_ = "Usas una llave. La puerta se abre y aparecen unas escaleras!";
-            }
-            else
-            {
-                explorationMsg_ = "La puerta esta cerrada con llave. Necesitas una llave.";
-            }
+            explorationMsg_ = "La puerta permanece sellada. Algo en las sombras aun respira.";
             break;
         }
 
@@ -542,7 +534,7 @@ void Game::dispatchInput(int key)
         inputQuestLog(key);
         break;
     case GameState::GameOver:
-        if (key == '\n' || key == '\n')
+        if (key == '\n' || key == 27)
             setState(GameState::MainMenu);
         break;
     case GameState::Shop:
@@ -647,7 +639,7 @@ void Game::inputQuitDialog(int key)
 
 void Game::inputNameInput(int key)
 {
-    if (key == '\n' || key == '\n')
+    if (key == '\n')
     {
         if (!playerName_.empty())
         {
@@ -729,6 +721,21 @@ void Game::inputHudSelect(int key)
 void Game::update()
 {
     checkQuestProgress();
+
+    // Abrir puerta bloqueada cuando todos los enemigos del piso estén muertos
+    if (state_ == GameState::Exploration &&
+        lockedDoorExists_ && !lockedDoorOpen_)
+    {
+        bool anyAlive = false;
+        for (const auto& we : worldEnemies_)
+            if (we.alive) { anyAlive = true; break; }
+
+        if (!anyAlive)
+        {
+            lockedDoorOpen_ = true;
+            explorationMsg_ = "El silencio se apodera del Tenebrarium... algo cede en la oscuridad.";
+        }
+    }
 }
 
 void Game::initQuests()
@@ -1278,7 +1285,6 @@ void Game::setState(GameState newState)
             std::swap(eligible[i], eligible[std::rand() % (i + 1)]);
 
         chestCount = std::min(chestCount, static_cast<int>(eligible.size()));
-        bool keyInChest = false;
 
         for (int ci = 0; ci < chestCount; ci++)
         {
@@ -1288,12 +1294,12 @@ void Game::setState(GameState newState)
             Item item{};
 
             int baseCoins = 10 + std::rand() % 40;
-            if (roll < 50)
+            if (roll < 55)
             {
                 loot = ChestLoot::Coins;
                 coins = baseCoins * (1 + (floor - 1) / 2);
             }
-            else if (roll < 90)
+            else
             {
                 loot = ChestLoot::Item;
                 int r = std::rand() % 4;
@@ -1304,21 +1310,8 @@ void Game::setState(GameState newState)
                 else
                     item = pickArmor(cls, floor);
             }
-            else
-            {
-                loot = ChestLoot::Key;
-                keyInChest = true;
-            }
 
             worldChests_.push_back({pickPos(eligible[ci]), false, loot, coins, item});
-        }
-
-        // Guarantee a key source: if no chest has one, force one random chest to carry it
-        // (enemies can also drop keys on kill, so this is just a safety net)
-        if (lockedDoorExists_ && !keyInChest && !worldChests_.empty())
-        {
-            int idx = std::rand() % static_cast<int>(worldChests_.size());
-            worldChests_[idx] = {worldChests_[idx].pos, false, ChestLoot::Key, 0, {}};
         }
 
         // Place 1–2 secret rooms hidden behind SecretWall tiles
@@ -1374,13 +1367,9 @@ void Game::openChest(WorldChest &chest)
         }
         else
         {
-            player_->applyItemBonus(chest.item);
+            player_->pickupItem(chest.item);
             explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!  (+" + std::to_string(chest.item.statBonus) + (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
         }
-        break;
-    case ChestLoot::Key:
-        player_->addKey();
-        explorationMsg_ = "Cofre: encontraste una llave!";
         break;
     }
 }
@@ -1676,7 +1665,7 @@ void Game::inputShop(int key)
         if (s.item.type == ItemType::Consumable)
             player_->getInventory().addItem(s.item);
         else
-            player_->applyItemBonus(s.item);
+            player_->pickupItem(s.item);
         s.sold = true;
         explorationMsg_ = "Compraste: " + s.item.name + "!";
         break;
@@ -1737,12 +1726,6 @@ void Game::inputCombat(int key)
                 we.alive = false;
                 enemiesKilled_++;
                 int lootChance = we.isBoss ? 45 : 15;
-                // chance the enemy drops a key
-                if (std::rand() % 100 < lootChance)
-                {
-                    player_->addKey();
-                    explorationMsg_ = "El enemigo solto una llave!";
-                }
                 // chance the enemy drops a potion
                 if (std::rand() % 100 < lootChance)
                 {
@@ -1826,7 +1809,7 @@ void Game::inputCombat(int key)
         break;
     case 'u':
     case 'U':
-        combat_->doUseItem(0);
+        combat_->doUseItem();
         break;
     case '\t': // TAB
         combat_->cycleTarget();
@@ -1895,14 +1878,8 @@ static char glyphForTile(TileType t)
         return '#';
     case TileType::Floor:
         return '.';
-    case TileType::Door:
-        return '+';
-    case TileType::Trap:
-        return '^';
     case TileType::Stairs:
         return '>';
-    case TileType::Empty:
-        return ' ';
     }
     return ' ';
 }
@@ -1925,7 +1902,7 @@ void Game::saveGame()
     f << player_->level_ << ' ' << player_->xp_ << ' ' << player_->xpToNextLevel_ << ' '
       << player_->hp_ << ' ' << player_->maxHp_ << ' '
       << player_->mana_ << ' ' << player_->maxMana_ << ' '
-      << player_->coins_ << ' ' << player_->keys_ << ' ' << player_->dungeonFloor_ << ' '
+      << player_->coins_ << ' ' << player_->dungeonFloor_ << ' '
       << player_->attack_ << ' ' << player_->defense_ << ' '
       << player_->baseAttack_ << ' ' << player_->baseDefense_ << '\n';
 
@@ -2038,9 +2015,9 @@ bool Game::loadGame()
     if (!(f >> cls))
         return false;
 
-    int level, xp, xpNext, hp, maxHp, mana, maxMana, coins, keys, floor,
+    int level, xp, xpNext, hp, maxHp, mana, maxMana, coins, floor,
         atk, def, baseAtk, baseDef;
-    if (!(f >> level >> xp >> xpNext >> hp >> maxHp >> mana >> maxMana >> coins >> keys >> floor >> atk >> def >> baseAtk >> baseDef))
+    if (!(f >> level >> xp >> xpNext >> hp >> maxHp >> mana >> maxMana >> coins >> floor >> atk >> def >> baseAtk >> baseDef))
         return false;
 
     PlayerClass playerClass = static_cast<PlayerClass>(cls);
@@ -2053,7 +2030,6 @@ bool Game::loadGame()
     player_->mana_ = mana;
     player_->maxMana_ = maxMana;
     player_->coins_ = coins;
-    player_->keys_ = keys;
     player_->dungeonFloor_ = floor;
     player_->attack_ = atk;
     player_->defense_ = def;
