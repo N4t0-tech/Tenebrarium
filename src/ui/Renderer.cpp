@@ -6,6 +6,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 // ─── colores TUI ─────────────────────────────────────────────────────────────
@@ -92,6 +93,14 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
 
+    // Helper: atenúa un color por un factor [0,1]
+    auto applyFactor = [](Color c, float f) -> Color {
+        return { (uint8_t)(c.r * f), (uint8_t)(c.g * f),
+                 (uint8_t)(c.b * f), c.a };
+    };
+
+    static constexpr float FOV_RADIUS = 8.0f;
+
     for (int sy = 0; sy < viewH; sy++) {
         for (int sx = 0; sx < viewW; sx++) {
             int mx = camX + sx, my = camY + sy;
@@ -104,25 +113,36 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 scr.put(dc, dr, '@', COL_YELLOW, COL_BLACK, CELL_BOLD);
                 continue;
             }
+
             if (tile.visible) {
+                // Gradiente: más lejos del jugador → más oscuro
+                float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
+                float dist  = std::sqrt(dx*dx + dy*dy);
+                float factor = std::max(0.45f, 1.0f - (dist / FOV_RADIUS) * 0.55f);
+
                 bool drew = false;
                 for (const auto& ent : entities) {
                     if (ent.pos.x == mx && ent.pos.y == my) {
-                        scr.put(dc, dr, ent.glyph, colorFromPair(ent.colorPair),
-                                COL_BLACK, ent.bold ? CELL_BOLD : 0);
+                        Color ec = applyFactor(colorFromPair(ent.colorPair), factor);
+                        scr.put(dc, dr, ent.glyph, ec, COL_BLACK,
+                                ent.bold ? CELL_BOLD : 0);
                         drew = true;
                         break;
                     }
                 }
                 if (drew) continue;
+
+                if (tile.type == TileType::SecretWall) {
+                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, factor), COL_BLACK, CELL_DIM);
+                    continue;
+                }
+                scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
+            } else {
+                // Explorado pero fuera del FOV: gris muy oscuro
+                static const Color COL_DARK = { 45, 45, 45, 255 };
+                if (tile.type == TileType::SecretWall) continue;
+                scr.put(dc, dr, tile.glyph, COL_DARK, COL_BLACK, 0);
             }
-            if (tile.type == TileType::SecretWall) {
-                scr.put(dc, dr, '#', COL_GRAY, COL_BLACK, CELL_DIM);
-                continue;
-            }
-            Color tc = tile.visible ? COL_WHITE : COL_GRAY;
-            uint8_t tf = tile.visible ? 0 : CELL_DIM;
-            scr.put(dc, dr, tile.glyph, tc, COL_BLACK, tf);
         }
     }
 }
