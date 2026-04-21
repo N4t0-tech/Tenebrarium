@@ -241,8 +241,11 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     std::string line;
     int ty = cy - 8;
     while (std::getline(f, line)) {
-        int x = cx - static_cast<int>(line.size()) / 2;
-        scr.putStr(x, ty++, line, COL_CYAN, COL_BLACK, CELL_BOLD);
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = cx - cols / 2;
+        scr.putStr(x, ty++, line, COL_YELLOW, COL_BLACK, CELL_BOLD);
     }
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
@@ -277,14 +280,7 @@ void Renderer::drawCredits(TerminalScreen& scr) {
     drawCentered(scr, cy - 6, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
 
     int y = cy - 4;
-    drawCentered(scr, y++, 0, scr.cols(), "Desarrollo", COL_YELLOW, CELL_BOLD);
-    drawCentered(scr, y++, 0, scr.cols(), "Renato 'Nato' Campos", COL_WHITE);
-    y++;
-    drawCentered(scr, y++, 0, scr.cols(), "Arte", COL_YELLOW, CELL_BOLD);
-    drawCentered(scr, y++, 0, scr.cols(), "ary 'HalleyKite' ", COL_WHITE);
-    y++;
-    drawCentered(scr, y++, 0, scr.cols(), "Disenio", COL_YELLOW, CELL_BOLD);
-    drawCentered(scr, y++, 0, scr.cols(), "Renato 'Nato' Campos", COL_WHITE);
+    drawCentered(scr, y++, 0, scr.cols(), "Halley & Nato Co.", COL_WHITE);
     y++;
     drawCentered(scr, y,   0, scr.cols(), "ESC para volver", COL_GRAY, CELL_DIM);
 }
