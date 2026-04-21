@@ -20,9 +20,11 @@
 #include <atomic>
 
 class GameSerializer;
+class EnemyAI;
 
 class Game {
     friend class GameSerializer;
+    friend class EnemyAI;
 public:
     Game();
     ~Game();

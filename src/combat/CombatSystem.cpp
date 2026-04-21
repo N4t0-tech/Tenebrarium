@@ -39,69 +39,49 @@ const std::vector<StatusEffect>& CombatSystem::getEnemyEffects(int idx) const {
 
 // ─── player actions ───────────────────────────────────────────────────────────
 
-void CombatSystem::doAttack() {
-    if (phase_ != CombatPhase::PlayerTurn) return;
-    if (!hasEnoughAp(1)) { logMessage("PA insuficientes para atacar."); return; }
-
+void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
+                                const std::string& actionName)
+{
     if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
     auto& target = enemies_[currentTarget_];
     if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
 
-    int rawAtk = player_.getAttack();
+    if (manaCost > 0 && !player_.useMana(manaCost)) {
+        logMessage("Mana insuficiente para " + actionName + " (necesitas " + ts(manaCost) + ").");
+        return;
+    }
+
+    int rawAtk = static_cast<int>(player_.getAttack() * atkMultiplier);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
-    int dmg = std::max(1, rawAtk - target->getDefense());
+    int  dmg  = std::max(1, rawAtk - target->getDefense());
     bool crit = rollCritical();
     if (crit) dmg = dmg * 3 / 2;
     target->takeDamageRaw(dmg);
 
-    if (crit)
-        logMessage("CRITICO! " + player_.getName() + " ataca a " + target->getName()
-                   + " por " + ts(dmg) + " daño.");
-    else
-        logMessage(player_.getName() + " ataca a " + target->getName()
-                   + " por " + ts(dmg) + " daño.");
+    std::string prefix = crit ? "CRITICO! " : "";
+    logMessage(prefix + player_.getName() + " " + actionName + " a " +
+               target->getName() + " por " + ts(dmg) + " daño.");
     if (!target->isAlive()) {
         logMessage("  " + target->getName() + " derrotado!");
         advanceTarget();
     }
 
-    currentAp_--;
+    currentAp_ -= apCost;
     checkCombatOver();
     if (isOver()) return;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }
 
+void CombatSystem::doAttack() {
+    if (phase_ != CombatPhase::PlayerTurn) return;
+    if (!hasEnoughAp(1)) { logMessage("PA insuficientes para atacar."); return; }
+    doAttackBase(1.0f, 1, 0, "ataca");
+}
+
 void CombatSystem::doHeavyAttack() {
     if (phase_ != CombatPhase::PlayerTurn) return;
     if (!hasEnoughAp(2)) { logMessage("PA insuficientes para ataque fuerte (necesitas 2)."); return; }
-
-    if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
-    auto& target = enemies_[currentTarget_];
-    if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
-
-    if (!player_.useMana(8)) { logMessage("Mana insuficiente para Ataque Fuerte (necesitas 8)."); return; }
-    int rawAtk = static_cast<int>(player_.getAttack() * 1.8f);
-    if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
-    int dmg = std::max(1, rawAtk - target->getDefense());
-    bool crit = rollCritical();
-    if (crit) dmg = dmg * 3 / 2;
-    target->takeDamageRaw(dmg);
-
-    if (crit)
-        logMessage("CRITICO! " + player_.getName() + " Ataque Fuerte a " + target->getName()
-                   + " por " + ts(dmg) + " daño!");
-    else
-        logMessage(player_.getName() + " Ataque Fuerte a " + target->getName()
-                   + " por " + ts(dmg) + " daño!");
-    if (!target->isAlive()) {
-        logMessage("  " + target->getName() + " derrotado!");
-        advanceTarget();
-    }
-
-    currentAp_ -= 2;
-    checkCombatOver();
-    if (isOver()) return;
-    if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
+    doAttackBase(1.8f, 2, 8, "Ataque Fuerte");
 }
 
 void CombatSystem::doArt(int idx) {

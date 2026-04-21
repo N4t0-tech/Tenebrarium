@@ -1,11 +1,11 @@
 #include "Game.hpp"
 #include "GameSerializer.hpp"
 #include "core/Assets.hpp"
+#include "ai/EnemyAI.hpp"
 #include "ui/Renderer.hpp"
 #include "entities/Enemy.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
-#include <queue>
 #include <vector>
 #include <chrono>
 #include <algorithm>
@@ -18,6 +18,12 @@ static constexpr int GKEY_DOWN = 0x1002;
 static constexpr int GKEY_LEFT = 0x1003;
 static constexpr int GKEY_RIGHT = 0x1004;
 static constexpr int GKEY_BACKSPACE = 0x1005;
+
+// Vertical menu navigation: wraps selection_ within [0, n)
+static inline void navV(int key, int& sel, int n) {
+    if (key == GKEY_UP)   sel = (sel - 1 + n) % n;
+    if (key == GKEY_DOWN) sel = (sel + 1) % n;
+}
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
@@ -665,10 +671,8 @@ void Game::inputClassSelect(int key)
     switch (key)
     {
     case GKEY_UP:
-        classSelection_ = (classSelection_ + 2) % 3;
-        break;
     case GKEY_DOWN:
-        classSelection_ = (classSelection_ + 1) % 3;
+        navV(key, classSelection_, 3);
         break;
     case 27:
         menuPhase_ = MenuPhase::NameInput;
@@ -886,133 +890,7 @@ static char glyphForEnemy(EnemyType t)
 
 // ─── AI movement ─────────────────────────────────────────────────────────────
 
-// Returns the first step from 'from' toward 'to' avoiding non-walkable tiles.
-// Returns 'from' if no path exists or already at destination.
-static Position bfsStep(Position from, Position to, const Map &map)
-{
-    if (from.x == to.x && from.y == to.y)
-        return from;
-    const int W = map.width(), H = map.height();
-    std::vector<int> dist(W * H, -1);
-    std::vector<Position> prev(W * H, {-1, -1});
-    std::queue<Position> q;
-    auto idx = [W](int x, int y)
-    { return y * W + x; };
-    dist[idx(from.x, from.y)] = 0;
-    q.push(from);
-    const int dx[] = {0, 0, -1, 1};
-    const int dy[] = {-1, 1, 0, 0};
-    bool found = false;
-    while (!q.empty() && !found)
-    {
-        auto [x, y] = q.front();
-        q.pop();
-        for (int d = 0; d < 4; d++)
-        {
-            int nx = x + dx[d], ny = y + dy[d];
-            if (nx < 0 || nx >= W || ny < 0 || ny >= H)
-                continue;
-            if (dist[idx(nx, ny)] != -1)
-                continue;
-            if (!map.isWalkable(nx, ny))
-                continue;
-            dist[idx(nx, ny)] = dist[idx(x, y)] + 1;
-            prev[idx(nx, ny)] = {x, y};
-            if (nx == to.x && ny == to.y)
-            {
-                found = true;
-                break;
-            }
-            q.push({nx, ny});
-        }
-    }
-    if (!found)
-        return from;
-    Position cur = to;
-    while (prev[idx(cur.x, cur.y)].x != from.x || prev[idx(cur.x, cur.y)].y != from.y)
-    {
-        Position p = prev[idx(cur.x, cur.y)];
-        if (p.x == -1)
-            return from;
-        cur = p;
-    }
-    return cur;
-}
-
-void Game::aiLoop()
-{
-    while (aiRunning_)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(600));
-        if (!aiRunning_)
-            break;
-
-        {
-            std::lock_guard<std::mutex> lk(worldMutex_);
-            if ((state_ != GameState::Exploration && state_ != GameState::Shop) || !map_)
-                continue;
-
-            Position player = map_->getPlayerPos();
-            bool playerInShop = (state_ == GameState::Shop);
-
-            for (int i = 0; i < static_cast<int>(worldEnemies_.size()); i++)
-            {
-                auto &we = worldEnemies_[i];
-                if (!we.alive)
-                    continue;
-
-                // Player in shop → all enemies return to spawn
-                if (playerInShop)
-                {
-                    if (we.pos.x == we.spawnPos.x && we.pos.y == we.spawnPos.y)
-                        continue;
-                    Position next = bfsStep(we.pos, we.spawnPos, *map_);
-                    if (next.x != we.pos.x || next.y != we.pos.y)
-                        we.pos = next;
-                    continue;
-                }
-
-                // Only chase player within Chebyshev distance 10
-                int dist = std::max(std::abs(we.pos.x - player.x),
-                                    std::abs(we.pos.y - player.y));
-                if (dist > 10)
-                    continue;
-
-                Position next = bfsStep(we.pos, player, *map_);
-
-                // Safe zone: block entry into shop room
-                if (shopExists_ && isInShopRoom(next))
-                    continue;
-
-                // Next step lands on player → trigger combat
-                if (next.x == player.x && next.y == player.y)
-                {
-                    if (pendingCombatEnemy_ < 0)
-                        pendingCombatEnemy_ = i;
-                    continue;
-                }
-
-                // Check no other enemy occupies 'next'
-                bool occupied = false;
-                for (int j = 0; j < static_cast<int>(worldEnemies_.size()); j++)
-                {
-                    if (j == i || !worldEnemies_[j].alive)
-                        continue;
-                    if (worldEnemies_[j].pos.x == next.x &&
-                        worldEnemies_[j].pos.y == next.y)
-                    {
-                        occupied = true;
-                        break;
-                    }
-                }
-                if (!occupied && (next.x != we.pos.x || next.y != we.pos.y))
-                    we.pos = next;
-            }
-        }
-
-        pendingRedraw_.store(true, std::memory_order_release);
-    }
-}
+void Game::aiLoop() { EnemyAI::run(*this); }
 
 // ─── state transitions ────────────────────────────────────────────────────────
 
@@ -1126,10 +1004,8 @@ void Game::inputInventory(int key)
     switch (key)
     {
     case GKEY_UP:
-        inventorySelection_ = (inventorySelection_ - 1 + total) % total;
-        break;
     case GKEY_DOWN:
-        inventorySelection_ = (inventorySelection_ + 1) % total;
+        navV(key, inventorySelection_, total);
         break;
     case 'e':
     case 'E':
@@ -1181,12 +1057,8 @@ void Game::inputQuestLog(int key)
     switch (key)
     {
     case GKEY_UP:
-        if (n > 0)
-            questLogSelection_ = (questLogSelection_ - 1 + n) % n;
-        break;
     case GKEY_DOWN:
-        if (n > 0)
-            questLogSelection_ = (questLogSelection_ + 1) % n;
+        if (n > 0) navV(key, questLogSelection_, n);
         break;
     case 27:
     case 'q':
@@ -1207,10 +1079,8 @@ void Game::inputShop(int key)
     switch (key)
     {
     case GKEY_UP:
-        shopSelection_ = (shopSelection_ - 1 + n) % n;
-        break;
     case GKEY_DOWN:
-        shopSelection_ = (shopSelection_ + 1) % n;
+        navV(key, shopSelection_, n);
         break;
     case '\n':
     {
@@ -1322,10 +1192,8 @@ void Game::inputCombat(int key)
         switch (key)
         {
         case GKEY_UP:
-            combatArtSelection_ = (combatArtSelection_ - 1 + n) % n;
-            break;
         case GKEY_DOWN:
-            combatArtSelection_ = (combatArtSelection_ + 1) % n;
+            navV(key, combatArtSelection_, n);
             break;
         case '\n':
             combat_->doArt(combatArtSelection_);

@@ -68,6 +68,7 @@ private:
     void logMessage(const std::string& msg);
     void checkCombatOver();
     void advanceTarget();               // move currentTarget_ to next alive enemy
+    void doAttackBase(float atkMultiplier, int apCost, int manaCost, const std::string& actionName);
 
     void processEnemyTurn();
     void tickPlayerEffects();
