@@ -2,6 +2,8 @@
 
 RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativa. Escrito en C++17 con Raylib.
 
+![Menú principal](Tenebrarium-photos/1Menu.webp)
+
 ## Características
 
 - Ventana nativa (Linux / Windows) con fuente monoespaciada empaquetada
@@ -15,6 +17,14 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - Retratos de clase en truecolor (REXPaint `.xp`)
 - 2 modos de HUD: panel lateral o barra inferior
 - Guardado automático al bajar de piso — continúa desde el menú principal
+
+| | |
+| --- | --- |
+| ![Mago](Tenebrarium-photos/2wizard.webp) | ![Guerrero](Tenebrarium-photos/3warrior.webp) |
+
+| | | |
+| --- | --- | --- |
+| ![Gameplay 1](Tenebrarium-photos/gameplay1.webp) | ![Gameplay 2](Tenebrarium-photos/gameplay2.webp) | ![Gameplay 3](Tenebrarium-photos/gameplay3.webp) |
 
 ## Descarga
 
@@ -43,8 +53,9 @@ cmake --build build -j$(nproc)
 ## Controles
 
 ### Exploración
+
 | Tecla | Acción |
-|---|---|
+| --- | --- |
 | `W A S D` / flechas / `H J K L` | Moverse |
 | `E` | Buscar paredes secretas |
 | `I` | Inventario |
@@ -52,8 +63,9 @@ cmake --build build -j$(nproc)
 | `Q` | Salir |
 
 ### Combate
+
 | Tecla | Acción | Coste |
-|---|---|---|
+| --- | --- | --- |
 | `A` | Atacar | 1 PA |
 | `F` | Ataque Fuerte | 2 PA |
 | `D` | Defender | 1 PA |
@@ -65,7 +77,7 @@ cmake --build build -j$(nproc)
 
 ## Estructura
 
-```
+```text
 src/
   core/       Game loop, estados, input
   entities/   Player, Enemy
