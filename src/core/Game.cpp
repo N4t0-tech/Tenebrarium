@@ -265,11 +265,14 @@ void Game::run()
         int screenH = GetScreenHeight();
         int cols = screenW / cellW;
         int rows = screenH / cellH;
-        if (cols < 1) cols = 1;
-        if (rows < 1) rows = 1;
+        if (cols < 1)
+            cols = 1;
+        if (rows < 1)
+            rows = 1;
 
         // Recrear render texture si la ventana cambió de tamaño
-        if (IsWindowResized() && (screenW != rtW || screenH != rtH)) {
+        if (IsWindowResized() && (screenW != rtW || screenH != rtH))
+        {
             UnloadRenderTexture(renderTarget);
             renderTarget = LoadRenderTexture(screenW, screenH);
             rtW = screenW;
@@ -277,7 +280,7 @@ void Game::run()
         }
 
         // Actualizar uniform de resolución
-        float res[2] = { (float)rtW, (float)rtH };
+        float res[2] = {(float)rtW, (float)rtH};
         SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
 
         // Procesar IA pending
@@ -313,10 +316,9 @@ void Game::run()
         // La RenderTexture está volteada verticalmente en Raylib
         DrawTexturePro(
             renderTarget.texture,
-            { 0, 0, (float)rtW, -(float)rtH },
-            { 0, 0, (float)screenW, (float)screenH },
-            { 0, 0 }, 0.0f, WHITE
-        );
+            {0, 0, (float)rtW, -(float)rtH},
+            {0, 0, (float)screenW, (float)screenH},
+            {0, 0}, 0.0f, WHITE);
         EndShaderMode();
         EndDrawing();
     }
@@ -616,24 +618,25 @@ void Game::inputCredits(int key)
 
 void Game::inputQuitDialog(int key)
 {
-    switch (key) {
-        case GKEY_UP:
-        case GKEY_LEFT:
-            menuSelection_ = (menuSelection_ - 1 + 2) % 2;
-            break;
-        case GKEY_DOWN:
-        case GKEY_RIGHT:
-            menuSelection_ = (menuSelection_ + 1) % 2;
-            break;
-        case '\n':
-            if (menuSelection_ == 0)
-                setState(GameState::MainMenu);
-            else
-                quitRequested_ = true;
-            break;
-        case 27:  // ESC — cancelar
-            setState(GameState::Exploration);
-            break;
+    switch (key)
+    {
+    case GKEY_UP:
+    case GKEY_LEFT:
+        menuSelection_ = (menuSelection_ - 1 + 2) % 2;
+        break;
+    case GKEY_DOWN:
+    case GKEY_RIGHT:
+        menuSelection_ = (menuSelection_ + 1) % 2;
+        break;
+    case '\n':
+        if (menuSelection_ == 0)
+            setState(GameState::MainMenu);
+        else
+            quitRequested_ = true;
+        break;
+    case 27: // ESC — cancelar
+        setState(GameState::Exploration);
+        break;
     }
 }
 
@@ -727,8 +730,12 @@ void Game::update()
         lockedDoorExists_ && !lockedDoorOpen_)
     {
         bool anyAlive = false;
-        for (const auto& we : worldEnemies_)
-            if (we.alive) { anyAlive = true; break; }
+        for (const auto &we : worldEnemies_)
+            if (we.alive)
+            {
+                anyAlive = true;
+                break;
+            }
 
         if (!anyAlive)
         {
