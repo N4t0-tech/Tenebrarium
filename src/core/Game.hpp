@@ -8,6 +8,7 @@
 #include "combat/CombatSystem.hpp"
 #include "world/Map.hpp"
 #include "world/BSPDungeon.hpp"
+#include "world/WorldObjects.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -18,7 +19,10 @@
 #include <mutex>
 #include <atomic>
 
+class GameSerializer;
+
 class Game {
+    friend class GameSerializer;
 public:
     Game();
     ~Game();
@@ -47,24 +51,9 @@ private:
     double                         combatFlashEndTime_;
 
     // World enemies
-    struct WorldEnemy {
-        Position  pos;
-        Position  spawnPos;
-        EnemyType type;
-        bool      alive;
-        bool      isBoss = false;
-    };
     std::vector<WorldEnemy>  worldEnemies_;
     int                      combatWorldEnemyIdx_;
 
-    enum class ChestLoot { Coins, Item };
-    struct WorldChest {
-        Position  pos;
-        bool      opened;
-        ChestLoot loot;
-        int       coins;
-        Item      item;
-    };
     std::vector<WorldChest>  worldChests_;
 
     // Locked door and stairs
@@ -105,7 +94,6 @@ private:
     void setState(GameState newState);
     void returnToExploration();
     void openChest(WorldChest& chest);
-    void tryPlaceSecretRoom(std::vector<Position>& taken, PlayerClass cls);
 
     // Per-phase input handlers
     void inputTitle(int key);

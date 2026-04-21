@@ -14,6 +14,7 @@ enum class PlayerClass {
 
 class Player : public Entity {
     friend class Game;
+    friend class GameSerializer;
 public:
     Player(const std::string& name, PlayerClass playerClass);
 
