@@ -130,21 +130,22 @@ jobs:
             tenebrarium-linux.zip
             tenebrarium-windows.zip
 
-      - name: Instalar Butler
-        run: |
-          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
-          unzip butler.zip
-          chmod +x butler
-          ./butler -V
-
-      - name: Desplegar Linux en itch.io
+      - name: Desplegar en itch.io
+        uses: josephbmanley/butler-publish-itchio-action@v1.0.3
         env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
-        run: |
-          ./butler push tenebrarium-linux.zip halleynato/tenebrarium:linux --userversion "${GITHUB_REF_NAME#v}"
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: linux
+          ITCH_GAME: tenebrarium
+          ITCH_USER: halleynato
+          PACKAGE: tenebrarium-linux.zip
+          VERSION: ${{ github.ref_name }}
 
       - name: Desplegar Windows en itch.io
+        uses: josephbmanley/butler-publish-itchio-action@v1.0.3
         env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
-        run: |
-          ./butler push tenebrarium-windows.zip halleynato/tenebrarium:windows --userversion "${GITHUB_REF_NAME#v}"
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: windows
+          ITCH_GAME: tenebrarium
+          ITCH_USER: halleynato
+          PACKAGE: tenebrarium-windows.zip
+          VERSION: ${{ github.ref_name }}
