@@ -34,7 +34,7 @@ public:
     int  putStr(int col, int row, const std::string& utf8,
                 Color fg, Color bg = BLACK, uint8_t flags = 0);
     // Dibuja el buffer (llamar entre BeginDrawing/EndDrawing)
-    void render() const;
+    void render(int offsetX = 0, int offsetY = 0) const;
 
     static Color dimColor(Color c);
 

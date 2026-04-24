@@ -50,14 +50,14 @@ Color TerminalScreen::dimColor(Color c) {
              (uint8_t)(c.b / 2), c.a };
 }
 
-void TerminalScreen::render() const {
+void TerminalScreen::render(int offsetX, int offsetY) const {
     float fs = static_cast<float>(cellH_);
 
     for (int row = 0; row < rows_; row++) {
         for (int col = 0; col < cols_; col++) {
             const Cell& c = buf_[idx(col, row)];
-            int px = col * cellW_;
-            int py = row * cellH_;
+            int px = offsetX + col * cellW_;
+            int py = offsetY + row * cellH_;
 
             Color fg = c.fg;
             Color bg = c.bg;

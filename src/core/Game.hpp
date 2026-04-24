@@ -83,10 +83,14 @@ private:
     int                enemiesKilled_{0};
     int                chestsOpened_{0};
 
+    int mapZoom_{1};
+
     void saveGame();
     bool loadGame();
     bool hasSave() const;
     std::string savePath() const;
+    void saveSettings() const;
+    void loadSettings();
 
     void dispatchInput(int key);
     void processInput();

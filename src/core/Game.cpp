@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
 
 // Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_UP = 0x1001;
@@ -66,6 +68,7 @@ void Game::run()
     InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
     SetTargetFPS(60);
     SetExitKey(0); // desactivar cierre con ESC (lo manejamos nosotros)
+    loadSettings();
 
     // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
     assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
@@ -263,12 +266,19 @@ void Game::run()
         // Recalcular grid si la ventana cambió de tamaño
         int screenW = GetScreenWidth();
         int screenH = GetScreenHeight();
-        int cols = screenW / cellW;
-        int rows = screenH / cellH;
-        if (cols < 1)
-            cols = 1;
-        if (rows < 1)
-            rows = 1;
+
+        // Margen en celdas: el texto no toca los bordes de la ventana
+        static constexpr int kPadX = 1;
+        static constexpr int kPadY = 1;
+        int offX = kPadX * cellW;
+        int offY = kPadY * cellH;
+
+        int cols = screenW / cellW - 2 * kPadX;
+        int rows = screenH / cellH - 2 * kPadY;
+        // HudBar: margen extra inferior para que la barra no quede pegada al borde
+        if (hudLayout_ == HudLayout::Bottom) rows -= 1;
+        if (cols < 1) cols = 1;
+        if (rows < 1) rows = 1;
 
         // Recrear render texture si la ventana cambió de tamaño
         if (IsWindowResized() && (screenW != rtW || screenH != rtH))
@@ -306,7 +316,47 @@ void Game::run()
         // 1) Renderizar juego al texture offscreen
         BeginTextureMode(renderTarget);
         ClearBackground(BLACK);
-        scr.render();
+        scr.render(offX, offY);
+
+        // Overlay del mapa a font-zoom (solo en exploración y si zoom > 1)
+        if (mapZoom_ > 1 && state_ == GameState::Exploration && map_ && player_) {
+            static constexpr int kSidebarW = 22;
+            static constexpr int kHudBarH  = 3;
+
+            int mapPixW, mapPixH;
+            if (hudLayout_ == HudLayout::Sidebar) {
+                mapPixW = (cols - kSidebarW - 1) * cellW;
+                mapPixH = rows * cellH;
+            } else {
+                mapPixW = cols * cellW;
+                mapPixH = (rows - kHudBarH) * cellH;
+            }
+
+            int zCellW = cellW * mapZoom_;
+            int zCellH = cellH * mapZoom_;
+            TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
+                                  zCellW, zCellH, font);
+            mapScr.clear();
+
+            std::vector<MapEntity> zEntities;
+            for (const auto& we : worldEnemies_)
+                if (we.alive)
+                    zEntities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+            for (const auto& ch : worldChests_)
+                if (!ch.opened)
+                    zEntities.push_back({ch.pos, '$', 2, true});
+            if (lockedDoorExists_ && !lockedDoorOpen_)
+                zEntities.push_back({lockedDoorPos_, '+', 1, false});
+            if (!lockedDoorExists_ || lockedDoorOpen_)
+                zEntities.push_back({stairsPos_, '>', 3, true});
+            if (shopExists_)
+                zEntities.push_back({shopMerchantPos_, '$', 4, true});
+
+            Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
+                              *map_, zEntities);
+            mapScr.render(offX, offY);
+        }
+
         EndTextureMode();
 
         // 2) Dibujar texture con shader CRT
@@ -357,8 +407,14 @@ void Game::processInput()
             return;
         }
     }
-    // Carácter Unicode (letras, números, etc.)
+    // Zoom del mapa (layout-agnostic, solo afecta tiles del mapa)
+    if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
+    if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
+
+    // Carácter Unicode — interceptar + y - para zoom antes de dispatch
     int cp = GetCharPressed();
+    if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
+    if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
     if (cp > 0)
         dispatchInput(cp);
 }
@@ -835,7 +891,7 @@ void Game::render(TerminalScreen &scr)
             if (shopExists_)
                 entities.push_back({shopMerchantPos_, '$', 4, true});
             Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
-                                      entities, explorationMsg_);
+                                      entities, explorationMsg_, mapZoom_);
         }
         break;
     case GameState::Combat:
@@ -1256,3 +1312,19 @@ bool        Game::hasSave()  const { return GameSerializer::hasSave();  }
 
 void Game::saveGame() { GameSerializer::save(*this); }
 bool Game::loadGame() { return GameSerializer::load(*this); }
+
+void Game::saveSettings() const {
+    std::string dir = std::string(GetApplicationDirectory()) + "saves";
+    std::filesystem::create_directories(dir);
+    std::ofstream f(dir + "/settings.dat");
+    if (f) f << "mapZoom=" << mapZoom_ << "\n";
+}
+
+void Game::loadSettings() {
+    std::ifstream f(std::string(GetApplicationDirectory()) + "saves/settings.dat");
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.rfind("mapZoom=", 0) == 0)
+            mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3);
+    }
+}

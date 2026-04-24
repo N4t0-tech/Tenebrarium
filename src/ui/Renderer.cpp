@@ -11,12 +11,12 @@
 
 // ─── colores TUI ─────────────────────────────────────────────────────────────
 static constexpr Color COL_WHITE   = WHITE;
-static constexpr Color COL_YELLOW  = { 255, 215,   0, 255 };
-static constexpr Color COL_CYAN    = {   0, 200, 200, 255 };
-static constexpr Color COL_GREEN   = {   0, 200,  80, 255 };
-static constexpr Color COL_RED     = { 220,  50,  50, 255 };
-static constexpr Color COL_GRAY    = { 100, 100, 100, 255 };
-static constexpr Color COL_ORANGE  = { 255, 165,   0, 255 };
+static constexpr Color COL_YELLOW  = { 255, 230,  60, 255 };
+static constexpr Color COL_CYAN    = {  60, 230, 240, 255 };
+static constexpr Color COL_GREEN   = {  60, 230, 110, 255 };
+static constexpr Color COL_RED     = { 255,  80,  80, 255 };
+static constexpr Color COL_GRAY    = { 200, 200, 200, 255 };
+static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
 static constexpr Color COL_BLACK   = BLACK;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -93,7 +93,6 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
 
-    // Helper: atenúa un color por un factor [0,1]
     auto applyFactor = [](Color c, float f) -> Color {
         return { (uint8_t)(c.r * f), (uint8_t)(c.g * f),
                  (uint8_t)(c.b * f), c.a };
@@ -115,7 +114,6 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             }
 
             if (tile.visible) {
-                // Gradiente: más lejos del jugador → más oscuro
                 float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
                 float dist  = std::sqrt(dx*dx + dy*dy);
                 float factor = std::max(0.45f, 1.0f - (dist / FOV_RADIUS) * 0.55f);
@@ -138,8 +136,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 }
                 scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
             } else {
-                // Explorado pero fuera del FOV: gris muy oscuro
-                static const Color COL_DARK = { 45, 45, 45, 255 };
+                static const Color COL_DARK = { 80, 80, 80, 255 };
                 if (tile.type == TileType::SecretWall) continue;
                 scr.put(dc, dr, tile.glyph, COL_DARK, COL_BLACK, 0);
             }
@@ -167,7 +164,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
 // ─── HUD helpers ─────────────────────────────────────────────────────────────
 
 void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
-                             const Player& player) {
+                             const Player& player, int mapZoom) {
     int r = row;
     auto put = [&](const std::string& s, Color c, uint8_t f = 0) {
         scr.putStr(col + 1, r++, s, c, COL_BLACK, f);
@@ -207,9 +204,10 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     put("  I   mochila",  COL_GRAY, CELL_DIM);
     put("  M   misiones", COL_GRAY, CELL_DIM);
     put("  Q   salir",    COL_GRAY, CELL_DIM);
+    put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
-void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
+void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
     drawHSep(scr, 0, row, scr.cols());
     int c = 1;
     auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
@@ -230,7 +228,8 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player) {
     b(" DEF:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
     b("  $" + std::to_string(player.getCoins()), COL_YELLOW);
     b("  +" + std::to_string(player.countConsumables()), COL_GREEN);
-    b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir", COL_GRAY, CELL_DIM);
+    b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir"
+      "  +/-:zoom(" + std::to_string(mapZoom) + "x)", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -441,13 +440,13 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
 void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
-                                const std::string& message) {
+                                const std::string& message, int mapZoom) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 22;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 0, 0, mapW, scr.rows(), map, entities);
         drawVSep(scr, mapW, 0, scr.rows());
-        drawHudPanel(scr, mapW + 1, 0, player);
+        drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, scr.rows() / 2, 0, mapW,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
@@ -455,7 +454,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int hudH = 3;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 0, 0, scr.cols(), mapH, map, entities);
-        drawHudBar(scr, mapH, player);
+        drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
