@@ -691,7 +691,7 @@ void Game::inputQuitDialog(int key)
             quitRequested_ = true;
         break;
     case 27: // ESC — cancelar
-        setState(GameState::Exploration);
+        returnToExploration();
         break;
     }
 }
