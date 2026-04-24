@@ -83,7 +83,8 @@ private:
     int                enemiesKilled_{0};
     int                chestsOpened_{0};
 
-    int mapZoom_{1};
+    int  mapZoom_{1};
+    bool victory_{false};
 
     void saveGame();
     bool loadGame();

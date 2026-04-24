@@ -32,7 +32,7 @@ public:
                            bool isBoss = false, int flashIdx = -1);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
-    static void drawGameOver(TerminalScreen& scr);
+    static void drawGameOver(TerminalScreen& scr, bool victory = false);
     static void drawQuitDialog(TerminalScreen& scr, int selection);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,

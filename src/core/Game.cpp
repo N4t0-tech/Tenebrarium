@@ -574,11 +574,16 @@ void Game::dispatchInput(int key)
         if ((!lockedDoorExists_ || lockedDoorOpen_) &&
             stairsPos_.x == nx && stairsPos_.y == ny)
         {
-            player_->descendFloor();
-            setState(GameState::Exploration);
-            explorationMsg_ = "Desciendes al piso " +
-                              std::to_string(player_->getDungeonFloor()) + "...";
-            saveGame();
+            if (player_->getDungeonFloor() >= 20) {
+                victory_ = true;
+                setState(GameState::GameOver);
+            } else {
+                player_->descendFloor();
+                setState(GameState::Exploration);
+                explorationMsg_ = "Desciendes al piso " +
+                                  std::to_string(player_->getDungeonFloor()) + "...";
+                saveGame();
+            }
         }
         break;
     }
@@ -916,7 +921,7 @@ void Game::render(TerminalScreen &scr)
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
         break;
     case GameState::GameOver:
-        Renderer::drawGameOver(scr);
+        Renderer::drawGameOver(scr, victory_);
         break;
     case GameState::QuitDialog:
         Renderer::drawQuitDialog(scr, menuSelection_);
@@ -955,6 +960,7 @@ void Game::setState(GameState newState)
     if (newState == GameState::MainMenu)
     {
         pendingCombatEnemy_ = -1;
+        victory_ = false;
         menuPhase_ = MenuPhase::Title;
         menuSelection_ = 0;
         classSelection_ = 0;

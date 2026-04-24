@@ -749,11 +749,22 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
 
 // ─── drawGameOver ─────────────────────────────────────────────────────────────
 
-void Renderer::drawGameOver(TerminalScreen& scr) {
+void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
     int cy = scr.rows() / 2;
-    drawCentered(scr, cy - 1, 0, scr.cols(), "G A M E   O V E R",
-                 COL_YELLOW, CELL_BOLD);
-    drawCentered(scr, cy + 1, 0, scr.cols(), "ENTER para volver al menu",
+    if (victory) {
+        drawCentered(scr, cy - 5, 0, scr.cols(), "* * * V I C T O R I A * * *",
+                     COL_YELLOW, CELL_BOLD);
+        drawCentered(scr, cy - 3, 0, scr.cols(), "Has conquistado la mazmorra.",
+                     COL_WHITE, CELL_BOLD);
+        drawCentered(scr, cy - 2, 0, scr.cols(), "Gracias por jugar Tenebrarium.",
+                     COL_CYAN, 0);
+        drawCentered(scr, cy,     0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
+        drawCentered(scr, cy + 1, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
+    } else {
+        drawCentered(scr, cy - 1, 0, scr.cols(), "G A M E   O V E R",
+                     COL_RED, CELL_BOLD);
+    }
+    drawCentered(scr, cy + 3, 0, scr.cols(), "ENTER para volver al menu",
                  COL_GRAY, CELL_DIM);
 }
 
