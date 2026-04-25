@@ -12,10 +12,11 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - 3 clases: Guerrero, Mago, Ranger — cada una con 3 artes únicas
 - Inventario por slots, equipo, pociones, cofres, llaves y salas secretas
 - Tienda con mercader por piso
-- Escalado de dificultad por piso (stats, tipos de enemigo, loot)
+- **20 pisos** con escalado de dificultad — jefes cada 5 pisos
 - Diario de misiones
 - Retratos de clase en truecolor (REXPaint `.xp`)
 - 2 modos de HUD: panel lateral o barra inferior
+- Zoom del mapa ajustable en tiempo real (`+` / `-`), se guarda entre sesiones
 - Guardado automático al bajar de piso — continúa desde el menú principal
 
 | | |
@@ -60,7 +61,8 @@ cmake --build build -j$(nproc)
 | `E` | Buscar paredes secretas |
 | `I` | Inventario |
 | `M` | Diario de misiones |
-| `Q` | Salir |
+| `Q` | Menú de salida |
+| `+` / `-` | Zoom del mapa (1×–3×) |
 
 ### Combate
 

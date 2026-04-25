@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
 
 // Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_UP = 0x1001;
@@ -66,6 +68,7 @@ void Game::run()
     InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
     SetTargetFPS(60);
     SetExitKey(0); // desactivar cierre con ESC (lo manejamos nosotros)
+    loadSettings();
 
     // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
     assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
@@ -241,14 +244,25 @@ void Game::run()
     for (int cp : extras)
         codepoints.push_back(cp);
 
-    Font font = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), 18,
-                           codepoints.data(), static_cast<int>(codepoints.size()));
-    SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+    static constexpr int kBaseFontSize = 18;
+
+    auto loadFont = [&](int size) {
+        Font f = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), size,
+                            codepoints.data(), static_cast<int>(codepoints.size()));
+        SetTextureFilter(f.texture, TEXTURE_FILTER_POINT);
+        return f;
+    };
+    Font font   = loadFont(kBaseFontSize);
+    Font font2x = loadFont(kBaseFontSize * 2);
+    Font font3x = loadFont(kBaseFontSize * 3);
 
     // Calcular tamaño de celda
-    Vector2 gs = MeasureTextEx(font, "M", 18, 0);
+    Vector2 gs = MeasureTextEx(font, "M", kBaseFontSize, 0);
     int cellW = static_cast<int>(gs.x);
     int cellH = static_cast<int>(gs.y) + 2;
+
+    static constexpr int kPadX = 1;
+    static constexpr int kPadY = 1;
 
     // Shader CRT
     Shader crtShader = LoadShader(0, (assetsDir() + "shaders/crt.frag").c_str());
@@ -263,12 +277,16 @@ void Game::run()
         // Recalcular grid si la ventana cambió de tamaño
         int screenW = GetScreenWidth();
         int screenH = GetScreenHeight();
-        int cols = screenW / cellW;
-        int rows = screenH / cellH;
-        if (cols < 1)
-            cols = 1;
-        if (rows < 1)
-            rows = 1;
+
+        int offX = kPadX * cellW;
+        int offY = kPadY * cellH;
+
+        int cols = screenW / cellW - 2 * kPadX;
+        int rows = screenH / cellH - 2 * kPadY;
+        // HudBar: margen extra inferior para que la barra no quede pegada al borde
+        if (hudLayout_ == HudLayout::Bottom) rows -= 1;
+        if (cols < 1) cols = 1;
+        if (rows < 1) rows = 1;
 
         // Recrear render texture si la ventana cambió de tamaño
         if (IsWindowResized() && (screenW != rtW || screenH != rtH))
@@ -299,14 +317,69 @@ void Game::run()
         processInput();
         update();
 
-        TerminalScreen scr(cols, rows, cellW, cellH, font);
+        TerminalScreen scr(cols, rows, cellW, cellH, font, kBaseFontSize);
         scr.clear();
         render(scr);
 
         // 1) Renderizar juego al texture offscreen
         BeginTextureMode(renderTarget);
         ClearBackground(BLACK);
-        scr.render();
+        scr.render(offX, offY);
+
+        // Overlay del mapa a font-zoom (solo en exploración y si zoom > 1)
+        if (mapZoom_ > 1 && state_ == GameState::Exploration && map_ && player_) {
+            static constexpr int kSidebarW = 22;
+            static constexpr int kHudBarH  = 3;
+
+            int mapPixW, mapPixH;
+            if (hudLayout_ == HudLayout::Sidebar) {
+                mapPixW = (cols - kSidebarW - 1) * cellW;
+                mapPixH = rows * cellH;
+            } else {
+                mapPixW = cols * cellW;
+                mapPixH = (rows - kHudBarH) * cellH;
+            }
+
+            int zCellW = cellW * mapZoom_;
+            int zCellH = cellH * mapZoom_;
+            Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
+            int  zFontH = kBaseFontSize * mapZoom_;
+            TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
+                                  zCellW, zCellH, zFont, zFontH);
+            mapScr.clear();
+
+            std::vector<MapEntity> zEntities;
+            for (const auto& we : worldEnemies_)
+                if (we.alive)
+                    zEntities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+            for (const auto& ch : worldChests_)
+                if (!ch.opened)
+                    zEntities.push_back({ch.pos, '$', 2, true});
+            if (lockedDoorExists_ && !lockedDoorOpen_)
+                zEntities.push_back({lockedDoorPos_, '+', 1, false});
+            if (!lockedDoorExists_ || lockedDoorOpen_)
+                zEntities.push_back({stairsPos_, '>', 3, true});
+            if (shopExists_)
+                zEntities.push_back({shopMerchantPos_, '$', 4, true});
+
+            Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
+                              *map_, zEntities);
+            mapScr.render(offX, offY);
+
+            // Re-dibujar mensaje encima del overlay (el zoom lo tapaba)
+            if (!explorationMsg_.empty()) {
+                int msgRow = (hudLayout_ == HudLayout::Sidebar)
+                    ? rows / 2
+                    : (rows - 3) / 2;
+                int msgW = (hudLayout_ == HudLayout::Sidebar)
+                    ? (cols - 22 - 1) * cellW
+                    : cols * cellW;
+                BeginScissorMode(offX, offY + msgRow * cellH, msgW, cellH);
+                scr.render(offX, offY);
+                EndScissorMode();
+            }
+        }
+
         EndTextureMode();
 
         // 2) Dibujar texture con shader CRT
@@ -326,6 +399,8 @@ void Game::run()
     UnloadRenderTexture(renderTarget);
     UnloadShader(crtShader);
     UnloadFont(font);
+    UnloadFont(font2x);
+    UnloadFont(font3x);
     CloseWindow();
 }
 
@@ -349,6 +424,10 @@ void Game::processInput()
         {259, GKEY_BACKSPACE}, // KEY_BACKSPACE
         {32, ' '},             // KEY_SPACE
     };
+    // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
+    if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
+    if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
+
     for (auto &m : mapping)
     {
         if (IsKeyPressed(m.rl))
@@ -357,8 +436,11 @@ void Game::processInput()
             return;
         }
     }
-    // Carácter Unicode (letras, números, etc.)
+
+    // Carácter Unicode — interceptar + y - para zoom antes de dispatch
     int cp = GetCharPressed();
+    if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
+    if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
     if (cp > 0)
         dispatchInput(cp);
 }
@@ -518,11 +600,16 @@ void Game::dispatchInput(int key)
         if ((!lockedDoorExists_ || lockedDoorOpen_) &&
             stairsPos_.x == nx && stairsPos_.y == ny)
         {
-            player_->descendFloor();
-            setState(GameState::Exploration);
-            explorationMsg_ = "Desciendes al piso " +
-                              std::to_string(player_->getDungeonFloor()) + "...";
-            saveGame();
+            if (player_->getDungeonFloor() >= 20) {
+                victory_ = true;
+                setState(GameState::GameOver);
+            } else {
+                player_->descendFloor();
+                setState(GameState::Exploration);
+                explorationMsg_ = "Desciendes al piso " +
+                                  std::to_string(player_->getDungeonFloor()) + "...";
+                saveGame();
+            }
         }
         break;
     }
@@ -635,7 +722,7 @@ void Game::inputQuitDialog(int key)
             quitRequested_ = true;
         break;
     case 27: // ESC — cancelar
-        setState(GameState::Exploration);
+        returnToExploration();
         break;
     }
 }
@@ -835,7 +922,7 @@ void Game::render(TerminalScreen &scr)
             if (shopExists_)
                 entities.push_back({shopMerchantPos_, '$', 4, true});
             Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
-                                      entities, explorationMsg_);
+                                      entities, explorationMsg_, mapZoom_);
         }
         break;
     case GameState::Combat:
@@ -860,7 +947,7 @@ void Game::render(TerminalScreen &scr)
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
         break;
     case GameState::GameOver:
-        Renderer::drawGameOver(scr);
+        Renderer::drawGameOver(scr, victory_);
         break;
     case GameState::QuitDialog:
         Renderer::drawQuitDialog(scr, menuSelection_);
@@ -899,6 +986,7 @@ void Game::setState(GameState newState)
     if (newState == GameState::MainMenu)
     {
         pendingCombatEnemy_ = -1;
+        victory_ = false;
         menuPhase_ = MenuPhase::Title;
         menuSelection_ = 0;
         classSelection_ = 0;
@@ -1256,3 +1344,21 @@ bool        Game::hasSave()  const { return GameSerializer::hasSave();  }
 
 void Game::saveGame() { GameSerializer::save(*this); }
 bool Game::loadGame() { return GameSerializer::load(*this); }
+
+void Game::saveSettings() const {
+    std::string dir = std::string(GetApplicationDirectory()) + "saves";
+    std::filesystem::create_directories(dir);
+    std::ofstream f(dir + "/settings.dat");
+    if (f) f << "mapZoom=" << mapZoom_ << "\n";
+}
+
+void Game::loadSettings() {
+    std::ifstream f(std::string(GetApplicationDirectory()) + "saves/settings.dat");
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.rfind("mapZoom=", 0) == 0) {
+            try { mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3); }
+            catch (...) {}
+        }
+    }
+}

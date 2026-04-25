@@ -20,7 +20,8 @@ struct Cell {
 // Buffer de celdas que el Renderer escribe y Raylib dibuja.
 class TerminalScreen {
 public:
-    TerminalScreen(int cols, int rows, int cellW, int cellH, Font font);
+    // fontH: tamaño real de render de la fuente (0 = usar cellH)
+    TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, int fontH = 0);
 
     int cols()  const { return cols_; }
     int rows()  const { return rows_; }
@@ -34,12 +35,12 @@ public:
     int  putStr(int col, int row, const std::string& utf8,
                 Color fg, Color bg = BLACK, uint8_t flags = 0);
     // Dibuja el buffer (llamar entre BeginDrawing/EndDrawing)
-    void render() const;
+    void render(int offsetX = 0, int offsetY = 0) const;
 
     static Color dimColor(Color c);
 
 private:
-    int   cols_, rows_, cellW_, cellH_;
+    int   cols_, rows_, cellW_, cellH_, fontH_;
     Font  font_;
     std::vector<Cell> buf_;
 

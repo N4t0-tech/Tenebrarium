@@ -23,13 +23,16 @@ public:
     static void drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
-                                const std::string& message = "");
+                                const std::string& message = "",
+                                int mapZoom = 1);
+    static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
+                        const Map& map, const std::vector<MapEntity>& entities);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
-    static void drawGameOver(TerminalScreen& scr);
+    static void drawGameOver(TerminalScreen& scr, bool victory = false);
     static void drawQuitDialog(TerminalScreen& scr, int selection);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
@@ -49,11 +52,10 @@ private:
                             int value, int max, int barW, Color c);
 
     static Color colorFromPair(int pair);
-    static void  drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
-                         const Map& map, const std::vector<MapEntity>& entities);
     static void  drawHudPanel(TerminalScreen& scr, int col, int row,
-                              const Player& player);
-    static void  drawHudBar(TerminalScreen& scr, int row, const Player& player);
+                              const Player& player, int mapZoom = 1);
+    static void  drawHudBar(TerminalScreen& scr, int row,
+                             const Player& player, int mapZoom = 1);
     static void  drawPortrait(TerminalScreen& scr, int col, int row,
                               const char* filename);
     static const char* className(const Player& p);
