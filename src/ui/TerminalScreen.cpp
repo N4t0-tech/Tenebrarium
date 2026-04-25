@@ -1,9 +1,9 @@
 #include "TerminalScreen.hpp"
 #include <raylib.h>
 
-TerminalScreen::TerminalScreen(int cols, int rows, int cellW, int cellH, Font font)
+TerminalScreen::TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, int fontH)
     : cols_(cols), rows_(rows), cellW_(cellW), cellH_(cellH),
-      font_(font), buf_(cols * rows)
+      fontH_(fontH > 0 ? fontH : cellH), font_(font), buf_(cols * rows)
 {}
 
 void TerminalScreen::clear() {
@@ -51,7 +51,8 @@ Color TerminalScreen::dimColor(Color c) {
 }
 
 void TerminalScreen::render(int offsetX, int offsetY) const {
-    float fs = static_cast<float>(cellH_);
+    float fs    = static_cast<float>(fontH_);
+    int   padY  = (cellH_ - fontH_) / 2; // centrado vertical del glifo en la celda
 
     for (int row = 0; row < rows_; row++) {
         for (int col = 0; col < cols_; col++) {
@@ -64,13 +65,11 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
             if (c.flags & CELL_INVERTED) std::swap(fg, bg);
             if (c.flags & CELL_DIM)      fg = dimColor(fg);
 
-            // Fondo de celda
             DrawRectangle(px, py, cellW_, cellH_, bg);
 
-            // Glifo
             if (c.codepoint > 32) {
                 DrawTextCodepoint(font_, c.codepoint,
-                                  { (float)px, (float)py }, fs, fg);
+                                  { (float)px, (float)(py + padY) }, fs, fg);
             }
         }
     }

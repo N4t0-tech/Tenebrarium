@@ -244,9 +244,15 @@ void Game::run()
     for (int cp : extras)
         codepoints.push_back(cp);
 
-    Font font = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), 18,
-                           codepoints.data(), static_cast<int>(codepoints.size()));
-    SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+    auto loadFont = [&](int size) {
+        Font f = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), size,
+                            codepoints.data(), static_cast<int>(codepoints.size()));
+        SetTextureFilter(f.texture, TEXTURE_FILTER_POINT);
+        return f;
+    };
+    Font font   = loadFont(18);
+    Font font2x = loadFont(36);
+    Font font3x = loadFont(54);
 
     // Calcular tamaño de celda
     Vector2 gs = MeasureTextEx(font, "M", 18, 0);
@@ -309,7 +315,7 @@ void Game::run()
         processInput();
         update();
 
-        TerminalScreen scr(cols, rows, cellW, cellH, font);
+        TerminalScreen scr(cols, rows, cellW, cellH, font, 18);
         scr.clear();
         render(scr);
 
@@ -334,8 +340,10 @@ void Game::run()
 
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
+            Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
+            int  zFontH = 18 * mapZoom_;
             TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
-                                  zCellW, zCellH, font);
+                                  zCellW, zCellH, zFont, zFontH);
             mapScr.clear();
 
             std::vector<MapEntity> zEntities;
@@ -376,6 +384,8 @@ void Game::run()
     UnloadRenderTexture(renderTarget);
     UnloadShader(crtShader);
     UnloadFont(font);
+    UnloadFont(font2x);
+    UnloadFont(font3x);
     CloseWindow();
 }
 
