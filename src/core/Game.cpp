@@ -244,20 +244,25 @@ void Game::run()
     for (int cp : extras)
         codepoints.push_back(cp);
 
+    static constexpr int kBaseFontSize = 18;
+
     auto loadFont = [&](int size) {
         Font f = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), size,
                             codepoints.data(), static_cast<int>(codepoints.size()));
         SetTextureFilter(f.texture, TEXTURE_FILTER_POINT);
         return f;
     };
-    Font font   = loadFont(18);
-    Font font2x = loadFont(36);
-    Font font3x = loadFont(54);
+    Font font   = loadFont(kBaseFontSize);
+    Font font2x = loadFont(kBaseFontSize * 2);
+    Font font3x = loadFont(kBaseFontSize * 3);
 
     // Calcular tamaño de celda
-    Vector2 gs = MeasureTextEx(font, "M", 18, 0);
+    Vector2 gs = MeasureTextEx(font, "M", kBaseFontSize, 0);
     int cellW = static_cast<int>(gs.x);
     int cellH = static_cast<int>(gs.y) + 2;
+
+    static constexpr int kPadX = 1;
+    static constexpr int kPadY = 1;
 
     // Shader CRT
     Shader crtShader = LoadShader(0, (assetsDir() + "shaders/crt.frag").c_str());
@@ -273,9 +278,6 @@ void Game::run()
         int screenW = GetScreenWidth();
         int screenH = GetScreenHeight();
 
-        // Margen en celdas: el texto no toca los bordes de la ventana
-        static constexpr int kPadX = 1;
-        static constexpr int kPadY = 1;
         int offX = kPadX * cellW;
         int offY = kPadY * cellH;
 
@@ -315,7 +317,7 @@ void Game::run()
         processInput();
         update();
 
-        TerminalScreen scr(cols, rows, cellW, cellH, font, 18);
+        TerminalScreen scr(cols, rows, cellW, cellH, font, kBaseFontSize);
         scr.clear();
         render(scr);
 
@@ -341,7 +343,7 @@ void Game::run()
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
             Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
-            int  zFontH = 18 * mapZoom_;
+            int  zFontH = kBaseFontSize * mapZoom_;
             TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
                                   zCellW, zCellH, zFont, zFontH);
             mapScr.clear();
@@ -409,6 +411,10 @@ void Game::processInput()
         {259, GKEY_BACKSPACE}, // KEY_BACKSPACE
         {32, ' '},             // KEY_SPACE
     };
+    // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
+    if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
+    if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
+
     for (auto &m : mapping)
     {
         if (IsKeyPressed(m.rl))
@@ -417,9 +423,6 @@ void Game::processInput()
             return;
         }
     }
-    // Zoom del mapa (layout-agnostic, solo afecta tiles del mapa)
-    if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
-    if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
 
     // Carácter Unicode — interceptar + y - para zoom antes de dispatch
     int cp = GetCharPressed();
@@ -1340,7 +1343,9 @@ void Game::loadSettings() {
     std::ifstream f(std::string(GetApplicationDirectory()) + "saves/settings.dat");
     std::string line;
     while (std::getline(f, line)) {
-        if (line.rfind("mapZoom=", 0) == 0)
-            mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3);
+        if (line.rfind("mapZoom=", 0) == 0) {
+            try { mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3); }
+            catch (...) {}
+        }
     }
 }
