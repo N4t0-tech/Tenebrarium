@@ -365,6 +365,19 @@ void Game::run()
             Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
                               *map_, zEntities);
             mapScr.render(offX, offY);
+
+            // Re-dibujar mensaje encima del overlay (el zoom lo tapaba)
+            if (!explorationMsg_.empty()) {
+                int msgRow = (hudLayout_ == HudLayout::Sidebar)
+                    ? rows / 2
+                    : (rows - 3) / 2;
+                int msgW = (hudLayout_ == HudLayout::Sidebar)
+                    ? (cols - 22 - 1) * cellW
+                    : cols * cellW;
+                BeginScissorMode(offX, offY + msgRow * cellH, msgW, cellH);
+                scr.render(offX, offY);
+                EndScissorMode();
+            }
         }
 
         EndTextureMode();
