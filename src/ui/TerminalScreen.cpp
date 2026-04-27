@@ -1,3 +1,7 @@
+// TerminalScreen — buffer de celdas 2D que abstrae el rendering de texto en Raylib.
+// Cada celda almacena un codepoint Unicode, colores fg/bg y flags (negrita, atenuado, invertido).
+// El buffer se llena por la lógica de juego/renderer y se vuelca a Raylib en render().
+
 #include "TerminalScreen.hpp"
 #include <raylib.h>
 
@@ -52,7 +56,8 @@ Color TerminalScreen::dimColor(Color c) {
 
 void TerminalScreen::render(int offsetX, int offsetY) const {
     float fs    = static_cast<float>(fontH_);
-    int   padY  = (cellH_ - fontH_) / 2; // centrado vertical del glifo en la celda
+    // padY centra el glifo verticalmente cuando fontH < cellH (ocurre en zoom x2/x3)
+    int   padY  = (cellH_ - fontH_) / 2;
 
     for (int row = 0; row < rows_; row++) {
         for (int col = 0; col < cols_; col++) {
@@ -65,8 +70,10 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
             if (c.flags & CELL_INVERTED) std::swap(fg, bg);
             if (c.flags & CELL_DIM)      fg = dimColor(fg);
 
+            // Siempre rellenar el fondo, incluso para espacios, para cubrir frames anteriores
             DrawRectangle(px, py, cellW_, cellH_, bg);
 
+            // Solo dibujar glifo para codepoints visibles (espacio = 32 no necesita draw)
             if (c.codepoint > 32) {
                 DrawTextCodepoint(font_, c.codepoint,
                                   { (float)px, (float)(py + padY) }, fs, fg);

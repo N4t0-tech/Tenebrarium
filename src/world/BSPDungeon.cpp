@@ -1,3 +1,13 @@
+// BSPDungeon — generación procedural de mazmorras usando Binary Space Partitioning.
+// Algoritmo:
+//   1. buildTree(): divide recursivamente el espacio en rectángulos (nodos BSP).
+//      Se para cuando profundidad >= maxDepth_ o el espacio es muy pequeño.
+//   2. carveNode(): recorre el árbol en post-order. En las hojas coloca una sala
+//      aleatoria. En los nodos internos conecta los centros de los hijos con un
+//      corredor en L (horizontal→vertical o vertical→horizontal al azar).
+//   3. carveNode() retorna un punto (centro de sala) para que el padre pueda
+//      conectar los dos subárboles.
+
 #include "BSPDungeon.hpp"
 #include <algorithm>
 

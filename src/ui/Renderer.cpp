@@ -86,6 +86,11 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
 
 // ─── drawMap ─────────────────────────────────────────────────────────────────
 
+// drawMap — renderiza el mapa centrado en el jugador con FOV y gradiente de brillo.
+// Cámara: el jugador queda siempre en el centro de la vista (camX, camY son el offset).
+// FOV: las celdas visibles se muestran con brillo según distancia al jugador (0.45–1.0).
+// Las celdas exploradas pero no visibles se muestran en gris oscuro (COL_DARK).
+// Las paredes secretas no exploradas/visibles se omiten para no revelarlas.
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities) {
@@ -98,7 +103,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                  (uint8_t)(c.b * f), c.a };
     };
 
-    static constexpr float FOV_RADIUS = 8.0f;
+    static constexpr float FOV_RADIUS = 8.0f;  // radio del FOV en celdas
 
     for (int sy = 0; sy < viewH; sy++) {
         for (int sx = 0; sx < viewW; sx++) {
@@ -307,6 +312,8 @@ struct ClassInfo {
     const char* portrait;
     int hp, atk, def, mana;
 };
+// Para añadir una clase: agregar entrada aquí y crear el archivo .xp en assets/art/.
+// portraitPath == nullptr muestra "[sin retrato]" como placeholder.
 static constexpr ClassInfo kClasses[3] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
      "warrior.xp", 120,15,8,20},

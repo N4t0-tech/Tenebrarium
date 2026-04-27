@@ -1,3 +1,8 @@
+// Pathfinding BFS — calcula el primer paso del camino más corto de 'from' a 'to'.
+// Retorna 'from' si ya está en destino o si no existe camino.
+// Usa movimiento en 4 direcciones (no diagonal) para evitar cruzar esquinas.
+// La reconstrucción del camino sigue prev[] desde 'to' hasta encontrar 'from'.
+
 #include "Pathfinding.hpp"
 #include <vector>
 #include <queue>

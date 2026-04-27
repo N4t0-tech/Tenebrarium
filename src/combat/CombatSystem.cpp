@@ -39,6 +39,9 @@ const std::vector<StatusEffect>& CombatSystem::getEnemyEffects(int idx) const {
 
 // ─── player actions ───────────────────────────────────────────────────────────
 
+// doAttackBase — implementación compartida de doAttack y doHeavyAttack.
+// Fórmula de daño: max(1, ATK*mult + boost - DEF_enemigo), con crítico ×1.5.
+// El orden importa: se aplica el boost antes de restar DEF.
 void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
                                 const std::string& actionName)
 {
@@ -206,6 +209,13 @@ void CombatSystem::checkCombatOver() {
     }
 }
 
+// processEnemyTurn — orden de resolución por turno enemigo:
+// 1. tick efectos del jugador (veneno le hace daño, efectos expiran)
+// 2. tick efectos de enemigos (veneno/trampa les hace daño, congelado reduce PA)
+// 3. verificar fin de combate (veneno puede haber matado a alguien)
+// 4. cada enemigo vivo ataca según su PA base
+// Los efectos defensivos (DefendingHeavy, Defending) se resuelven por golpe individual.
+// DefendingHeavy tiene prioridad sobre Defending y se consume al primer golpe recibido.
 void CombatSystem::processEnemyTurn() {
     if (phase_ == CombatPhase::CombatOver) return;
     phase_ = CombatPhase::EnemyTurn;
@@ -221,7 +231,6 @@ void CombatSystem::processEnemyTurn() {
         auto& enemy = enemies_[i];
         if (!enemy->isAlive()) continue;
 
-        // Check frozen: reduce PA
         int attackCount = enemy->getBasePa();
         bool frozen = std::any_of(enemyEffects_[i].begin(), enemyEffects_[i].end(),
             [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Frozen; });

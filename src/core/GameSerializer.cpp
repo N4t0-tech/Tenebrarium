@@ -1,3 +1,12 @@
+// GameSerializer — serialización/deserialización del estado completo del juego.
+// Formato: texto plano, un campo por línea o separados por espacios.
+//   Cabecera: "1\n" (número de versión — si cambia el formato, incrementar aquí y en load)
+//   Strings: se guardan con prefijo de longitud ("5 hola " en vez de "hola") para
+//            soportar strings con espacios (wstr/rstr).
+// El archivo se guarda en <directorio_ejecutable>/saves/save.dat.
+// Para añadir un campo nuevo: añadirlo al final de save() y load() para no romper
+// partidas guardadas existentes con versiones anteriores.
+
 #include "GameSerializer.hpp"
 #include "Game.hpp"
 #include <raylib.h>

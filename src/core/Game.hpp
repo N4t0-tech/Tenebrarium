@@ -1,5 +1,10 @@
 #pragma once
 
+// Game es la clase central: contiene el loop principal, la máquina de estados,
+// todos los objetos del mundo y la lógica de transición entre pantallas.
+// GameSerializer y EnemyAI son friend para acceder a miembros privados sin
+// getters adicionales.
+
 #include "GameState.hpp"
 #include "MenuPhase.hpp"
 #include "ShopItem.hpp"
@@ -29,61 +34,62 @@ public:
     Game();
     ~Game();
 
+    // Abre la ventana Raylib, carga fuentes/shader y ejecuta el loop hasta salir.
     void run();
 
 private:
     GameState     state_;
-    MenuPhase     menuPhase_;
+    MenuPhase     menuPhase_;   // sub-fase dentro de MainMenu
     bool          quitRequested_;
 
-    // Menu state
+    // Estado del menú principal y flujo de creación de personaje
     int           menuSelection_;
     std::string   playerName_;
     int           classSelection_;
     int           hudSelection_;
 
-    HudLayout     hudLayout_;
+    HudLayout     hudLayout_;   // Sidebar o Bottom — elegido en HudSelect
 
     std::unique_ptr<Player>        player_;
     std::unique_ptr<Map>           map_;
     std::unique_ptr<CombatSystem>  combat_;
-    bool                           combatShowingArts_;
+    bool                           combatShowingArts_;  // true = submenú de habilidades abierto
     int                            combatArtSelection_;
+    // Flash visual al impactar: índice del enemigo que parpadea y hasta cuándo
     int                            combatFlashIdx_;
     double                         combatFlashEndTime_;
 
-    // World enemies
+    // Lista de enemigos vivos en el mundo; usada por el renderer y la IA
+    // INVARIANTE: acceder/modificar siempre bajo worldMutex_
     std::vector<WorldEnemy>  worldEnemies_;
-    int                      combatWorldEnemyIdx_;
+    int                      combatWorldEnemyIdx_;  // índice en worldEnemies_ del combate activo (-1 si ninguno)
 
     std::vector<WorldChest>  worldChests_;
 
-    // Locked door and stairs
+    // La puerta bloqueada se abre cuando todos los enemigos del piso mueren
     Position  lockedDoorPos_;
     bool      lockedDoorExists_;
     bool      lockedDoorOpen_;
     Position  stairsPos_;
 
-    // Inventory
     int       inventorySelection_{0};
 
-    // Shop
+    // Stock de la tienda generado una sola vez por piso (ver generateShopStock)
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
     BSPDungeon::Room        shopRoom_{};
     bool                    shopExists_{false};
     Position                shopMerchantPos_{};
 
-    // Exploration message
+    // Mensaje flotante en exploración (se limpia al mover o al nuevo turno)
     std::string explorationMsg_;
 
-    // Quest system
     std::vector<Quest> quests_;
     int                questLogSelection_{0};
-    int                enemiesKilled_{0};
+    int                enemiesKilled_{0};  // contadores para objetivos de misiones
     int                chestsOpened_{0};
 
-    int  mapZoom_{1};
+    int  mapZoom_{1};   // 1–3; escala la celda del mapa overlay
     bool victory_{false};
 
     void saveGame();
@@ -93,16 +99,20 @@ private:
     void saveSettings() const;
     void loadSettings();
 
+    // processInput() convierte keycodes de Raylib a enteros internos y llama dispatchInput.
+    // dispatchInput() enruta al handler del estado actual.
     void dispatchInput(int key);
     void processInput();
     void update();
     void render(TerminalScreen& scr);
 
+    // setState() es el punto único de transición: limpia estado obsoleto y genera
+    // el nuevo (mapa, enemigos, combat, etc.) según el estado destino.
     void setState(GameState newState);
+    // returnToExploration() vuelve al mapa sin regenerarlo (post-combate o ESC en QuitDialog)
     void returnToExploration();
     void openChest(WorldChest& chest);
 
-    // Per-phase input handlers
     void inputTitle(int key);
     void inputCredits(int key);
     void inputQuitDialog(int key);
@@ -119,7 +129,10 @@ private:
     void initQuests();
     void checkQuestProgress();
 
-    // AI movement thread
+    // Thread de IA: mueve enemigos cada 600 ms (ver EnemyAI::run).
+    // Comunicación con el hilo principal mediante worldMutex_ + pendingRedraw_.
+    // pendingCombatEnemy_: cuando la IA detecta colisión con el jugador, pone aquí
+    // el índice del enemigo; el hilo principal lo recoge en el próximo frame.
     std::thread          aiThread_;
     std::mutex           worldMutex_;
     std::atomic<bool>    aiRunning_{false};

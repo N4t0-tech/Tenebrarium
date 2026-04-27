@@ -1,5 +1,11 @@
 #pragma once
 
+// Renderer — todos los métodos son estáticos y reciben un TerminalScreen& donde dibujar.
+// No llaman a Raylib directamente; usan scr.putStr/put/putCell para llenar el buffer.
+// Esto permite testar el layout sin ventana y hace el renderer stateless (fácil de extender).
+// Para agregar una pantalla nueva: agregar método drawXxx() aquí, implementarlo en Renderer.cpp
+// y llamarlo desde Game::render() en el case correspondiente.
+
 #include "ui/TerminalScreen.hpp"
 #include "world/Map.hpp"
 #include "entities/Player.hpp"
@@ -12,14 +18,14 @@
 
 class Renderer {
 public:
-    // Menu screens
+    // ── Menús ────────────────────────────────────────────────────────────────
     static void drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink);
     static void drawCredits(TerminalScreen& scr);
     static void drawNameInput(TerminalScreen& scr, const std::string& name, bool blink);
     static void drawClassSelect(TerminalScreen& scr, int selection);
     static void drawHudSelect(TerminalScreen& scr, int selection);
 
-    // Game screens
+    // ── Pantallas de juego ───────────────────────────────────────────────────
     static void drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
@@ -39,7 +45,7 @@ public:
                          const std::string& message);
 
 private:
-    // Layout primitives
+    // ── Primitivas de layout ─────────────────────────────────────────────────
     static void drawBorder(TerminalScreen& scr, int col, int row, int w, int h,
                            Color c = WHITE);
     static void drawHSep(TerminalScreen& scr, int col, int row, int w,
@@ -48,6 +54,7 @@ private:
                          Color c = WHITE);
     static void drawCentered(TerminalScreen& scr, int row, int col0, int w,
                              const std::string& text, Color fg, uint8_t flags = 0);
+    // drawStatBar: rellena barW celdas con █ (llenas) o ░ (vacías) según value/max
     static void drawStatBar(TerminalScreen& scr, int col, int row,
                             int value, int max, int barW, Color c);
 

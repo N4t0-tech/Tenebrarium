@@ -2,7 +2,8 @@
 
 #include <string>
 
-// Base class for all game entities (player, enemies, NPCs).
+// Clase base para todas las entidades del juego (jugador, enemigos, NPCs).
+// takeDamage aplica la DEF de la entidad; takeDamageRaw la ignora (daño mágico, DoT, etc.).
 class Entity {
 public:
     Entity(const std::string& name, int maxHp, int attack, int defense);
@@ -17,7 +18,7 @@ public:
     bool isAlive() const { return hp_ > 0; }
 
     void takeDamage(int amount);
-    void takeDamageRaw(int amount);   // bypasses DEF (magic damage, special attacks)
+    void takeDamageRaw(int amount);   // ignora DEF — usar para DoT, magia, trampas
     void heal(int amount);
 
 protected:

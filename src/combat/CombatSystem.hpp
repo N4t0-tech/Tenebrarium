@@ -1,5 +1,14 @@
 #pragma once
 
+// CombatSystem — maneja un encuentro completo por turnos.
+// Turno del jugador: el jugador gasta PA (máx 3) con acciones hasta quedarse sin PA o usar doEndTurn().
+// Turno del enemigo: se resuelve automáticamente cuando el jugador se queda sin PA.
+// Los StatusEffects se aplican al inicio del turno enemigo (tickPlayerEffects/tickEnemyEffects).
+//
+// Para añadir una nueva acción: agregar método público + lógica en el .cpp.
+// Para añadir un nuevo efecto de estado: agregar valor en StatusEffect::Type, manejar en
+// tickPlayerEffects/tickEnemyEffects y resolveArt.
+
 #include "Art.hpp"
 #include "entities/Player.hpp"
 #include "entities/Enemy.hpp"
@@ -9,16 +18,16 @@
 
 struct StatusEffect {
     enum class Type {
-        Poisoned,       // DoT applied to enemy each turn
-        Frozen,         // Enemy loses 1 PA this turn
-        AttackBoosted,  // Player ATK increased
-        Defending,      // Player takes 50% less damage this enemy turn
-        DefendingHeavy, // Player takes 70% less damage on next hit (consumed)
-        TrapPending,    // Enemy takes delayed damage on tick
+        Poisoned,       // DoT al inicio del turno enemigo (daño por turnsLeft turnos)
+        Frozen,         // enemigo pierde 1 PA en su turno (1 turno)
+        AttackBoosted,  // jugador tiene ATK extra por turnsLeft turnos
+        Defending,      // jugador recibe 50% menos daño durante 1 turno enemigo
+        DefendingHeavy, // jugador recibe 70% menos daño en el PRIMER golpe y se consume
+        TrapPending,    // enemigo recibe daño retardado al inicio del turno enemigo
     };
     Type type;
     int  turnsLeft;
-    int  magnitude;
+    int  magnitude;   // cantidad de daño/bonus según el tipo
 };
 
 enum class CombatPhase { PlayerTurn, EnemyTurn, CombatOver };

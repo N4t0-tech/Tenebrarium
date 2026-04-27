@@ -4,6 +4,10 @@
 
 // ─── Enemy tables ─────────────────────────────────────────────────────────────
 
+// pickEnemyType — selección aleatoria ponderada de tipo de enemigo según el piso.
+// Los pesos de goblin bajan con el piso; orcos, arañas y vampiros suben gradualmente.
+// Arañas disponibles desde piso 2, vampiros desde piso 4.
+// Fórmula de peso: evita que goblins desaparezcan del todo (mínimo 5).
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
     bool spiderAvail  = (floor >= 2);
@@ -238,6 +242,14 @@ void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& che
 
 // ─── Main population ──────────────────────────────────────────────────────────
 
+// populate() — asigna contenido a las salas generadas por BSPDungeon.
+// Asignación de salas por rol (el índice 0 = sala inicial del jugador):
+//   rooms[0]       → sala de spawn del jugador (reservada, no se puebla)
+//   rooms[n-1]     → escaleras al siguiente piso
+//   rooms[n-2]     → puerta bloqueada (requiere matar todos los enemigos)
+//   rooms[i]       → tienda (una sala aleatoria entre inicio y fin)
+//   resto          → enemigos, cofres, salas secretas
+// El vector 'taken' acumula posiciones ya ocupadas para que pickPos() las evite.
 DungeonPopulator::Result DungeonPopulator::populate(
     Map& map, const std::vector<BSPDungeon::Room>& rooms, int floor, PlayerClass cls)
 {
@@ -245,18 +257,17 @@ DungeonPopulator::Result DungeonPopulator::populate(
     int n = static_cast<int>(rooms.size());
 
     std::vector<Position> taken;
-    taken.push_back({rooms[0].centerX(), rooms[0].centerY()});
+    taken.push_back({rooms[0].centerX(), rooms[0].centerY()});  // posición inicial del jugador
 
-    // Stairs in last room
     result.stairsPos = pickPos(rooms[n - 1], taken);
 
-    // Locked door in second-to-last room
+    // Puerta bloqueada en la penúltima sala (si hay suficientes salas)
     if (n >= 3) {
         result.lockedDoorPos    = pickPos(rooms[n - 2], taken);
         result.lockedDoorExists = true;
     }
 
-    // Shop room: any room that is not start, last, or locked-door room
+    // Tienda: cualquier sala que no sea inicio, fin ni sala de puerta bloqueada
     {
         std::vector<int> shopCandidates;
         for (int i = 1; i < n - 1; i++) {
@@ -272,7 +283,7 @@ DungeonPopulator::Result DungeonPopulator::populate(
         }
     }
 
-    // Enemies
+    // spawnChance crece con el piso (más difícil = más enemigos por sala)
     int spawnChance = std::min(85, 50 + (floor - 1) * 8);
     for (int i = 1; i < n; i++) {
         if (result.shopExists &&

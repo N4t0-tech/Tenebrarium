@@ -21,11 +21,12 @@ struct Position {
     int x, y;
 };
 
-// A renderable entity placed on the map (enemy, chest, door, stairs…)
+// Entidad visual sobre el mapa (enemigo, cofre, puerta, escaleras…).
+// colorPair usa los mismos índices que colorFromPair() en Renderer.cpp (1=blanco, 2=amarillo, etc.)
 struct MapEntity {
     Position pos;
     char     glyph;
-    int      colorPair;  // ncurses color pair index
+    int      colorPair;
     bool     bold = true;
 };
 

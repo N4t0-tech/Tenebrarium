@@ -1,5 +1,9 @@
 #pragma once
 
+// Player extiende Entity con mana, clase, nivel, XP, equipo e inventario.
+// El ATK y DEF efectivos se calculan como base + bonus del ítem equipado;
+// se actualizan en levelUp() y cada vez que se equipa/desequipa algo.
+
 #include "Entity.hpp"
 #include "inventory/Inventory.hpp"
 #include "combat/Art.hpp"
@@ -7,9 +11,9 @@
 #include <optional>
 
 enum class PlayerClass {
-    Warrior,
-    Mage,
-    Ranger,
+    Warrior,  // alta vida y defensa, artes de cuerpo a cuerpo
+    Mage,     // baja vida, mucho mana, artes de área y control
+    Ranger,   // equilibrado, artes de DoT y múltiples golpes
 };
 
 class Player : public Entity {
@@ -32,16 +36,16 @@ public:
     const std::optional<Item>& getEquippedWeapon() const { return equippedWeapon_; }
     const std::optional<Item>& getEquippedArmor()  const { return equippedArmor_;  }
 
-    void gainXp(int amount);
-    bool useMana(int amount);
+    void gainXp(int amount);               // acumula XP; llama levelUp() si supera el umbral
+    bool useMana(int amount);             // retorna false y no descuenta si no hay mana suficiente
     void restoreMana(int amount);
-    std::vector<Art> getAvailableArts() const;
+    std::vector<Art> getAvailableArts() const;  // lista de habilidades según la clase
 
-    void addCoins(int amount);
-    void descendFloor();
-    bool pickupItem(const Item& item);    // auto-equip if slot free, else bag
-    void equipItem(int bagIdx);           // swap bag item into equipment slot
-    int  useConsumable();                // uses first potion; returns HP healed, 0 if none
+    void addCoins(int amount);            // puede ser negativo (compra)
+    void descendFloor();                  // incrementa dungeonFloor_
+    bool pickupItem(const Item& item);    // auto-equipa si el slot está libre, si no va a la mochila
+    void equipItem(int bagIdx);           // intercambia el ítem de la mochila[bagIdx] con el slot equipado
+    int  useConsumable();                 // usa la primera poción del inventario; retorna HP curado (0 si no hay)
     int  countConsumables() const;
 
 private:

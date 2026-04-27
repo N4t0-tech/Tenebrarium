@@ -1,3 +1,14 @@
+// XpLoader — carga archivos REXPaint (.xp), que son gzip con formato binario propio.
+// Formato del binario descomprimido:
+//   version  (int32) — ignorado
+//   numLayers(int32)
+//   por cada capa: width(int32) height(int32) + width*height celdas en COLUMN-MAJOR
+//   cada celda: glyph(int32, CP437) fg_r fg_g fg_b bg_r bg_g bg_b (6 bytes)
+//
+// Internamente almacenamos en row-major: cells[y * width + x].
+// IMPORTANTE: usar gzopen/gzread de zlib, NO uncompress() — el archivo usa gzip stream,
+// no el formato zlib raw que espera uncompress().
+
 #include "XpLoader.hpp"
 #include <fstream>
 #include <vector>
@@ -69,12 +80,14 @@ XpFile loadXp(const std::string& path) {
         layer.height = readInt32(data.data(), offset);
         layer.cells.resize(layer.width * layer.height);
 
+        // REXPaint itera columnas primero (column-major); nosotros almacenamos row-major.
+        // Por eso el índice de destino es [y * width + x] aunque el loop exterior sea x.
         for (int x = 0; x < layer.width; x++) {
             for (int y = 0; y < layer.height; y++) {
                 XpCell cell;
                 int32_t glyphVal = readInt32(data.data(), offset);
                 uint8_t cp = static_cast<uint8_t>(glyphVal & 0xFF);
-                cell.glyph = kCp437[cp];
+                cell.glyph = kCp437[cp];  // convertir CP437 → Unicode
                 cell.fg_r = data[offset++];
                 cell.fg_g = data[offset++];
                 cell.fg_b = data[offset++];
@@ -96,9 +109,14 @@ static Color effectiveRl(const XpCell& c) {
     return Color{ c.fg_r, c.fg_g, c.fg_b, 255 };
 }
 
+// xpDrawHalfBlock — renderiza la imagen REXPaint con máxima fidelidad de color.
+// Técnica: empaqueta dos filas de píxeles en una celda usando el carácter ▀ (U+2580).
+//   fila par  → color fg (mitad superior del bloque)
+//   fila impar→ color bg (mitad inferior)
+// Resultado: la imagen ocupa height/2 filas de celdas con doble resolución vertical.
+// effectiveRl() usa fg si hay un glifo visible, bg si la celda es espacio/vacía.
 void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row) {
-    // U+2580 = ▀  (upper half block)
-    static constexpr int UPPER_HALF = 0x2580;
+    static constexpr int UPPER_HALF = 0x2580;  // ▀
     for (int y = 0; y < layer.height; y += 2) {
         for (int x = 0; x < layer.width; x++) {
             const XpCell& top = layer.cells[y * layer.width + x];

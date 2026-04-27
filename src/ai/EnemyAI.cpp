@@ -12,11 +12,13 @@ void EnemyAI::run(Game& g)
 
         {
             std::lock_guard<std::mutex> lk(g.worldMutex_);
+            // Solo mover enemigos en exploración/tienda. En combate o menú no hay movimiento.
             if ((g.state_ != GameState::Exploration &&
                  g.state_ != GameState::Shop) || !g.map_)
                 continue;
 
             Position player      = g.map_->getPlayerPos();
+            // Cuando el jugador está en la tienda, los enemigos vuelven a su spawnPos
             bool     playerInShop = (g.state_ == GameState::Shop);
 
             for (int i = 0; i < static_cast<int>(g.worldEnemies_.size()); i++) {
@@ -32,6 +34,7 @@ void EnemyAI::run(Game& g)
                     continue;
                 }
 
+                // Solo perseguir al jugador dentro de distancia Chebyshev 10
                 int dist = std::max(std::abs(we.pos.x - player.x),
                                     std::abs(we.pos.y - player.y));
                 if (dist > 10) continue;

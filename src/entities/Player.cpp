@@ -26,11 +26,12 @@ void Player::gainXp(int amount) {
 
 void Player::levelUp() {
     level_++;
-    xpToNextLevel_ = static_cast<int>(xpToNextLevel_ * 1.5);
+    xpToNextLevel_ = static_cast<int>(xpToNextLevel_ * 1.5);  // umbral crece x1.5 cada nivel
     maxHp_ += 10;
-    hp_ = maxHp_;
+    hp_ = maxHp_;   // curación completa al subir nivel
     baseAttack_  += 2;
     baseDefense_ += 1;
+    // Recalcular ATK/DEF efectivo incluyendo el bonus del equipo actual
     attack_  = baseAttack_  + (equippedWeapon_ ? equippedWeapon_->statBonus : 0);
     defense_ = baseDefense_ + (equippedArmor_  ? equippedArmor_->statBonus  : 0);
     maxMana_ += 5;

@@ -61,6 +61,7 @@ Game::~Game()
 
 void Game::run()
 {
+    // Resolución inicial; se permite resize (ver bloque IsWindowResized más abajo)
     const int SCREEN_W = 1280;
     const int SCREEN_H = 720;
 
@@ -246,6 +247,10 @@ void Game::run()
 
     static constexpr int kBaseFontSize = 18;
 
+    // Precargamos las tres variantes de tamaño para el zoom del mapa (1×, 2×, 3×).
+    // Raylib requiere que los codepoints se declaren al cargar la fuente; de lo
+    // contrario los glífos no estarán en la textura y aparecerán como □.
+    // TEXTURE_FILTER_POINT evita suavizado que hace borrosos los glífos pixelados.
     auto loadFont = [&](int size) {
         Font f = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), size,
                             codepoints.data(), static_cast<int>(codepoints.size()));
@@ -256,7 +261,8 @@ void Game::run()
     Font font2x = loadFont(kBaseFontSize * 2);
     Font font3x = loadFont(kBaseFontSize * 3);
 
-    // Calcular tamaño de celda
+    // Celda = ancho de 'M' × (alto de glifo + 2px de margen entre líneas).
+    // Se usa 'M' porque es el carácter más ancho en fuentes monoespaciadas.
     Vector2 gs = MeasureTextEx(font, "M", kBaseFontSize, 0);
     int cellW = static_cast<int>(gs.x);
     int cellH = static_cast<int>(gs.y) + 2;
@@ -301,7 +307,9 @@ void Game::run()
         float res[2] = {(float)rtW, (float)rtH};
         SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
 
-        // Procesar IA pending
+        // El thread de IA escribe pendingCombatEnemy_ y luego activa pendingRedraw_.
+        // Aquí consumimos ese evento en el hilo principal para disparar el combate
+        // de forma segura (setState no es thread-safe y solo debe llamarse aquí).
         if (pendingRedraw_.load(std::memory_order_acquire))
         {
             pendingRedraw_.store(false, std::memory_order_release);
@@ -321,12 +329,17 @@ void Game::run()
         scr.clear();
         render(scr);
 
-        // 1) Renderizar juego al texture offscreen
+        // Pipeline de render de dos pasos:
+        // 1) Renderizar la escena completa en la RenderTexture offscreen.
+        // 2) Aplicar el shader CRT sobre esa textura al presentar.
+        // El overlay de zoom se dibuja sobre la textura offscreen antes de cerrarla.
         BeginTextureMode(renderTarget);
         ClearBackground(BLACK);
         scr.render(offX, offY);
 
-        // Overlay del mapa a font-zoom (solo en exploración y si zoom > 1)
+        // Overlay del mapa a font-zoom (solo en exploración y si zoom > 1).
+        // Se crea un TerminalScreen adicional con celda más grande y se dibuja
+        // encima del área del mapa usando el mismo offset de padding.
         if (mapZoom_ > 1 && state_ == GameState::Exploration && map_ && player_) {
             static constexpr int kSidebarW = 22;
             static constexpr int kHudBarH  = 3;
@@ -382,11 +395,12 @@ void Game::run()
 
         EndTextureMode();
 
-        // 2) Dibujar texture con shader CRT
+        // 2) Presentar con shader CRT.
+        // La RenderTexture de Raylib está volteada en Y respecto a OpenGL,
+        // por eso el src rect usa altura negativa (flip vertical).
         BeginDrawing();
         ClearBackground(BLACK);
         BeginShaderMode(crtShader);
-        // La RenderTexture está volteada verticalmente en Raylib
         DrawTexturePro(
             renderTarget.texture,
             {0, 0, (float)rtW, -(float)rtH},
@@ -981,6 +995,9 @@ void Game::aiLoop() { EnemyAI::run(*this); }
 
 // ─── state transitions ────────────────────────────────────────────────────────
 
+// setState() es el único lugar donde se crean/destruyen el mapa, los enemigos
+// y el sistema de combate. Centralizar aquí evita estados inconsistentes.
+// NOTA: returnToExploration() NO pasa por aquí — vuelve al mapa existente.
 void Game::setState(GameState newState)
 {
     if (newState == GameState::MainMenu)
@@ -1004,7 +1021,9 @@ void Game::setState(GameState newState)
         lockedDoorExists_ = false;
         lockedDoorOpen_ = false;
         combat_.reset();
+        shopStock_.clear();  // el stock se regenera la primera vez que se entra a la tienda del nuevo piso
 
+        // Generar nuevo piso: mapa BSP 80×40 con jugador en el centro de la sala 0
         map_ = std::make_unique<Map>(80, 40);
         BSPDungeon gen(80, 40);
         gen.generate(*map_);
@@ -1031,6 +1050,8 @@ void Game::setState(GameState newState)
         combatShowingArts_ = false;
         combatArtSelection_ = 0;
 
+        // Instanciar el Enemy de combate a partir del WorldEnemy del mundo.
+        // Si combatWorldEnemyIdx_ == -1 (caso raro/debug) se usan dos enemigos por defecto.
         std::vector<std::unique_ptr<Enemy>> enemies;
         int fl = player_ ? player_->getDungeonFloor() : 1;
         if (combatWorldEnemyIdx_ >= 0)
@@ -1203,8 +1224,10 @@ void Game::inputShop(int key)
 
 void Game::generateShopStock()
 {
+    // Stock lazy: se genera la primera vez que el jugador entra a la tienda del piso.
+    // shopStock_.clear() se llama en setState(Exploration) al cambiar de piso.
     if (!shopStock_.empty())
-        return; // ya generado este piso
+        return;
     PlayerClass cls = player_->getClass();
     int shopFloor = player_ ? player_->getDungeonFloor() : 1;
     Item p1 = DungeonPopulator::pickPotion(shopFloor);
