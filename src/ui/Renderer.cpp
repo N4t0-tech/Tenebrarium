@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -310,6 +311,7 @@ struct ClassInfo {
     const char* name;
     const char* role;
     const char* desc;
+    const char* lore;
     const char* portrait;
     int hp, atk, def, mana;
 };
@@ -317,10 +319,13 @@ struct ClassInfo {
 // portraitPath == nullptr muestra "[sin retrato]" como placeholder.
 static constexpr ClassInfo kClasses[3] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
+     "Absorbe golpes y contraataca sin piedad. Usa Escudo Total para sobrevivir situaciones comprometidas y Grito de Guerra justo antes de los jefes.",
      "warrior.xp", 120,15,8,20},
     {"MAGO","Arcano","Domina las artes magicas. Poder devastador.",
-     "mago.xp", 70,8,3,100},
+     "Sus hechizos escalan con el mana disponible: cuanto mas MP conserves, mas destruye la Bola de Fuego. Vulnerable en combate directo; el posicionamiento y el control son su supervivencia.",
+     "mago.xp", 100,10,3,100},
     {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
+     "Especialista en debilitar enemigos antes de que actuen. Veneno y Trampa generan presion sostenida sin gastar recursos. Ideal para jugadores que prefieren pensar antes de golpear.",
      nullptr, 90,12,5,50},
 };
 
@@ -375,6 +380,25 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
     if (portCol < spaceStart) portCol = spaceStart;
     drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
     drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
+
+    // Lore de la clase seleccionada debajo del retrato
+    int loreY = 4 + portH + 2 + 1;
+    int loreW = portW + 2;
+    std::string lore = kClasses[selection].lore;
+    // Word-wrap manual: partir en líneas de loreW caracteres sin cortar palabras
+    int loreX = portCol - 1;
+    std::istringstream ss(lore);
+    std::string word, line;
+    while (ss >> word) {
+        if (!line.empty() && static_cast<int>(line.size() + 1 + word.size()) > loreW) {
+            scr.putStr(loreX, loreY++, line, COL_GRAY, COL_BLACK, CELL_DIM);
+            line.clear();
+        }
+        if (!line.empty()) line += ' ';
+        line += word;
+    }
+    if (!line.empty())
+        scr.putStr(loreX, loreY, line, COL_GRAY, COL_BLACK, CELL_DIM);
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  "Arriba/Abajo navegar  |  ENTER confirmar  |  ESC volver",

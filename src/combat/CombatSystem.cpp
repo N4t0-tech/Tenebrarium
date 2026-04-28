@@ -378,8 +378,8 @@ void CombatSystem::resolveArt(ArtEffect effect) {
         }
 
         case ArtEffect::BolaDeFuego: {
-            int dmg = player_.getAttack() + 10;
-            logMessage("Bola de Fuego! " + ts(dmg) + " daño magico a todos!");
+            int dmg = player_.getMana() / 5 + 8;
+            logMessage("Bola de Fuego! " + ts(dmg) + " daño magico a todos! (MP=" + ts(player_.getMana()) + ")");
             for (auto& e : enemies_) {
                 if (e->isAlive()) {
                     e->takeDamageRaw(dmg);

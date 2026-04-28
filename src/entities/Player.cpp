@@ -41,7 +41,7 @@ void Player::levelUp() {
 int Player::baseHp(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior: return 120;
-        case PlayerClass::Mage:    return 70;
+        case PlayerClass::Mage:    return 100;
         case PlayerClass::Ranger:  return 90;
     }
     return 100;
@@ -50,7 +50,7 @@ int Player::baseHp(PlayerClass c) {
 int Player::baseAttack(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior: return 15;
-        case PlayerClass::Mage:    return 8;
+        case PlayerClass::Mage:    return 10;
         case PlayerClass::Ranger:  return 12;
     }
     return 10;

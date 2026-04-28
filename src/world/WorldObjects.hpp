@@ -17,6 +17,7 @@ struct WorldEnemy {
     EnemyType type;
     bool      alive;      // false = eliminado, no se dibuja ni mueve
     bool      isBoss = false;
+    int       remainingHp{-1};  // -1 = HP completo; >0 = HP guardado al huir del combate
 };
 
 struct WorldChest {

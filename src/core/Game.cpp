@@ -1058,8 +1058,11 @@ void Game::setState(GameState newState)
         int fl = player_ ? player_->getDungeonFloor() : 1;
         if (combatWorldEnemyIdx_ >= 0)
         {
-            bool boss = worldEnemies_[combatWorldEnemyIdx_].isBoss;
-            enemies.push_back(DungeonPopulator::makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type, fl, boss));
+            const auto& we = worldEnemies_[combatWorldEnemyIdx_];
+            auto enemy = DungeonPopulator::makeEnemy(we.type, fl, we.isBoss);
+            if (we.remainingHp > 0 && we.remainingHp < enemy->getMaxHp())
+                enemy->takeDamageRaw(enemy->getMaxHp() - we.remainingHp);
+            enemies.push_back(std::move(enemy));
         }
         else
         {
@@ -1302,6 +1305,9 @@ void Game::inputCombat(int key)
     {
         if (combat_->playerFled())
         {
+            if (combatWorldEnemyIdx_ >= 0 && !combat_->getEnemies().empty())
+                worldEnemies_[combatWorldEnemyIdx_].remainingHp =
+                    combat_->getEnemies()[0]->getHp();
             returnToExploration();
         }
         else if (combat_->playerWon())
