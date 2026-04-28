@@ -137,8 +137,9 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
             } else {
                 static const Color COL_DARK = { 80, 80, 80, 255 };
-                if (tile.type == TileType::SecretWall) continue;
-                scr.put(dc, dr, tile.glyph, COL_DARK, COL_BLACK, 0);
+                // La pared secreta usa '#' (como pared normal) para no parpadear al salir del FOV
+                char32_t g = (tile.type == TileType::SecretWall) ? '#' : tile.glyph;
+                scr.put(dc, dr, g, COL_DARK, COL_BLACK, 0);
             }
         }
     }
