@@ -142,8 +142,9 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
             } else {
                 static const Color COL_DARK = { 80, 80, 80, 255 };
-                if (tile.type == TileType::SecretWall) continue;
-                scr.put(dc, dr, tile.glyph, COL_DARK, COL_BLACK, 0);
+                // La pared secreta usa '#' (como pared normal) para no parpadear al salir del FOV
+                char32_t g = (tile.type == TileType::SecretWall) ? '#' : tile.glyph;
+                scr.put(dc, dr, g, COL_DARK, COL_BLACK, 0);
             }
         }
     }
@@ -152,7 +153,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 // ─── drawPortrait ─────────────────────────────────────────────────────────────
 
 void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
-                             const char* filename) {
+                             const char* filename, float scale) {
     if (!filename) {
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
@@ -160,7 +161,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
     try {
         XpFile xp = loadXp(assetsDir() + "art/" + filename);
         if (xp.layers.empty()) throw std::runtime_error("vacio");
-        xpDrawHalfBlock(scr, xp.layers[0], col, row);
+        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale);
     } catch (...) {
         scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
     }
@@ -364,8 +365,16 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
         scr.putStr(listCol + 2, br + 5, c.desc, tc, COL_BLACK, CELL_DIM);
     }
 
-    int portCol = listCol + boxW + 2;
-    drawPortrait(scr, portCol, 4, kClasses[selection].portrait);
+    // Centrar el retrato escalado en el espacio entre la lista y el borde derecho
+    static constexpr float kPortScale = 0.95f;
+    static constexpr int kSrcSize = 60;
+    int portW = static_cast<int>(kSrcSize * kPortScale);
+    int portH = static_cast<int>(kSrcSize * kPortScale / 2);  // half-block divide alto entre 2
+    int spaceStart = listCol + boxW + 2;
+    int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
+    if (portCol < spaceStart) portCol = spaceStart;
+    drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
+    drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  "Arriba/Abajo navegar  |  ENTER confirmar  |  ESC volver",

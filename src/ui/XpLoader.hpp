@@ -24,4 +24,4 @@ struct XpFile {
 XpFile loadXp(const std::string& path);
 
 // Vuelca una capa XP en el TerminalScreen en (col, row) con half-block (▀)
-void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row);
+void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);

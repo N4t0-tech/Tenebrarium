@@ -36,6 +36,8 @@ void main() {
     // Viñeta usando la UV curva → oscurece los bordes como pantalla curva
     vec2 vig = curved * (1.0 - curved.yx);
     float vignette = pow(vig.x * vig.y * 12.0, 0.3);
+    // Reducir oscurecimiento en el borde inferior
+    vignette = mix(vignette, 0.3, curved.y * 0.30);
     color.rgb *= vignette;
 
     finalColor = color * fragColor;

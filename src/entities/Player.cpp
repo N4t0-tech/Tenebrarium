@@ -141,14 +141,14 @@ std::vector<Art> Player::getAvailableArts() const {
             };
         case PlayerClass::Mage:
             return {
-                { "Bola de Fuego", 2, 20, ArtEffect::BolaDeFuego, "Dano magico a TODOS" },
+                { "Bola de Fuego", 2, 20, ArtEffect::BolaDeFuego, "Daño mágico a TODOS" },
                 { "Congelar",      1, 10, ArtEffect::Congelar,    "Enemigo pierde 1 PA su turno" },
-                { "Drenaje",       3, 30, ArtEffect::Drenaje,     "Dano + recupera HP igual al daño" },
+                { "Drenaje",       3, 30, ArtEffect::Drenaje,     "Daño + recupera HP igual al daño" },
             };
         case PlayerClass::Ranger:
             return {
                 { "Disparo Doble", 2, 0, ArtEffect::DisparoDoble, "2 ataques rapidos" },
-                { "Trampa",        1, 0, ArtEffect::Trampa,       "Dano retardado turno siguiente" },
+                { "Trampa",        1, 0, ArtEffect::Trampa,       "Daño retardado turno siguiente" },
                 { "Veneno",        1, 0, ArtEffect::Veneno,       "DoT 3 turnos" },
             };
     }

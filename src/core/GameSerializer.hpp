@@ -15,6 +15,7 @@ class GameSerializer {
 public:
     static std::string savePath();        // ruta absoluta del archivo de save
     static bool        hasSave();         // true si el archivo existe y es legible
+    static void        deleteSave();      // elimina el archivo de save (permadeath)
     static void        save(Game& g);     // sobreescribe el save con el estado actual
     static bool        load(Game& g);     // carga el save; retorna false si falla o versión incorrecta
 

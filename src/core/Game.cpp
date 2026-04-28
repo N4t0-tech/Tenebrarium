@@ -1067,6 +1067,9 @@ void Game::setState(GameState newState)
         combat_ = std::make_unique<CombatSystem>(*player_, std::move(enemies));
     }
 
+    if (newState == GameState::GameOver)
+        GameSerializer::deleteSave();
+
     state_ = newState;
 }
 
@@ -1172,7 +1175,7 @@ void Game::inputQuestLog(int key)
     case 27:
     case 'q':
     case 'Q':
-        setState(GameState::Exploration);
+        state_ = GameState::Exploration;
         break;
     }
 }

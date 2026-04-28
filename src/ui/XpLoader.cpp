@@ -109,25 +109,19 @@ static Color effectiveRl(const XpCell& c) {
     return Color{ c.fg_r, c.fg_g, c.fg_b, 255 };
 }
 
-// xpDrawHalfBlock — renderiza la imagen REXPaint con máxima fidelidad de color.
-// Técnica: empaqueta dos filas de píxeles en una celda usando el carácter ▀ (U+2580).
-//   fila par  → color fg (mitad superior del bloque)
-//   fila impar→ color bg (mitad inferior)
-// Resultado: la imagen ocupa height/2 filas de celdas con doble resolución vertical.
-// effectiveRl() usa fg si hay un glifo visible, bg si la celda es espacio/vacía.
-void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row) {
-    static constexpr int UPPER_HALF = 0x2580;  // ▀
-    for (int y = 0; y < layer.height; y += 2) {
-        for (int x = 0; x < layer.width; x++) {
-            const XpCell& top = layer.cells[y * layer.width + x];
-            Color topCol = effectiveRl(top);
-            Color botCol;
-            if (y + 1 < layer.height) {
-                botCol = effectiveRl(layer.cells[(y + 1) * layer.width + x]);
-            } else {
-                botCol = BLACK;
-            }
-            scr.put(col + x, row + y / 2, UPPER_HALF, topCol, botCol);
+void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
+    static constexpr int UPPER_HALF = 0x2580;
+    int dstW = static_cast<int>(layer.width  * scale);
+    int dstH = static_cast<int>(layer.height * scale);
+    if (dstH % 2 != 0) dstH--;  // half-block necesita filas pares
+    for (int dy = 0; dy < dstH; dy += 2) {
+        for (int dx = 0; dx < dstW; dx++) {
+            int sx  = std::min(static_cast<int>(dx / scale), layer.width  - 1);
+            int sy0 = std::min(static_cast<int>(dy / scale), layer.height - 1);
+            int sy1 = std::min(sy0 + 1,                      layer.height - 1);
+            Color topCol = effectiveRl(layer.cells[sy0 * layer.width + sx]);
+            Color botCol = effectiveRl(layer.cells[sy1 * layer.width + sx]);
+            scr.put(col + dx, row + dy / 2, UPPER_HALF, topCol, botCol);
         }
     }
 }
