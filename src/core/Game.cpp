@@ -1151,7 +1151,7 @@ void Game::inputQuestLog(int key)
     case 27:
     case 'q':
     case 'Q':
-        setState(GameState::Exploration);
+        state_ = GameState::Exploration;
         break;
     }
 }

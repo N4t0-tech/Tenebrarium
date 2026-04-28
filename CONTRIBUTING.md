@@ -28,7 +28,7 @@ Consulta el [README.md](README.md) para entender la arquitectura general del pro
 ## Áreas donde se acepta ayuda
 
 - Retrato de Ranger en REXPaint (`.xp`) — el retrato se crea con [REXPaint](https://www.gridsagegames.com/rexpaint/), coloca el archivo en `assets/art/ranger.xp` y regístralo en `kClasses[]` en `src/ui/Renderer.cpp`
-- Nuevos tipos de enemigo — añade la entrada en `EnemyType` (`src/entities/Enemy.hpp`), sus stats en `makeEnemy()` y la tabla de spawn en `populateFloor()` (`src/core/Game.cpp`)
+- Nuevos tipos de enemigo — añade la entrada en `EnemyType` (`src/entities/Enemy.hpp`), sus stats en `makeEnemy()` y la tabla de spawn en `populate()` (`src/world/DungeonPopulator.cpp`)
 
 ## Convenciones
 

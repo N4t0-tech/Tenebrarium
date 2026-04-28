@@ -315,7 +315,11 @@ bool GameSerializer::load(Game& g)
     if (!(f >> g.enemiesKilled_ >> g.chestsOpened_)) return false;
     size_t questCount;
     if (!(f >> questCount)) return false;
+    // Guardar contadores antes de initQuests() porque este los reinicia a 0
+    int savedKilled = g.enemiesKilled_, savedChests = g.chestsOpened_;
     g.initQuests();
+    g.enemiesKilled_ = savedKilled;
+    g.chestsOpened_  = savedChests;
     for (size_t i = 0; i < std::min(questCount, g.quests_.size()); i++) {
         int status, objCount;
         if (!(f >> status >> objCount)) return false;
