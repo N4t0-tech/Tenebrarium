@@ -73,6 +73,8 @@ private:
     Position  stairsPos_;
 
     int       inventorySelection_{0};
+    int       inventoryTab_{0};       // 0 = Pociones, 1 = Equipo
+    std::string inventoryMsg_;        // feedback dentro del inventario
 
     // Stock de la tienda generado una sola vez por piso (ver generateShopStock)
     std::vector<ShopItem>   shopStock_;

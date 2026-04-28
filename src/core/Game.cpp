@@ -511,6 +511,8 @@ void Game::dispatchInput(int key)
         if (key == 'i' || key == 'I')
         {
             inventorySelection_ = 0;
+            inventoryTab_ = 0;
+            inventoryMsg_.clear();
             setState(GameState::Inventory);
             break;
         }
@@ -955,7 +957,7 @@ void Game::render(TerminalScreen &scr)
         break;
     case GameState::Inventory:
         if (player_)
-            Renderer::drawInventory(scr, *player_, inventorySelection_);
+            Renderer::drawInventory(scr, *player_, inventorySelection_, inventoryTab_, inventoryMsg_);
         break;
     case GameState::QuestLog:
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
@@ -1109,57 +1111,96 @@ void Game::returnToExploration()
 
 void Game::inputInventory(int key)
 {
-    if (!player_)
-        return;
-    const int bagSize = static_cast<int>(player_->getInventory().items().size());
-    const int total = 2 + bagSize;
-    switch (key)
-    {
-    case GKEY_UP:
-    case GKEY_DOWN:
-        navV(key, inventorySelection_, total);
-        break;
-    case 'e':
-    case 'E':
-    case '\n':
-    {
-        int bagIdx = inventorySelection_ - 2;
-        if (bagIdx >= 0 && bagIdx < bagSize)
-        {
-            player_->equipItem(bagIdx);
-            int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
-            if (inventorySelection_ >= newTotal)
-                inventorySelection_ = std::max(0, newTotal - 1);
+    if (!player_) return;
+
+    const auto& allItems = player_->getInventory().items();
+
+    // Construir vista filtrada+ordenada igual que el renderer
+    auto buildTab = [&](int tab) {
+        std::vector<int> idx;
+        for (int i = 0; i < static_cast<int>(allItems.size()); i++) {
+            bool isConsumable = (allItems[i].type == ItemType::Consumable);
+            if (tab == 0 ? isConsumable : !isConsumable)
+                idx.push_back(i);
         }
-        break;
+        std::sort(idx.begin(), idx.end(), [&](int a, int b) {
+            return allItems[a].statBonus > allItems[b].statBonus;
+        });
+        return idx;
+    };
+
+    // Cambiar pestaña con ←/→
+    if (key == GKEY_LEFT || key == GKEY_RIGHT) {
+        inventoryTab_ = 1 - inventoryTab_;
+        inventorySelection_ = 0;
+        inventoryMsg_.clear();
+        return;
     }
-    case 'u':
-    case 'U':
-    {
-        int bagIdx = inventorySelection_ - 2;
-        if (bagIdx >= 0 && bagIdx < bagSize)
-        {
-            const auto &items = player_->getInventory().items();
-            if (items[bagIdx].type == ItemType::Consumable)
-            {
-                std::string name = items[bagIdx].name;
-                int bonus = items[bagIdx].statBonus;
+
+    if (key == 27 || key == 'q' || key == 'Q') {
+        state_ = GameState::Exploration;
+        return;
+    }
+
+    if (inventoryTab_ == 0) {
+        // ── Pestaña Pociones ──────────────────────────────────────────────────
+        auto idx = buildTab(0);
+        int n = static_cast<int>(idx.size());
+        if (key == GKEY_UP || key == GKEY_DOWN) {
+            if (n > 0) { navV(key, inventorySelection_, n); inventoryMsg_.clear(); }
+            return;
+        }
+        if ((key == 'e' || key == 'E' || key == 'u' || key == 'U' || key == '\n') && n > 0) {
+            int bagIdx = idx[inventorySelection_];
+            const Item& item = allItems[bagIdx];
+            if (player_->getHp() >= player_->getMaxHp()) {
+                inventoryMsg_ = "HP ya esta al maximo!";
+            } else {
+                std::string name = item.name;
+                int bonus = item.statBonus;
                 player_->getInventory().removeItem(name);
                 int healed = std::min(bonus, player_->getMaxHp() - player_->getHp());
                 player_->heal(healed);
-                explorationMsg_ = "Usas " + name + ": +" + std::to_string(healed) + " HP!";
-                int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
+                inventoryMsg_ = "Usas " + name + ": +" + std::to_string(healed) + " HP!";
+                auto newIdx = buildTab(0);
+                int newN = static_cast<int>(newIdx.size());
+                if (inventorySelection_ >= newN)
+                    inventorySelection_ = std::max(0, newN - 1);
+            }
+        }
+    } else {
+        // ── Pestaña Equipo ────────────────────────────────────────────────────
+        auto idx = buildTab(1);
+        int bagN = static_cast<int>(idx.size());
+        int total = 2 + bagN;  // slot arma + slot armadura + items en bolsa
+        if (key == GKEY_UP || key == GKEY_DOWN) {
+            navV(key, inventorySelection_, total);
+            inventoryMsg_.clear();
+            return;
+        }
+        if (key == 'e' || key == 'E' || key == '\n') {
+            if (inventorySelection_ == 0) {
+                // Desequipar arma
+                if (player_->getEquippedWeapon()) {
+                    player_->unequipWeapon();
+                    inventoryMsg_ = "Arma desequipada.";
+                }
+            } else if (inventorySelection_ == 1) {
+                // Desequipar armadura
+                if (player_->getEquippedArmor()) {
+                    player_->unequipArmor();
+                    inventoryMsg_ = "Armadura desequipada.";
+                }
+            } else {
+                int bagIdx = idx[inventorySelection_ - 2];
+                player_->equipItem(bagIdx);
+                inventoryMsg_.clear();
+                auto newIdx = buildTab(1);
+                int newTotal = 2 + static_cast<int>(newIdx.size());
                 if (inventorySelection_ >= newTotal)
                     inventorySelection_ = std::max(0, newTotal - 1);
             }
         }
-        break;
-    }
-    case 27:
-    case 'q':
-    case 'Q':
-        state_ = GameState::Exploration;
-        break;
     }
 }
 

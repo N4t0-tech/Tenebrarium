@@ -102,6 +102,20 @@ void Player::equipItem(int idx) {
     }
 }
 
+void Player::unequipWeapon() {
+    if (!equippedWeapon_) return;
+    inventory_.addItem(*equippedWeapon_);
+    equippedWeapon_.reset();
+    attack_ = baseAttack_;
+}
+
+void Player::unequipArmor() {
+    if (!equippedArmor_) return;
+    inventory_.addItem(*equippedArmor_);
+    equippedArmor_.reset();
+    defense_ = baseDefense_;
+}
+
 int Player::useConsumable() {
     for (const auto& item : inventory_.items()) {
         if (item.type == ItemType::Consumable) {

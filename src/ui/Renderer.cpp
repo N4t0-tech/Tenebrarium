@@ -608,67 +608,149 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
 // ─── drawInventory ────────────────────────────────────────────────────────────
 
-void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
-    int cx = scr.cols() / 2;
-    int w  = 60, sc2 = cx - w / 2, r = 2;
-    drawBorder(scr, sc2, 1, w, scr.rows() - 2);
-    scr.putStr(sc2 + 2, r++, "=== EQUIPO ===", COL_CYAN, COL_BLACK, CELL_BOLD);
+void Renderer::drawInventory(TerminalScreen& scr, const Player& player,
+                              int selection, int tab, const std::string& msg) {
+    const int w   = std::min(scr.cols() - 4, 64);
+    const int x0  = (scr.cols() - w) / 2;
+    const int y0  = 1;
+    const int h   = scr.rows() - 2;
+    drawBorder(scr, x0, y0, w, h);
 
-    auto makeSlot = [&](int row, int sel, const char* label,
-                        const std::optional<Item>& slot) {
-        std::string line;
-        Color c = COL_GRAY;
-        uint8_t f = CELL_DIM;
-        if (slot) {
-            std::string tag = (slot->type == ItemType::Weapon) ? "[ARMA]   " : "[ARMADURA]";
-            line = tag + " " + slot->name + "  +" + std::to_string(slot->statBonus)
-                 + (slot->type == ItemType::Weapon ? " ATK" : " DEF");
-            c = (slot->type == ItemType::Weapon) ? COL_YELLOW : COL_GREEN;
-            f = 0;
+    // ── Pestañas ──────────────────────────────────────────────────────────────
+    const char* tabs[2] = { " POCIONES ", " EQUIPO " };
+    int tx = x0 + 2;
+    for (int t = 0; t < 2; t++) {
+        bool active = (t == tab);
+        scr.putStr(tx, y0, tabs[t],
+                   active ? COL_YELLOW : COL_GRAY,
+                   COL_BLACK,
+                   active ? CELL_BOLD | CELL_INVERTED : CELL_DIM);
+        tx += static_cast<int>(std::string(tabs[t]).size()) + 1;
+    }
+    scr.putStr(tx, y0, " ←/→ cambiar ", COL_GRAY, COL_BLACK, CELL_DIM);
+
+    // Vista filtrada+ordenada por statBonus desc
+    const auto& allItems = player.getInventory().items();
+    std::vector<int> idx;
+    for (int i = 0; i < static_cast<int>(allItems.size()); i++) {
+        bool isConsumable = (allItems[i].type == ItemType::Consumable);
+        if (tab == 0 ? isConsumable : !isConsumable)
+            idx.push_back(i);
+    }
+    std::sort(idx.begin(), idx.end(), [&](int a, int b) {
+        return allItems[a].statBonus > allItems[b].statBonus;
+    });
+
+    int r = y0 + 2;
+    const int contentBottom = y0 + h - 4;  // reservar 3 filas para descripción + controles
+
+    if (tab == 0) {
+        // ── Pestaña Pociones ──────────────────────────────────────────────────
+        // Barra de HP
+        int hp = player.getHp(), maxHp = player.getMaxHp();
+        bool full = (hp >= maxHp);
+        Color hpCol = full ? COL_GREEN : hpColor(hp, maxHp);
+        std::string hpLabel = "HP " + std::to_string(hp) + "/" + std::to_string(maxHp);
+        if (full) hpLabel += "  *** LLENO ***";
+        scr.putStr(x0 + 2, r, hpLabel, hpCol, COL_BLACK, full ? CELL_BOLD : 0);
+        r++;
+        drawStatBar(scr, x0 + 2, r++, hp, maxHp, w - 4, hpCol);
+        drawHSep(scr, x0 + 1, r++, w - 2);
+
+        if (idx.empty()) {
+            scr.putStr(x0 + 2, r, "(sin pociones)", COL_GRAY, COL_BLACK, CELL_DIM);
         } else {
-            line = std::string(label) + "  (vacio)";
-        }
-        if (selection == sel) f |= CELL_INVERTED;
-        scr.putStr(sc2 + 2, row, line, c, COL_BLACK, f);
-    };
-    makeSlot(r++, 0, "Arma    ", player.getEquippedWeapon());
-    makeSlot(r++, 1, "Armadura", player.getEquippedArmor());
-    drawHSep(scr, sc2 + 1, r++, w - 2);
-
-    scr.putStr(sc2 + 2, r++, "=== MOCHILA ===", COL_CYAN, COL_BLACK, CELL_BOLD);
-    const auto& items = player.getInventory().items();
-    if (items.empty()) {
-        scr.putStr(sc2 + 2, r++, "(vacia)", COL_GRAY, COL_BLACK, CELL_DIM);
-    } else {
-        for (int i = 0; i < static_cast<int>(items.size()); i++) {
-            const auto& item = items[i];
-            std::string tag; Color ic = COL_WHITE;
-            switch (item.type) {
-                case ItemType::Weapon:     tag = "[ARMA]   "; ic = COL_YELLOW; break;
-                case ItemType::Armor:      tag = "[ARMADURA]"; ic = COL_GREEN; break;
-                case ItemType::Consumable: tag = "[POCION] "; ic = COL_CYAN;  break;
-                default:                  tag = "[MISC]   "; break;
+            for (int i = 0; i < static_cast<int>(idx.size()) && r < contentBottom; i++) {
+                const auto& item = allItems[idx[i]];
+                bool sel = (selection == i);
+                std::string line = "[POCION]  " + item.name + "  +" + std::to_string(item.statBonus) + " HP";
+                scr.putStr(x0 + 2, r++, line,
+                           sel ? COL_WHITE : COL_CYAN,
+                           COL_BLACK,
+                           sel ? CELL_INVERTED : 0);
             }
-            std::string line = tag + " " + item.name;
-            if (item.type != ItemType::Consumable)
-                line += "  +" + std::to_string(item.statBonus)
-                      + (item.type == ItemType::Weapon ? " ATK" : " DEF");
-            else
-                line += "  +" + std::to_string(item.statBonus) + " HP";
-            uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
-            scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
+        }
+    } else {
+        // ── Pestaña Equipo ────────────────────────────────────────────────────
+        // Slots equipados
+        auto drawSlot = [&](int sel, const char* label, const std::optional<Item>& slot, bool isWeapon) {
+            bool active = (selection == sel);
+            std::string line;
+            Color c;
+            if (slot) {
+                line = std::string(label) + ": " + slot->name +
+                       "  +" + std::to_string(slot->statBonus) +
+                       (isWeapon ? " ATK" : " DEF") + "  [E=desequipar]";
+                c = isWeapon ? COL_YELLOW : COL_GREEN;
+            } else {
+                line = std::string(label) + ": (vacio)";
+                c = COL_GRAY;
+            }
+            scr.putStr(x0 + 2, r, line, c, COL_BLACK,
+                       active ? CELL_INVERTED : (slot ? 0 : CELL_DIM));
+        };
+        drawSlot(0, "Arma    ", player.getEquippedWeapon(), true);  r++;
+        drawSlot(1, "Armadura", player.getEquippedArmor(),  false); r++;
+        drawHSep(scr, x0 + 1, r++, w - 2);
+
+        if (idx.empty()) {
+            scr.putStr(x0 + 2, r, "(mochila vacia)", COL_GRAY, COL_BLACK, CELL_DIM);
+        } else {
+            for (int i = 0; i < static_cast<int>(idx.size()) && r < contentBottom; i++) {
+                const auto& item = allItems[idx[i]];
+                bool sel = (selection == 2 + i);
+                bool isWeapon = (item.type == ItemType::Weapon);
+                std::string tag  = isWeapon ? "[ARMA]    " : "[ARMADURA]";
+                std::string stat = isWeapon ? " ATK" : " DEF";
+                std::string line = tag + " " + item.name + "  +" + std::to_string(item.statBonus) + stat;
+
+                // Diferencia vs equipado
+                const auto& equipped = isWeapon ? player.getEquippedWeapon() : player.getEquippedArmor();
+                std::string diffStr;
+                Color diffCol = COL_WHITE;
+                if (equipped) {
+                    int d = item.statBonus - equipped->statBonus;
+                    if (d > 0)      { diffStr = "  ↑+" + std::to_string(d); diffCol = COL_GREEN;  }
+                    else if (d < 0) { diffStr = "  ↓"  + std::to_string(d); diffCol = COL_RED;    }
+                    else            { diffStr = "  =";                       diffCol = COL_GRAY;   }
+                }
+
+                Color baseCol = isWeapon ? COL_YELLOW : COL_GREEN;
+                scr.putStr(x0 + 2, r, line, sel ? COL_WHITE : baseCol, COL_BLACK,
+                           sel ? CELL_INVERTED : 0);
+                if (!diffStr.empty())
+                    scr.putStr(x0 + 2 + static_cast<int>(line.size()), r, diffStr,
+                               diffCol, COL_BLACK, sel ? CELL_INVERTED : 0);
+                r++;
+            }
         }
     }
-    drawHSep(scr, sc2 + 1, r++, w - 2);
-    scr.putStr(sc2 + 2, r++,
-        "ATK:" + std::to_string(player.getAttack()) +
-        "  DEF:" + std::to_string(player.getDefense()) +
-        "  $" + std::to_string(player.getCoins()) +
-        "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
-        "/" + std::to_string(player.getInventory().totalSlots()), COL_GREEN);
-    scr.putStr(sc2 + 2, r,
-               "[Arriba/Abajo] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar",
-               COL_GRAY, COL_BLACK, CELL_DIM);
+
+    // ── Panel inferior: descripción + mensaje + controles ─────────────────────
+    drawHSep(scr, x0 + 1, contentBottom, w - 2);
+
+    // Descripción del ítem seleccionado
+    std::string desc;
+    if (tab == 0 && !idx.empty() && selection < static_cast<int>(idx.size())) {
+        desc = allItems[idx[selection]].description;
+    } else if (tab == 1) {
+        if (selection == 0 && player.getEquippedWeapon())
+            desc = player.getEquippedWeapon()->description;
+        else if (selection == 1 && player.getEquippedArmor())
+            desc = player.getEquippedArmor()->description;
+        else if (selection >= 2 && (selection - 2) < static_cast<int>(idx.size()))
+            desc = allItems[idx[selection - 2]].description;
+    }
+
+    if (!msg.empty())
+        scr.putStr(x0 + 2, contentBottom + 1, msg, COL_YELLOW, COL_BLACK, CELL_BOLD);
+    else if (!desc.empty())
+        scr.putStr(x0 + 2, contentBottom + 1, desc.substr(0, w - 4), COL_GRAY, COL_BLACK, CELL_DIM);
+
+    const char* hint = (tab == 0)
+        ? "[↑↓] Nav  [E/U] Usar  [ESC] Cerrar"
+        : "[↑↓] Nav  [E] Equipar/Desequipar  [ESC] Cerrar";
+    scr.putStr(x0 + 2, contentBottom + 2, hint, COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
 // ─── drawQuestLog ─────────────────────────────────────────────────────────────

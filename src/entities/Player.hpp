@@ -45,6 +45,8 @@ public:
     void descendFloor();                  // incrementa dungeonFloor_
     bool pickupItem(const Item& item);    // auto-equipa si el slot está libre, si no va a la mochila
     void equipItem(int bagIdx);           // intercambia el ítem de la mochila[bagIdx] con el slot equipado
+    void unequipWeapon();                 // devuelve el arma equipada a la mochila
+    void unequipArmor();                  // devuelve la armadura equipada a la mochila
     int  useConsumable();                 // usa la primera poción del inventario; retorna HP curado (0 si no hay)
     int  countConsumables() const;
 
