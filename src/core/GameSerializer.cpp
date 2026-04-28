@@ -17,6 +17,11 @@ bool GameSerializer::hasSave()
     return std::ifstream(savePath()).good();
 }
 
+void GameSerializer::deleteSave()
+{
+    std::filesystem::remove(savePath());
+}
+
 void GameSerializer::wstr(std::ostream& o, const std::string& s)
 {
     o << s.size() << ' ';

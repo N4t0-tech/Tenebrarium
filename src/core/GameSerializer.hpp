@@ -10,6 +10,7 @@ class GameSerializer {
 public:
     static std::string savePath();
     static bool        hasSave();
+    static void        deleteSave();
     static void        save(Game& g);
     static bool        load(Game& g);
 
