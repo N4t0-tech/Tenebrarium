@@ -29,6 +29,7 @@ static inline void navV(int key, int& sel, int n) {
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
+static int colorPairForEnemy(EnemyType t);
 
 Game::Game()
     : state_(GameState::MainMenu),
@@ -364,7 +365,7 @@ void Game::run()
             std::vector<MapEntity> zEntities;
             for (const auto& we : worldEnemies_)
                 if (we.alive)
-                    zEntities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+                    zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
             for (const auto& ch : worldChests_)
                 if (!ch.opened)
                     zEntities.push_back({ch.pos, '$', 2, true});
@@ -927,7 +928,7 @@ void Game::render(TerminalScreen &scr)
             std::vector<MapEntity> entities;
             for (const auto &we : worldEnemies_)
                 if (we.alive)
-                    entities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+                    entities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
             for (const auto &ch : worldChests_)
                 if (!ch.opened)
                     entities.push_back({ch.pos, '$', 2, true});
@@ -977,18 +978,32 @@ static char glyphForEnemy(EnemyType t)
 {
     switch (t)
     {
-    case EnemyType::Goblin:
-        return 'g';
-    case EnemyType::Skeleton:
-        return 's';
-    case EnemyType::Orc:
-        return 'o';
-    case EnemyType::Spider:
-        return 'a';
-    case EnemyType::Vampire:
-        return 'V';
+    case EnemyType::Goblin:   return 'g';
+    case EnemyType::Skeleton: return 's';
+    case EnemyType::Orc:      return 'o';
+    case EnemyType::Spider:   return 'a';
+    case EnemyType::Vampire:  return 'V';
+    case EnemyType::Zombie:   return 'z';
+    case EnemyType::Demon:    return 'd';
+    case EnemyType::Shadow:   return 'S';
     }
     return '?';
+}
+
+static int colorPairForEnemy(EnemyType t)
+{
+    switch (t)
+    {
+    case EnemyType::Goblin:   return 10; // COL_DK_GREEN
+    case EnemyType::Skeleton: return  7; // COL_GRAY
+    case EnemyType::Orc:      return  9; // COL_ORANGE
+    case EnemyType::Spider:   return  8; // COL_MAGENTA
+    case EnemyType::Vampire:  return  6; // COL_RED
+    case EnemyType::Zombie:   return 10; // COL_DK_GREEN
+    case EnemyType::Demon:    return  6; // COL_RED
+    case EnemyType::Shadow:   return 11; // COL_DK_GRAY
+    }
+    return 6; // COL_RED fallback
 }
 
 // ─── AI movement ─────────────────────────────────────────────────────────────

@@ -5,19 +5,21 @@
 // ─── Enemy tables ─────────────────────────────────────────────────────────────
 
 // pickEnemyType — selección aleatoria ponderada de tipo de enemigo según el piso.
-// Los pesos de goblin bajan con el piso; orcos, arañas y vampiros suben gradualmente.
-// Arañas disponibles desde piso 2, vampiros desde piso 4.
-// Fórmula de peso: evita que goblins desaparezcan del todo (mínimo 5).
+// Zombies desde piso 2, Sombras desde piso 4, Demonios desde piso 6.
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
-    bool spiderAvail  = (floor >= 2);
-    bool vampireAvail = (floor >= 4);
+    bool zombieAvail  = (floor >= 2);
+    bool shadowAvail  = (floor >= 4);
+    bool demonAvail   = (floor >= 6);
     int gobW = std::max(5, 55 - (floor - 1) * 8);
     int skeW = 15;
     int orcW = std::min(30, (floor - 1) * 5);
-    int spiW = spiderAvail  ? std::min(30, (floor - 2) * 7) : 0;
-    int vapW = vampireAvail ? std::min(20, (floor - 4) * 5) : 0;
-    int total = gobW + skeW + orcW + spiW + vapW;
+    int spiW = std::min(30, (floor - 2) * 7);
+    int vapW = std::min(20, (floor - 4) * 5);
+    int zomW = zombieAvail  ? std::min(25, (floor - 2) * 6) : 0;
+    int shaW = shadowAvail  ? std::min(20, (floor - 4) * 5) : 0;
+    int demW = demonAvail   ? std::min(20, (floor - 6) * 5) : 0;
+    int total = gobW + skeW + orcW + spiW + vapW + zomW + shaW + demW;
     int r = std::rand() % total;
     if (r < gobW) return EnemyType::Goblin;
     r -= gobW;
@@ -26,7 +28,13 @@ EnemyType DungeonPopulator::pickEnemyType(int floor)
     if (r < orcW) return EnemyType::Orc;
     r -= orcW;
     if (r < spiW) return EnemyType::Spider;
-    return EnemyType::Vampire;
+    r -= spiW;
+    if (r < vapW) return EnemyType::Vampire;
+    r -= vapW;
+    if (r < zomW) return EnemyType::Zombie;
+    r -= zomW;
+    if (r < shaW) return EnemyType::Shadow;
+    return EnemyType::Demon;
 }
 
 std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool isBoss)
@@ -46,6 +54,12 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "Arana";    hp = sc(80);  atk = sc(12); def = sc(2);  xp = sc(40);  pa = 1; break;
     case EnemyType::Vampire:
         name = "Vampiro";  hp = sc(110); atk = sc(18); def = sc(6);  xp = sc(80);  pa = 1; break;
+    case EnemyType::Zombie:
+        name = "Zombie";   hp = sc(160); atk = sc(10); def = sc(15); xp = sc(50);  pa = 1; break;
+    case EnemyType::Demon:
+        name = "Demonio";  hp = sc(150); atk = sc(25); def = sc(8);  xp = sc(100); pa = 1; break;
+    case EnemyType::Shadow:
+        name = "Sombra";   hp = sc(70);  atk = sc(18); def = sc(2);  xp = sc(35);  pa = 2; break;
     default:
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
@@ -59,6 +73,9 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         case EnemyType::Orc:      name = "Gran Orco";       break;
         case EnemyType::Spider:   name = "Reina Arana";     break;
         case EnemyType::Vampire:  name = "Vampiro Anciano"; break;
+        case EnemyType::Zombie:   name = "Zombie Colosal";  break;
+        case EnemyType::Demon:    name = "Archidemonio";    break;
+        case EnemyType::Shadow:   name = "Sombra Eterna";   break;
         default: break;
         }
     }
@@ -74,6 +91,9 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Orc:      base = 30; break;
     case EnemyType::Spider:   base = 40; break;
     case EnemyType::Vampire:  base = 80; break;
+    case EnemyType::Zombie:   base = 25; break;
+    case EnemyType::Demon:    base = 60; break;
+    case EnemyType::Shadow:   base = 18; break;
     default:                  base =  5; break;
     }
     return base + (floor - 1) * 5;

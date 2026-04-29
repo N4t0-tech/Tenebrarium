@@ -17,6 +17,9 @@ static constexpr Color COL_CYAN    = {  60, 230, 240, 255 };
 static constexpr Color COL_GREEN   = {  60, 230, 110, 255 };
 static constexpr Color COL_RED     = { 255,  80,  80, 255 };
 static constexpr Color COL_GRAY    = { 200, 200, 200, 255 };
+static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
+static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
+static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
 static constexpr Color COL_BLACK   = BLACK;
 
@@ -33,12 +36,16 @@ const char* Renderer::className(const Player& p) {
 
 Color Renderer::colorFromPair(int pair) {
     switch (pair) {
-        case 2: return COL_YELLOW;
-        case 3: return COL_CYAN;
-        case 4: return COL_GREEN;
-        case 5: return COL_CYAN;
-        case 6: return COL_RED;
-        case 7: return COL_GRAY;
+        case  2: return COL_YELLOW;
+        case  3: return COL_CYAN;
+        case  4: return COL_GREEN;
+        case  5: return COL_WHITE;
+        case  6: return COL_RED;
+        case  7: return COL_GRAY;
+        case  8: return COL_MAGENTA;
+        case  9: return COL_ORANGE;
+        case 10: return COL_DK_GREEN;
+        case 11: return COL_DK_GRAY;
         default: return COL_WHITE;
     }
 }
@@ -279,7 +286,6 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
 
 void Renderer::drawCredits(TerminalScreen& scr) {
-    int cx = scr.cols() / 2;
     int cy = scr.rows() / 2;
 
     drawCentered(scr, cy - 8, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);

@@ -8,7 +8,7 @@
 #include "Entity.hpp"
 
 // Para añadir un tipo nuevo: agregar aquí, en makeEnemy() y en populateFloor() de DungeonPopulator.
-enum class EnemyType { Goblin, Skeleton, Orc, Spider, Vampire };
+enum class EnemyType { Goblin, Skeleton, Orc, Spider, Vampire, Zombie, Demon, Shadow };
 
 class Enemy : public Entity {
 public:
