@@ -29,6 +29,7 @@ static inline void navV(int key, int& sel, int n) {
 
 // Forward declarations of file-local helpers (defined near setState)
 static char glyphForEnemy(EnemyType t);
+static int colorPairForEnemy(EnemyType t);
 
 Game::Game()
     : state_(GameState::MainMenu),
@@ -351,7 +352,7 @@ void Game::run()
             std::vector<MapEntity> zEntities;
             for (const auto& we : worldEnemies_)
                 if (we.alive)
-                    zEntities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+                    zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
             for (const auto& ch : worldChests_)
                 if (!ch.opened)
                     zEntities.push_back({ch.pos, '$', 2, true});
@@ -364,6 +365,23 @@ void Game::run()
 
             Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
                               *map_, zEntities);
+
+            // Draw explosion effect on zoomed map
+            if (GetTime() < explosionEndTime_ && !explosionTiles_.empty()) {
+                float progress = (GetTime() - (explosionEndTime_ - 0.4)) / 0.4f;
+                Color expCol = {255, (uint8_t)(200 * (1 - progress)), (uint8_t)(50 * (1 - progress)), (uint8_t)(255 * (1 - progress))};
+                for (const auto& et : explosionTiles_) {
+                    Position pp = map_->getPlayerPos();
+                    int sx = et.x - (pp.x - mapScr.cols() / 2);
+                    int sy = et.y - (pp.y - mapScr.rows() / 2);
+                    if (sx >= 0 && sx < mapScr.cols() && sy >= 0 && sy < mapScr.rows()) {
+                        char glyphs[] = {'*', '+', '~', '#', '^'};
+                        mapScr.put(sx, sy, glyphs[explosionFrame_ % 5], expCol, BLACK, CELL_BOLD);
+                    }
+                }
+                explosionFrame_++;
+            }
+
             mapScr.render(offX, offY);
 
             // Re-dibujar mensaje encima del overlay (el zoom lo tapaba)
@@ -509,7 +527,7 @@ void Game::dispatchInput(int key)
             break;
         }
 
-        // Search adjacent tiles for secret walls
+        // Search adjacent tiles for secret walls / use bomb
         if (key == 'e' || key == 'E')
         {
             const int sdx[] = {0, 0, -1, 1};
@@ -520,10 +538,22 @@ void Game::dispatchInput(int key)
                 int ax = pos.x + sdx[i], ay = pos.y + sdy[i];
                 if (map_->isSecretWall(ax, ay))
                 {
-                    map_->revealSecretWall(ax, ay);
-                    map_->updateFov();
-                    explorationMsg_ = "Encontraste una sala secreta!";
+                    // Try to use bomb first, if none available reveal normally
+                    int bombCount = 0;
+                    for (const auto& item : player_->getInventory().items())
+                        if (item.type == ItemType::Bomb) bombCount++;
+                    if (bombCount > 0) {
+                        map_->revealSecretWall(ax, ay);
+                        player_->getInventory().removeItem("Bomba");
+                        map_->updateFov();
+                        explorationMsg_ = "BOOM! La pared se hace polvo!";
+                    } else {
+                        map_->revealSecretWall(ax, ay);
+                        map_->updateFov();
+                        explorationMsg_ = "Encontraste una sala secreta!";
+                    }
                     found = true;
+                    break;
                 }
             }
             if (!found)
@@ -799,6 +829,8 @@ void Game::inputHudSelect(int key)
             break;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
+        for (int i = 0; i < 5; i++)
+            player_->getInventory().addItem(DungeonPopulator::pickBomb(1));
         initQuests();
         setState(GameState::Exploration);
         break;
@@ -911,7 +943,7 @@ void Game::render(TerminalScreen &scr)
             std::vector<MapEntity> entities;
             for (const auto &we : worldEnemies_)
                 if (we.alive)
-                    entities.push_back({we.pos, glyphForEnemy(we.type), 6, true});
+                    entities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
             for (const auto &ch : worldChests_)
                 if (!ch.opened)
                     entities.push_back({ch.pos, '$', 2, true});
@@ -923,6 +955,26 @@ void Game::render(TerminalScreen &scr)
                 entities.push_back({shopMerchantPos_, '$', 4, true});
             Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
                                       entities, explorationMsg_, mapZoom_);
+
+            // Draw explosion effect on normal map
+            if (GetTime() < explosionEndTime_ && !explosionTiles_.empty()) {
+                float progress = (GetTime() - (explosionEndTime_ - 0.4)) / 0.4f;
+                Color expCol = {255, (uint8_t)(200 * (1 - progress)), (uint8_t)(50 * (1 - progress)), (uint8_t)(255 * (1 - progress))};
+                Position pp = map_->getPlayerPos();
+                int viewW = scr.cols();
+                int viewH = (hudLayout_ == HudLayout::Bottom) ? scr.rows() - 3 : scr.rows();
+                int camX = pp.x - viewW / 2;
+                int camY = pp.y - viewH / 2;
+                char glyphs[] = {'*', '+', '~', '#', '^'};
+                for (const auto& et : explosionTiles_) {
+                    int sx = et.x - camX;
+                    int sy = et.y - camY;
+                    if (sx >= 0 && sx < scr.cols() && sy >= 0 && sy < viewH) {
+                        scr.put(sx, sy, glyphs[explosionFrame_ % 5], expCol, BLACK, CELL_BOLD);
+                    }
+                }
+                explosionFrame_++;
+            }
         }
         break;
     case GameState::Combat:
@@ -961,18 +1013,32 @@ static char glyphForEnemy(EnemyType t)
 {
     switch (t)
     {
-    case EnemyType::Goblin:
-        return 'g';
-    case EnemyType::Skeleton:
-        return 's';
-    case EnemyType::Orc:
-        return 'o';
-    case EnemyType::Spider:
-        return 'a';
-    case EnemyType::Vampire:
-        return 'V';
+    case EnemyType::Goblin:   return 'g';
+    case EnemyType::Skeleton: return 's';
+    case EnemyType::Orc:      return 'o';
+    case EnemyType::Spider:   return 'a';
+    case EnemyType::Vampire:  return 'V';
+    case EnemyType::Zombie:   return 'z';
+    case EnemyType::Demon:    return 'd';
+    case EnemyType::Shadow:   return 'S';
     }
     return '?';
+}
+
+static int colorPairForEnemy(EnemyType t)
+{
+    switch (t)
+    {
+    case EnemyType::Goblin:   return 10; // COL_DK_GREEN
+    case EnemyType::Skeleton: return  7; // COL_GRAY
+    case EnemyType::Orc:      return  9; // COL_ORANGE
+    case EnemyType::Spider:   return  8; // COL_MAGENTA
+    case EnemyType::Vampire:  return  6; // COL_RED
+    case EnemyType::Zombie:   return 10; // COL_DK_GREEN
+    case EnemyType::Demon:    return  6; // COL_RED
+    case EnemyType::Shadow:   return 11; // COL_DK_GRAY
+    }
+    return 6; // COL_RED fallback
 }
 
 // ─── AI movement ─────────────────────────────────────────────────────────────
@@ -1187,7 +1253,7 @@ void Game::inputShop(int key)
             break;
         }
         player_->addCoins(-s.price);
-        if (s.item.type == ItemType::Consumable)
+        if (s.item.type == ItemType::Consumable || s.item.type == ItemType::Bomb)
             player_->getInventory().addItem(s.item);
         else
             player_->pickupItem(s.item);
@@ -1214,6 +1280,8 @@ void Game::generateShopStock()
     Item p2 = DungeonPopulator::pickPotion(shopFloor);
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
+    Item bomb = DungeonPopulator::pickBomb(shopFloor);
+    shopStock_.push_back({bomb, bomb.value, false});
     Item w = DungeonPopulator::pickWeapon(cls, shopFloor);
     shopStock_.push_back({w, w.value + shopFloor * 5, false});
     Item a = DungeonPopulator::pickArmor(cls, shopFloor);
@@ -1226,6 +1294,58 @@ bool Game::isInShopRoom(Position p) const
         return false;
     return p.x >= shopRoom_.x && p.x < shopRoom_.x + shopRoom_.w &&
            p.y >= shopRoom_.y && p.y < shopRoom_.y + shopRoom_.h;
+}
+
+void Game::useBomb()
+{
+    if (!player_ || !map_) return;
+
+    int bombCount = 0;
+    for (const auto& item : player_->getInventory().items())
+        if (item.type == ItemType::Bomb) bombCount++;
+
+    if (bombCount == 0) {
+        explorationMsg_ = "No tienes bombas.";
+        return;
+    }
+
+    Position pos = map_->getPlayerPos();
+    const int dx[] = {0, 0, -1, 1};
+    const int dy[] = {-1, 1, 0, 0};
+
+    bool destroyed = false;
+    int tx = 0, ty = 0;
+
+    // Check only secret walls
+    for (int i = 0; i < 4; i++) {
+        int ax = pos.x + dx[i], ay = pos.y + dy[i];
+        if (map_->isSecretWall(ax, ay)) {
+            map_->revealSecretWall(ax, ay);
+            tx = ax; ty = ay;
+            destroyed = true;
+            break;
+        }
+    }
+
+    if (!destroyed) {
+        explorationMsg_ = "No hay pared secreta adyacente.";
+        return;
+    }
+
+    // Consume bomb
+    player_->getInventory().removeItem("Bomba");
+
+    // Explosion effect: 3x3 area around target
+    explosionTiles_.clear();
+    for (int ey = -1; ey <= 1; ey++) {
+        for (int ex = -1; ex <= 1; ex++) {
+            explosionTiles_.push_back({tx + ex, ty + ey});
+        }
+    }
+    explosionFrame_ = 0;
+    explosionEndTime_ = GetTime() + 0.4;
+    explorationMsg_ = "BOOM! La pared se hace polvo!";
+    map_->updateFov();
 }
 
 void Game::inputCombat(int key)

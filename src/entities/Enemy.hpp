@@ -2,7 +2,7 @@
 
 #include "Entity.hpp"
 
-enum class EnemyType { Goblin, Skeleton, Orc, Spider, Vampire };
+enum class EnemyType { Goblin, Skeleton, Orc, Spider, Vampire, Zombie, Demon, Shadow };
 
 class Enemy : public Entity {
 public:

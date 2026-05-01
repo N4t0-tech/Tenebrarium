@@ -86,6 +86,11 @@ private:
     int  mapZoom_{1};
     bool victory_{false};
 
+    // Bomb explosion effect
+    std::vector<Position> explosionTiles_;
+    int                   explosionFrame_{0};
+    double                explosionEndTime_{0.0};
+
     void saveGame();
     bool loadGame();
     bool hasSave() const;
@@ -115,6 +120,7 @@ private:
     void inputQuestLog(int key);
     void generateShopStock();
     bool isInShopRoom(Position p) const;
+    void useBomb();
 
     void initQuests();
     void checkQuestProgress();

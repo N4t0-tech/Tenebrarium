@@ -112,3 +112,19 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
         }
     }
 }
+
+void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
+    int dstW = static_cast<int>(layer.width  * scale);
+    int dstH = static_cast<int>(layer.height * scale);
+    for (int dy = 0; dy < dstH; dy++) {
+        for (int dx = 0; dx < dstW; dx++) {
+            int sx = std::min(static_cast<int>(dx / scale), layer.width  - 1);
+            int sy = std::min(static_cast<int>(dy / scale), layer.height - 1);
+            const XpCell& cell = layer.cells[sy * layer.width + sx];
+            if (cell.glyph == 0 || cell.glyph == U' ') continue;
+            Color fg = { cell.fg_r, cell.fg_g, cell.fg_b, 255 };
+            Color bg = { cell.bg_r, cell.bg_g, cell.bg_b, 255 };
+            scr.put(col + dx, row + dy, cell.glyph, fg, bg);
+        }
+    }
+}

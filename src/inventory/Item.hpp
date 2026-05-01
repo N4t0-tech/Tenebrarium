@@ -6,6 +6,7 @@ enum class ItemType {
     Weapon,
     Armor,
     Consumable,
+    Bomb,
 };
 
 struct Item {
@@ -15,4 +16,5 @@ struct Item {
     int value;       // gold value
     int slots;       // inventory slots consumed (default 1)
     int statBonus;   // generic stat modifier (attack, defense, or hp depending on type)
+    int quantity;    // stack size (default 1)
 };

@@ -16,6 +16,9 @@ static constexpr Color COL_CYAN    = {  60, 230, 240, 255 };
 static constexpr Color COL_GREEN   = {  60, 230, 110, 255 };
 static constexpr Color COL_RED     = { 255,  80,  80, 255 };
 static constexpr Color COL_GRAY    = { 200, 200, 200, 255 };
+static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
+static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
+static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
 static constexpr Color COL_BLACK   = BLACK;
 
@@ -32,12 +35,16 @@ const char* Renderer::className(const Player& p) {
 
 Color Renderer::colorFromPair(int pair) {
     switch (pair) {
-        case 2: return COL_YELLOW;
-        case 3: return COL_CYAN;
-        case 4: return COL_GREEN;
-        case 5: return COL_CYAN;
-        case 6: return COL_RED;
-        case 7: return COL_GRAY;
+        case  2: return COL_YELLOW;
+        case  3: return COL_CYAN;
+        case  4: return COL_GREEN;
+        case  5: return COL_WHITE;
+        case  6: return COL_RED;
+        case  7: return COL_GRAY;
+        case  8: return COL_MAGENTA;
+        case  9: return COL_ORANGE;
+        case 10: return COL_DK_GREEN;
+        case 11: return COL_DK_GRAY;
         default: return COL_WHITE;
     }
 }
@@ -148,17 +155,36 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 // ─── drawPortrait ─────────────────────────────────────────────────────────────
 
 void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
-                             const char* filename, float scale) {
+                              const char* filename, float scale) {
     if (!filename) {
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
     }
-    try {
-        XpFile xp = loadXp(assetsDir() + "art/" + filename);
-        if (xp.layers.empty()) throw std::runtime_error("vacio");
-        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale);
-    } catch (...) {
-        scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
+    std::string path = assetsDir() + "art/" + filename;
+    std::string fn = filename;
+    if (fn.find(".png") != std::string::npos || fn.find(".PNG") != std::string::npos) {
+        Image img = LoadImage(path.c_str());
+        if (img.data) {
+            Texture2D tex = LoadTextureFromImage(img);
+            UnloadImage(img);
+            int px = col * scr.cellW();
+            int py = row * scr.cellH();
+            int w = static_cast<int>(img.width * scale);
+            int h = static_cast<int>(img.height * scale);
+            DrawTexturePro(tex, {0,0,(float)tex.width,(float)tex.height},
+                           {(float)px,(float)py,(float)w,(float)h}, {0,0}, 0.0f, WHITE);
+            UnloadTexture(tex);
+        } else {
+            scr.putStr(col + 1, row + 1, "[PNG N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
+        }
+    } else {
+        try {
+            XpFile xp = loadXp(path);
+            if (xp.layers.empty()) throw std::runtime_error("vacio");
+            xpDrawGlyphs(scr, xp.layers[0], col, row, scale);
+        } catch (...) {
+            scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
+        }
     }
 }
 
@@ -193,19 +219,21 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         player.getEquippedArmor() ? COL_GREEN : COL_GRAY,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, 20);
-    put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
-    put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
-    int fl = player.getDungeonFloor();
+     put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
+     put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
+     put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
+     int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, 20);
-    put("WASD  mover",    COL_GRAY, CELL_DIM);
-    put("  P   pocion",   COL_GRAY, CELL_DIM);
-    put("  I   mochila",  COL_GRAY, CELL_DIM);
-    put("  M   misiones", COL_GRAY, CELL_DIM);
-    put("  Q   salir",    COL_GRAY, CELL_DIM);
-    put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
+     put("WASD  mover",    COL_GRAY, CELL_DIM);
+     put("  E   bomba",    COL_GRAY, CELL_DIM);
+     put("  P   pocion",   COL_GRAY, CELL_DIM);
+     put("  I   mochila",  COL_GRAY, CELL_DIM);
+     put("  M   misiones", COL_GRAY, CELL_DIM);
+     put("  Q   salir",    COL_GRAY, CELL_DIM);
+     put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
@@ -214,23 +242,21 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
         c += scr.putStr(c, row + 1, s, col, COL_BLACK, f);
     };
-    a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
-    a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
-    a("  HP:", COL_GREEN, CELL_BOLD);
-    a(std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
-    a("  MP:", COL_CYAN, CELL_BOLD);
-    a(std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
+     a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
+     a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
+     a(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
+     a(" MP:" + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
 
-    c = 1;
-    auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
-    };
-    b("ATK:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
-    b(" DEF:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
-    b("  $" + std::to_string(player.getCoins()), COL_YELLOW);
-    b("  +" + std::to_string(player.countConsumables()), COL_GREEN);
-    b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir"
-      "  +/-:zoom(" + std::to_string(mapZoom) + "x)", COL_GRAY, CELL_DIM);
+     c = 1;
+     auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
+         c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
+     };
+     b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
+     b(" Df:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
+     b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
+     b(" +" + std::to_string(player.countConsumables()), COL_GREEN);
+     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
+     b(" W:E P:I M:Q Z:" + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -273,7 +299,6 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
 
 void Renderer::drawCredits(TerminalScreen& scr) {
-    int cx = scr.cols() / 2;
     int cy = scr.rows() / 2;
 
     drawCentered(scr, cy - 8, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
@@ -313,8 +338,8 @@ static constexpr ClassInfo kClasses[3] = {
      "warrior.xp", 120,15,8,20},
     {"MAGO","Arcano","Domina las artes magicas. Poder devastador.",
      "mago.xp", 70,8,3,100},
-    {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
-     nullptr, 90,12,5,50},
+     {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
+      "ranger.xp", 90,12,5,50},
 };
 
 void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
@@ -359,10 +384,10 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
     }
 
     // Centrar el retrato escalado en el espacio entre la lista y el borde derecho
-    static constexpr float kPortScale = 0.95f;
+    static constexpr float kPortScale = 1.0f;
     static constexpr int kSrcSize = 60;
-    int portW = static_cast<int>(kSrcSize * kPortScale);
-    int portH = static_cast<int>(kSrcSize * kPortScale / 2);  // half-block divide alto entre 2
+    int portW = kSrcSize;
+    int portH = kSrcSize / 2;  // half-block divide alto entre 2
     int spaceStart = listCol + boxW + 2;
     int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
     if (portCol < spaceStart) portCol = spaceStart;
@@ -462,7 +487,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     } else {
         int hudH = 3;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 0, 0, scr.cols(), mapH, map, entities);
+        drawMap(scr, 0,0, scr.cols(), mapH, map, entities);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),
@@ -640,13 +665,16 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
                 case ItemType::Weapon:     tag = "[ARMA]   "; ic = COL_YELLOW; break;
                 case ItemType::Armor:      tag = "[ARMADURA]"; ic = COL_GREEN; break;
                 case ItemType::Consumable: tag = "[POCION] "; ic = COL_CYAN;  break;
+                case ItemType::Bomb:       tag = "[BOMBA]  "; ic = COL_ORANGE; break;
                 default:                  tag = "[MISC]   "; break;
             }
             std::string line = tag + " " + item.name;
-            if (item.type != ItemType::Consumable)
+            if (item.quantity > 1)
+                line += " x" + std::to_string(item.quantity);
+            if (item.type != ItemType::Consumable && item.type != ItemType::Bomb)
                 line += "  +" + std::to_string(item.statBonus)
                       + (item.type == ItemType::Weapon ? " ATK" : " DEF");
-            else
+            else if (item.type == ItemType::Consumable)
                 line += "  +" + std::to_string(item.statBonus) + " HP";
             uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
             scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);

@@ -6,14 +6,18 @@
 
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
-    bool spiderAvail  = (floor >= 2);
-    bool vampireAvail = (floor >= 4);
+    bool zombieAvail  = (floor >= 2);
+    bool shadowAvail  = (floor >= 4);
+    bool demonAvail   = (floor >= 6);
     int gobW = std::max(5, 55 - (floor - 1) * 8);
     int skeW = 15;
     int orcW = std::min(30, (floor - 1) * 5);
-    int spiW = spiderAvail  ? std::min(30, (floor - 2) * 7) : 0;
-    int vapW = vampireAvail ? std::min(20, (floor - 4) * 5) : 0;
-    int total = gobW + skeW + orcW + spiW + vapW;
+    int spiW = std::min(30, (floor - 2) * 7);
+    int vapW = std::min(20, (floor - 4) * 5);
+    int zomW = zombieAvail  ? std::min(25, (floor - 2) * 6) : 0;
+    int shaW = shadowAvail  ? std::min(20, (floor - 4) * 5) : 0;
+    int demW = demonAvail   ? std::min(20, (floor - 6) * 5) : 0;
+    int total = gobW + skeW + orcW + spiW + vapW + zomW + shaW + demW;
     int r = std::rand() % total;
     if (r < gobW) return EnemyType::Goblin;
     r -= gobW;
@@ -22,7 +26,13 @@ EnemyType DungeonPopulator::pickEnemyType(int floor)
     if (r < orcW) return EnemyType::Orc;
     r -= orcW;
     if (r < spiW) return EnemyType::Spider;
-    return EnemyType::Vampire;
+    r -= spiW;
+    if (r < vapW) return EnemyType::Vampire;
+    r -= vapW;
+    if (r < zomW) return EnemyType::Zombie;
+    r -= zomW;
+    if (r < shaW) return EnemyType::Shadow;
+    return EnemyType::Demon;
 }
 
 std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool isBoss)
@@ -42,6 +52,12 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "Arana";    hp = sc(80);  atk = sc(12); def = sc(2);  xp = sc(40);  pa = 1; break;
     case EnemyType::Vampire:
         name = "Vampiro";  hp = sc(110); atk = sc(18); def = sc(6);  xp = sc(80);  pa = 1; break;
+    case EnemyType::Zombie:
+        name = "Zombie";   hp = sc(160); atk = sc(10); def = sc(15); xp = sc(50);  pa = 1; break;
+    case EnemyType::Demon:
+        name = "Demonio";  hp = sc(150); atk = sc(25); def = sc(8);  xp = sc(100); pa = 1; break;
+    case EnemyType::Shadow:
+        name = "Sombra";   hp = sc(70);  atk = sc(18); def = sc(2);  xp = sc(35);  pa = 2; break;
     default:
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
@@ -55,6 +71,9 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         case EnemyType::Orc:      name = "Gran Orco";       break;
         case EnemyType::Spider:   name = "Reina Arana";     break;
         case EnemyType::Vampire:  name = "Vampiro Anciano"; break;
+        case EnemyType::Zombie:   name = "Zombie Colosal";  break;
+        case EnemyType::Demon:    name = "Archidemonio";    break;
+        case EnemyType::Shadow:   name = "Sombra Eterna";   break;
         default: break;
         }
     }
@@ -70,6 +89,9 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Orc:      base = 30; break;
     case EnemyType::Spider:   base = 40; break;
     case EnemyType::Vampire:  base = 80; break;
+    case EnemyType::Zombie:   base = 25; break;
+    case EnemyType::Demon:    base = 60; break;
+    case EnemyType::Shadow:   base = 18; break;
     default:                  base =  5; break;
     }
     return base + (floor - 1) * 5;
@@ -80,29 +102,29 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
 Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 {
     static const std::vector<Item> warrior = {
-        {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3},
-        {"Estoque",        "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3},
-        {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5},
-        {"Espada",         "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5},
-        {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8},
-        {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7},
+        {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3, 1},
+        {"Estoque",        "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5, 1},
+        {"Espada",         "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5, 1},
+        {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8, 1},
+        {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7, 1},
     };
     static const std::vector<Item> mage = {
-        {"Varita de Roble",   "Canaliza magia.",           ItemType::Weapon, 30, 1, 2},
-        {"Varita de Sauco",   "Madera antigua y potente.", ItemType::Weapon, 30, 1, 2},
-        {"Baculo de Cristal", "Poder arcano.",             ItemType::Weapon, 50, 1, 4},
-        {"Baculo de Rayos",   "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4},
-        {"Grimorio Oscuro",   "Magia devastadora.",        ItemType::Weapon, 80, 2, 6},
-        {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7},
+        {"Varita de Roble",   "Canaliza magia.",           ItemType::Weapon, 30, 1, 2, 1},
+        {"Varita de Sauco",   "Madera antigua y potente.", ItemType::Weapon, 30, 1, 2, 1},
+        {"Baculo de Cristal", "Poder arcano.",             ItemType::Weapon, 50, 1, 4, 1},
+        {"Baculo de Rayos",   "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4, 1},
+        {"Grimorio Oscuro",   "Magia devastadora.",        ItemType::Weapon, 80, 2, 6, 1},
+        {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7, 1},
     };
     static const std::vector<Item> ranger = {
-        {"Arco Corto",     "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3},
-        {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2},
-        {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5},
-        {"Arco Elfico",    "Tallado en madera elfica.", ItemType::Weapon, 50, 1, 5},
-        {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7},
-        {"Arco Encantado", "Flechas magicas.",          ItemType::Weapon, 80, 2, 7},
-        {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8},
+        {"Arco Corto",     "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2, 1},
+        {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5, 1},
+        {"Arco Elfico",    "Tallado en madera elfica.", ItemType::Weapon, 50, 1, 5, 1},
+        {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7, 1},
+        {"Arco Encantado", "Flechas magicas.",          ItemType::Weapon, 80, 2, 7, 1},
+        {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
     };
     const auto& pool = (cls == PlayerClass::Warrior) ? warrior
                      : (cls == PlayerClass::Mage)    ? mage
@@ -115,12 +137,12 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 {
     static const Item a[3][2] = {
-        {{"Cota de Malla",      "Proteccion media.",   ItemType::Armor, 40, 1, 3},
-         {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6}},
-        {{"Tunica Arcana",      "Ligera y magica.",    ItemType::Armor, 30, 1, 1},
-         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3}},
-        {{"Cuero Reforzado",    "Agil y resistente.",  ItemType::Armor, 35, 1, 2},
-         {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4}},
+        {{"Cota de Malla",      "Proteccion media.",   ItemType::Armor, 40, 1, 3, 1},
+         {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
+        {{"Tunica Arcana",      "Ligera y magica.",    ItemType::Armor, 30, 1, 1, 1},
+         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3, 1}},
+        {{"Cuero Reforzado",    "Agil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
+         {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
     Item item = a[ci][std::rand() % 2];
@@ -131,10 +153,16 @@ Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 Item DungeonPopulator::pickPotion(int floor)
 {
     if (floor >= 5 || std::rand() % 3 == 0)
-        return {"Pocion Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80};
+        return {"Pocion Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80, 1};
     if (floor >= 3 || std::rand() % 2 == 0)
-        return {"Pocion de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40};
-    return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20};
+        return {"Pocion de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40, 1};
+    return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20, 1};
+}
+
+Item DungeonPopulator::pickBomb(int floor)
+{
+    int price = 20 + floor * 3;
+    return {"Bomba", "Destruye paredes secretas.", ItemType::Bomb, price, 1, 0, 1};
 }
 
 // ─── Position helper ──────────────────────────────────────────────────────────

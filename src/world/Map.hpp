@@ -43,6 +43,7 @@ public:
     bool isWalkable(int x, int y) const;
     bool isSecretWall(int x, int y) const;
     void revealSecretWall(int x, int y);  // changes SecretWall → Floor
+    bool destroyTile(int x, int y);       // destroys wall/secret wall → Floor, returns true if destroyed
     void setPlayerPos(int x, int y);
     Position getPlayerPos() const { return playerPos_; }
 

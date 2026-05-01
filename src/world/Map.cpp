@@ -43,6 +43,17 @@ void Map::revealSecretWall(int x, int y) {
     }
 }
 
+bool Map::destroyTile(int x, int y) {
+    if (x < 0 || x >= width_ || y < 0 || y >= height_) return false;
+    auto& tile = tiles_[index(x, y)];
+    if (tile.type == TileType::Wall || tile.type == TileType::SecretWall) {
+        tile.type  = TileType::Floor;
+        tile.glyph = '.';
+        return true;
+    }
+    return false;
+}
+
 void Map::setPlayerPos(int x, int y) {
     playerPos_ = {x, y};
 }

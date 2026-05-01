@@ -25,6 +25,7 @@ public:
     static Item             pickWeapon(PlayerClass cls, int floor);
     static Item             pickArmor(PlayerClass cls, int floor);
     static Item             pickPotion(int floor);
+    static Item             pickBomb(int floor);
     static EnemyType        pickEnemyType(int floor);
     static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor, bool isBoss = false);
     static int              xpForEnemy(EnemyType t, int floor);
