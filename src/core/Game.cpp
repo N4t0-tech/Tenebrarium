@@ -63,7 +63,7 @@ Game::~Game()
 void Game::run()
 {
     const int SCREEN_W = 1280;
-    const int SCREEN_H = 720;
+    const int SCREEN_H = 800;
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
