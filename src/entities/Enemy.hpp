@@ -11,10 +11,10 @@ public:
 
     int       getXpReward() const { return xpReward_; }
     EnemyType getType()     const { return type_; }
-    int       getBasePa()   const { return basePa_; }
+    int       getBasePa()   const { return basePa_; }  // Ataques por turno
 
 private:
     int       xpReward_;
     EnemyType type_;
-    int       basePa_;  // number of attacks per turn
+    int       basePa_;  // Ataques por turno (1 o 2)
 };

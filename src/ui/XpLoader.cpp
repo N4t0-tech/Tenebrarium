@@ -89,18 +89,20 @@ XpFile loadXp(const std::string& path) {
     return xp;
 }
 
-// Color efectivo de una celda para half-block
+// Color efectivo: si la celda está vacía usa bg, si tiene glyph usa fg
 static Color effectiveRl(const XpCell& c) {
     if (c.glyph == 0 || c.glyph == U' ')
         return Color{ c.bg_r, c.bg_g, c.bg_b, 255 };
     return Color{ c.fg_r, c.fg_g, c.fg_b, 255 };
 }
 
+// Renderiza capa .xp con half-blocks (▀ = 2px verticales)
+// Solo usa colores (ignora glyphs) → ideal para pixel art/imágenes
 void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
     static constexpr int UPPER_HALF = 0x2580;
     int dstW = static_cast<int>(layer.width  * scale);
     int dstH = static_cast<int>(layer.height * scale);
-    if (dstH % 2 != 0) dstH--;  // half-block necesita filas pares
+    if (dstH % 2 != 0) dstH--;  // Requiere filas pares
     for (int dy = 0; dy < dstH; dy += 2) {
         for (int dx = 0; dx < dstW; dx++) {
             int sx  = std::min(static_cast<int>(dx / scale), layer.width  - 1);
@@ -113,6 +115,7 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
     }
 }
 
+// Renderiza capa .xp con glyphs CP437 reales (conserva detalles/texturas)
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
     int dstW = static_cast<int>(layer.width  * scale);
     int dstH = static_cast<int>(layer.height * scale);

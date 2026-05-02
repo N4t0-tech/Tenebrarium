@@ -13,8 +13,8 @@ struct Item {
     std::string name;
     std::string description;
     ItemType type;
-    int value;       // gold value
-    int slots;       // inventory slots consumed (default 1)
-    int statBonus;   // generic stat modifier (attack, defense, or hp depending on type)
-    int quantity;    // stack size (default 1)
+    int value;       // Valor en monedas
+    int slots;       // Slots que ocupa en inventario (default 1)
+    int statBonus;   // Bono de ataque/defensa/HP según tipo
+    int quantity;    // Cantidad apilada (default 1, para pociones/bombas)
 };

@@ -217,8 +217,9 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
+// HUD inferior: línea 1 = jugador/hp/mp, línea 2 = stats/bombas/controles
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
-    drawHSep(scr, 0, row, scr.cols());
+    drawHSep(scr, 0, row, scr.cols());  // Línea separadora
     int c = 1;
     auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
         c += scr.putStr(c, row + 1, s, col, COL_BLACK, f);
@@ -235,9 +236,9 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
      b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
      b(" Df:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
      b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
-     b(" +" + std::to_string(player.countConsumables()), COL_GREEN);
-     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
-     b(" W:E P:I M:Q Z:" + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
+     b(" +" + std::to_string(player.countConsumables()), COL_GREEN);       // Pociones
+     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE); // Bombas
+     b(" W:E P:I M:Q Z:" + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM); // Controles
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────

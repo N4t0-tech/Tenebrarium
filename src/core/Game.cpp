@@ -829,6 +829,7 @@ void Game::inputHudSelect(int key)
             break;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
+        // Dar 5 bombas iniciales
         for (int i = 0; i < 5; i++)
             player_->getInventory().addItem(DungeonPopulator::pickBomb(1));
         initQuests();
@@ -1296,10 +1297,12 @@ bool Game::isInShopRoom(Position p) const
            p.y >= shopRoom_.y && p.y < shopRoom_.y + shopRoom_.h;
 }
 
+// Usar bomba en pared secreta adyacente (tecla E)
 void Game::useBomb()
 {
     if (!player_ || !map_) return;
 
+    // Verificar si tiene bombas
     int bombCount = 0;
     for (const auto& item : player_->getInventory().items())
         if (item.type == ItemType::Bomb) bombCount++;
@@ -1316,7 +1319,7 @@ void Game::useBomb()
     bool destroyed = false;
     int tx = 0, ty = 0;
 
-    // Check only secret walls
+    // Buscar pared secreta adyacente
     for (int i = 0; i < 4; i++) {
         int ax = pos.x + dx[i], ay = pos.y + dy[i];
         if (map_->isSecretWall(ax, ay)) {
@@ -1332,10 +1335,8 @@ void Game::useBomb()
         return;
     }
 
-    // Consume bomb
+    // Consumir bomba y generar efecto visual (0.4s)
     player_->getInventory().removeItem("Bomba");
-
-    // Explosion effect: 3x3 area around target
     explosionTiles_.clear();
     for (int ey = -1; ey <= 1; ey++) {
         for (int ex = -1; ex <= 1; ex++) {
@@ -1345,7 +1346,7 @@ void Game::useBomb()
     explosionFrame_ = 0;
     explosionEndTime_ = GetTime() + 0.4;
     explorationMsg_ = "BOOM! La pared se hace polvo!";
-    map_->updateFov();
+    map_->updateFov(); // Actualizar visibilidad
 }
 
 void Game::inputCombat(int key)
