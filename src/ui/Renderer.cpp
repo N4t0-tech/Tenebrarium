@@ -160,31 +160,12 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
     }
-    std::string path = assetsDir() + "art/" + filename;
-    std::string fn = filename;
-    if (fn.find(".png") != std::string::npos || fn.find(".PNG") != std::string::npos) {
-        Image img = LoadImage(path.c_str());
-        if (img.data) {
-            Texture2D tex = LoadTextureFromImage(img);
-            UnloadImage(img);
-            int px = col * scr.cellW();
-            int py = row * scr.cellH();
-            int w = static_cast<int>(img.width * scale);
-            int h = static_cast<int>(img.height * scale);
-            DrawTexturePro(tex, {0,0,(float)tex.width,(float)tex.height},
-                           {(float)px,(float)py,(float)w,(float)h}, {0,0}, 0.0f, WHITE);
-            UnloadTexture(tex);
-        } else {
-            scr.putStr(col + 1, row + 1, "[PNG N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
-        }
-    } else {
-        try {
-            XpFile xp = loadXp(path);
-            if (xp.layers.empty()) throw std::runtime_error("vacio");
-            xpDrawGlyphs(scr, xp.layers[0], col, row, scale);
-        } catch (...) {
-            scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
-        }
+    try {
+        XpFile xp = loadXp(assetsDir() + "art/" + filename);
+        if (xp.layers.empty()) throw std::runtime_error("vacio");
+        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale);
+    } catch (...) {
+        scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
     }
 }
 
@@ -338,8 +319,8 @@ static constexpr ClassInfo kClasses[3] = {
      "warrior.xp", 120,15,8,20},
     {"MAGO","Arcano","Domina las artes magicas. Poder devastador.",
      "mago.xp", 70,8,3,100},
-     {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
-      "ranger.xp", 90,12,5,50},
+    {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
+     "ranger.xp", 90,12,5,50},
 };
 
 void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
