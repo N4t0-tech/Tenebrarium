@@ -770,20 +770,25 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
 
 void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
     int cy = scr.rows() / 2;
-    if (victory) {
-        drawCentered(scr, cy - 5, 0, scr.cols(), "* * * V I C T O R I A * * *",
-                     COL_YELLOW, CELL_BOLD);
-        drawCentered(scr, cy - 3, 0, scr.cols(), "Has conquistado la mazmorra.",
-                     COL_WHITE, CELL_BOLD);
-        drawCentered(scr, cy - 2, 0, scr.cols(), "Gracias por jugar Tenebrarium.",
-                     COL_CYAN, 0);
-        drawCentered(scr, cy,     0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
-        drawCentered(scr, cy + 1, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
-    } else {
-        drawCentered(scr, cy - 1, 0, scr.cols(), "G A M E   O V E R",
-                     COL_RED, CELL_BOLD);
+    const char* filename = victory ? "victoryTitle.txt" : "gameOverTitle.txt";
+    std::ifstream f(assetsDir() + filename);
+    std::string line;
+    int ty = cy - 8;
+    Color color = victory ? COL_YELLOW : COL_RED;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = scr.cols() / 2 - cols / 2;
+        scr.putStr(x, ty++, line, color, COL_BLACK, CELL_BOLD);
     }
-    drawCentered(scr, cy + 3, 0, scr.cols(), "ENTER para volver al menu",
+    if (victory) {
+        drawCentered(scr, ty + 1, 0, scr.cols(), "Gracias por jugar Tenebrarium.", COL_CYAN, 0);
+        drawCentered(scr, ty + 2, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
+        drawCentered(scr, ty + 3, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
+    }
+    drawCentered(scr, scr.rows() - 3, 0, scr.cols(),
+                 "ENTER para volver al menu",
                  COL_GRAY, CELL_DIM);
 }
 
