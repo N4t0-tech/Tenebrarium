@@ -86,11 +86,6 @@ private:
     int  mapZoom_{1};
     bool victory_{false};
 
-    // Bomb explosion effect
-    std::vector<Position> explosionTiles_;
-    int                   explosionFrame_{0};
-    double                explosionEndTime_{0.0};
-
     // Message display timing
     double                explorationMsgEndTime_{0.0};
 
