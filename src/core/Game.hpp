@@ -89,6 +89,11 @@ private:
     // Message display timing
     double                explorationMsgEndTime_{0.0};
 
+    // Bomb explosion effect
+    bool                  explosionActive_{false};
+    double                explosionEndTime_{0.0};
+    int                   explosionX_{0}, explosionY_{0};
+
     void saveGame();
     bool loadGame();
     bool hasSave() const;

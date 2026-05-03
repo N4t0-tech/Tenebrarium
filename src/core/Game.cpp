@@ -383,7 +383,68 @@ void Game::run()
             {0, 0}, 0.0f, WHITE);
         EndShaderMode();
 
-        // 3) Dibujar mensaje con Raylib directo (encima de todo, sin shader)
+        // 3) Efecto de explosión de bomba (sobre el tile destruido)
+        if (explosionActive_ && GetTime() < explosionEndTime_) {
+            // Convertir coordenadas del mapa a píxeles
+            Position pp = map_->getPlayerPos();
+
+            int pixelX, pixelY;
+            if (mapZoom_ > 1) {
+                // Con zoom: usar el mismo cálculo que el mapa con zoom
+                int zCellW = cellW * mapZoom_;
+                int zCellH = cellH * mapZoom_;
+                int mapPixW, mapPixH;
+                if (hudLayout_ == HudLayout::Sidebar) {
+                    mapPixW = (cols - 22 - 1) * cellW;
+                    mapPixH = rows * cellH;
+                } else {
+                    mapPixW = cols * cellW;
+                    mapPixH = (rows - 3) * cellH;
+                }
+                int camX = pp.x - mapPixW / zCellW / 2;
+                int camY = pp.y - mapPixH / zCellH / 2;
+                pixelX = offX + (explosionX_ - camX) * zCellW;
+                pixelY = offY + (explosionY_ - camY) * zCellH;
+            } else {
+                // Sin zoom: usar cálculo normal
+                int viewW = (hudLayout_ == HudLayout::Sidebar) ? (cols - 22 - 1) : cols;
+                int viewH = (hudLayout_ == HudLayout::Bottom) ? (rows - 3) : rows;
+                int camX = pp.x - viewW / 2;
+                int camY = pp.y - viewH / 2;
+                pixelX = offX + (explosionX_ - camX) * cellW;
+                pixelY = offY + (explosionY_ - camY) * cellH;
+            }
+
+            // Efecto de flash: blanco → naranja → rojo
+            float progress = (GetTime() - (explosionEndTime_ - 0.5)) / 0.5f;
+            Color expColor;
+            if (progress < 0.5f) {
+                // Blanco a naranja
+                float t = progress * 2.0f;
+                expColor = {255, (uint8_t)(255 * (1 - t) + 165 * t), (uint8_t)(255 * (1 - t)), 255};
+            } else {
+                // Naranja a rojo
+                float t = (progress - 0.5f) * 2.0f;
+                expColor = {255, (uint8_t)(165 * (1 - t)), 0, 255};
+            }
+
+            // Dibujar un rectángulo que cubra el tile completo
+            DrawRectangle(pixelX, pixelY, cellW, cellH, expColor);
+
+            // Dibujar glifos animados
+            const char glyphs[] = {'*', '+', '~', '#', '^', 'X'};
+            int frame = (int)(GetTime() * 20) % 6;
+            int glyphPixelW = (int)MeasureTextEx(font, "X", (float)kBaseFontSize, 0).x;
+            int glyphPixelH = cellH;
+            int glyphX = pixelX + (cellW - glyphPixelW) / 2;
+            int glyphY = pixelY + (cellH - glyphPixelH) / 2;
+            DrawTextEx(font, std::string(1, glyphs[frame]).c_str(),
+                      {(float)glyphX, (float)glyphY}, (float)kBaseFontSize, 0, BLACK);
+        } else {
+            explosionActive_ = false;
+        }
+
+        // 4) Dibujar mensaje con Raylib directo (encima de todo, sin shader)
         if (!explorationMsg_.empty() && GetTime() < explorationMsgEndTime_) {
             std::string msgText = " " + explorationMsg_ + " ";
             int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)kBaseFontSize, 0).x;
@@ -546,6 +607,11 @@ void Game::dispatchInput(int key)
                     if (bombCount > 0) {
                         map_->destroyTile(ax, ay);
                         player_->getInventory().removeItem("Bomba");
+                        // Activar efecto visual de explosión
+                        explosionActive_ = true;
+                        explosionEndTime_ = GetTime() + 0.5;
+                        explosionX_ = ax;
+                        explosionY_ = ay;
                         map_->updateFov();
                         explorationMsg_ = "BOOM! La pared se hace polvo!";
                     } else {
@@ -1313,10 +1379,13 @@ void Game::useBomb()
     bool destroyed = false;
 
     // Buscar pared secreta adyacente
+    int bombX = 0, bombY = 0;
     for (int i = 0; i < 4; i++) {
         int ax = pos.x + dx[i], ay = pos.y + dy[i];
         if (map_->isSecretWall(ax, ay)) {
             map_->destroyTile(ax, ay);
+            bombX = ax;
+            bombY = ay;
             destroyed = true;
             break;
         }
@@ -1328,8 +1397,12 @@ void Game::useBomb()
         return;
     }
 
-    // Consumir bomba
+    // Consumir bomba y activar efecto visual (0.5s)
     player_->getInventory().removeItem("Bomba");
+    explosionActive_ = true;
+    explosionEndTime_ = GetTime() + 0.5;
+    explosionX_ = bombX;
+    explosionY_ = bombY;
     explorationMsg_ = "BOOM! La pared se hace polvo!";
     explorationMsgEndTime_ = GetTime() + 2.0;
     map_->updateFov(); // Actualizar visibilidad
