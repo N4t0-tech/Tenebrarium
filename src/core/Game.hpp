@@ -91,6 +91,9 @@ private:
     int                   explosionFrame_{0};
     double                explosionEndTime_{0.0};
 
+    // Message display timing
+    double                explorationMsgEndTime_{0.0};
+
     void saveGame();
     bool loadGame();
     bool hasSave() const;

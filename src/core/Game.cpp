@@ -384,17 +384,30 @@ void Game::run()
 
             mapScr.render(offX, offY);
 
-            // Re-dibujar mensaje encima del overlay (el zoom lo tapaba)
-            if (!explorationMsg_.empty()) {
-                int msgRow = (hudLayout_ == HudLayout::Sidebar)
-                    ? rows / 2
-                    : (rows - 3) / 2;
-                int msgW = (hudLayout_ == HudLayout::Sidebar)
-                    ? (cols - 22 - 1) * cellW
-                    : cols * cellW;
-                BeginScissorMode(offX, offY + msgRow * cellH, msgW, cellH);
-                scr.render(offX, offY);
-                EndScissorMode();
+            // Dibujar mensaje con Raylib directo (no se ve afectado por zoom)
+            if (!explorationMsg_.empty() && GetTime() < explorationMsgEndTime_) {
+                std::string msgText = " " + explorationMsg_ + " ";
+                int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)kBaseFontSize, 0).x;
+                int msgPixelH = cellH;
+
+                // Centrar en el área del mapa (encima del zoom)
+                int mapPixelW, mapPixelH;
+                if (hudLayout_ == HudLayout::Sidebar) {
+                    mapPixelW = (cols - 22 - 1) * cellW;
+                    mapPixelH = rows * cellH;
+                } else {
+                    mapPixelW = cols * cellW;
+                    mapPixelH = (rows - 3) * cellH;
+                }
+
+                int pixelX = offX + (mapPixelW - msgPixelW) / 2;
+                int pixelY = offY + (mapPixelH - msgPixelH) / 2;
+
+                Color yellowBg = {255, 230, 60, 255};
+                DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
+
+                Color blackFg = {0, 0, 0, 255};
+                DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
             }
         }
 
@@ -508,6 +521,7 @@ void Game::dispatchInput(int key)
                 explorationMsg_ = "Usas una pocion: +" + std::to_string(healed) + " HP!";
             else
                 explorationMsg_ = "No tienes pociones.";
+            explorationMsgEndTime_ = GetTime() + 1.5;
             break;
         }
 
@@ -552,12 +566,14 @@ void Game::dispatchInput(int key)
                         map_->updateFov();
                         explorationMsg_ = "Encontraste una sala secreta!";
                     }
+                    explorationMsgEndTime_ = GetTime() + 1.5;
                     found = true;
                     break;
                 }
             }
             if (!found)
                 explorationMsg_ = "No hay nada aqui...";
+            explorationMsgEndTime_ = GetTime() + 1.5;
             break;
         }
 
@@ -587,6 +603,7 @@ void Game::dispatchInput(int key)
             lockedDoorPos_.x == nx && lockedDoorPos_.y == ny)
         {
             explorationMsg_ = "La puerta permanece sellada. Algo en las sombras aun respira.";
+            explorationMsgEndTime_ = GetTime() + 1.5;
             break;
         }
 
@@ -638,6 +655,7 @@ void Game::dispatchInput(int key)
                 setState(GameState::Exploration);
                 explorationMsg_ = "Desciendes al piso " +
                                   std::to_string(player_->getDungeonFloor()) + "...";
+                explorationMsgEndTime_ = GetTime() + 1.5;
                 saveGame();
             }
         }
@@ -859,6 +877,7 @@ void Game::update()
         {
             lockedDoorOpen_ = true;
             explorationMsg_ = "El silencio se apodera del Tenebrarium... algo cede en la oscuridad.";
+            explorationMsgEndTime_ = GetTime() + 1.5;
         }
     }
 }
@@ -908,6 +927,7 @@ void Game::checkQuestProgress()
             player_->gainXp(q.xpReward);
             player_->addCoins(q.goldReward);
             explorationMsg_ = "Mision completada: " + q.title + "!";
+            explorationMsgEndTime_ = GetTime() + 1.5;
         }
     }
 }
@@ -954,8 +974,9 @@ void Game::render(TerminalScreen &scr)
                 entities.push_back({stairsPos_, '>', 3, true});
             if (shopExists_)
                 entities.push_back({shopMerchantPos_, '$', 4, true});
+            // No pasar mensaje si hay zoom (se dibuja aparte)
             Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
-                                      entities, explorationMsg_, mapZoom_);
+                                       entities, (mapZoom_ <= 1) ? explorationMsg_ : "", mapZoom_);
 
             // Draw explosion effect on normal map
             if (GetTime() < explosionEndTime_ && !explosionTiles_.empty()) {
@@ -1128,6 +1149,7 @@ void Game::openChest(WorldChest &chest)
     case ChestLoot::Coins:
         player_->addCoins(chest.coins);
         explorationMsg_ = "Cofre: +" + std::to_string(chest.coins) + " monedas de oro!";
+        explorationMsgEndTime_ = GetTime() + 1.5;
         break;
     case ChestLoot::Item:
         if (chest.item.type == ItemType::Consumable)
@@ -1140,6 +1162,7 @@ void Game::openChest(WorldChest &chest)
             player_->pickupItem(chest.item);
             explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!  (+" + std::to_string(chest.item.statBonus) + (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
         }
+        explorationMsgEndTime_ = GetTime() + 1.5;
         break;
     }
 }
@@ -1194,6 +1217,7 @@ void Game::inputInventory(int key)
                 int healed = std::min(bonus, player_->getMaxHp() - player_->getHp());
                 player_->heal(healed);
                 explorationMsg_ = "Usas " + name + ": +" + std::to_string(healed) + " HP!";
+                explorationMsgEndTime_ = GetTime() + 1.5;
                 int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
                 if (inventorySelection_ >= newTotal)
                     inventorySelection_ = std::max(0, newTotal - 1);
@@ -1251,6 +1275,7 @@ void Game::inputShop(int key)
         if (player_->getCoins() < s.price)
         {
             explorationMsg_ = "No tienes suficiente oro.";
+            explorationMsgEndTime_ = GetTime() + 1.5;
             break;
         }
         player_->addCoins(-s.price);
@@ -1260,6 +1285,7 @@ void Game::inputShop(int key)
             player_->pickupItem(s.item);
         s.sold = true;
         explorationMsg_ = "Compraste: " + s.item.name + "!";
+        explorationMsgEndTime_ = GetTime() + 1.5;
         break;
     }
     case 27:
@@ -1309,6 +1335,7 @@ void Game::useBomb()
 
     if (bombCount == 0) {
         explorationMsg_ = "No tienes bombas.";
+        explorationMsgEndTime_ = GetTime() + 1.5;
         return;
     }
 
@@ -1323,7 +1350,7 @@ void Game::useBomb()
     for (int i = 0; i < 4; i++) {
         int ax = pos.x + dx[i], ay = pos.y + dy[i];
         if (map_->isSecretWall(ax, ay)) {
-            map_->revealSecretWall(ax, ay);
+            map_->destroyTile(ax, ay);
             tx = ax; ty = ay;
             destroyed = true;
             break;
@@ -1332,6 +1359,7 @@ void Game::useBomb()
 
     if (!destroyed) {
         explorationMsg_ = "No hay pared secreta adyacente.";
+        explorationMsgEndTime_ = GetTime() + 1.5;
         return;
     }
 
@@ -1346,6 +1374,7 @@ void Game::useBomb()
     explosionFrame_ = 0;
     explosionEndTime_ = GetTime() + 0.4;
     explorationMsg_ = "BOOM! La pared se hace polvo!";
+    explorationMsgEndTime_ = GetTime() + 1.5;
     map_->updateFov(); // Actualizar visibilidad
 }
 
@@ -1378,6 +1407,7 @@ void Game::inputCombat(int key)
                     Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
                     player_->getInventory().addItem(pot);
                     explorationMsg_ = "El enemigo solto una " + pot.name + "!";
+                    explorationMsgEndTime_ = GetTime() + 1.5;
                 }
             }
             // Regeneración post-combate
@@ -1387,6 +1417,7 @@ void Game::inputCombat(int key)
             player_->restoreMana(mpRegen);
             if (explorationMsg_.empty())
                 explorationMsg_ = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
+            explorationMsgEndTime_ = GetTime() + 1.5;
             returnToExploration();
         }
         else
