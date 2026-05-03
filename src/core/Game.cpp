@@ -341,6 +341,9 @@ void Game::run()
                 mapPixH = (rows - kHudBarH) * cellH;
             }
 
+            // Limpiar el área del mapa con negro para evitar "fantasmas" del zoom x1
+            DrawRectangle(offX, offY, mapPixW, mapPixH, BLACK);
+
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
             Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
@@ -603,7 +606,7 @@ void Game::dispatchInput(int key)
                     // Try to use bomb first, if none available reveal normally
                     int bombCount = 0;
                     for (const auto& item : player_->getInventory().items())
-                        if (item.type == ItemType::Bomb) bombCount++;
+                        if (item.type == ItemType::Bomb) bombCount += item.quantity;
                     if (bombCount > 0) {
                         map_->destroyTile(ax, ay);
                         player_->getInventory().removeItem("Bomba");
@@ -900,9 +903,12 @@ void Game::inputHudSelect(int key)
             break;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
-        // Dar 5 bombas iniciales
-        for (int i = 0; i < 5; i++)
-            player_->getInventory().addItem(DungeonPopulator::pickBomb(1));
+        // Dar 5 bombas iniciales (como 1 item con quantity=5)
+        {
+            Item bomba = DungeonPopulator::pickBomb(1);
+            bomba.quantity = 5;
+            player_->getInventory().addItem(bomba);
+        }
         initQuests();
         setState(GameState::Exploration);
         break;
@@ -1106,6 +1112,9 @@ void Game::setState(GameState newState)
 {
     if (newState == GameState::MainMenu)
     {
+        // Guardar antes de limpiar (permitir continuar después)
+        if (player_ && map_)
+            saveGame();
         pendingCombatEnemy_ = -1;
         victory_ = false;
         menuPhase_ = MenuPhase::Title;
@@ -1113,6 +1122,7 @@ void Game::setState(GameState newState)
         classSelection_ = 0;
         hudSelection_ = 0;
         playerName_.clear();
+        player_.reset(); // Limpiar jugador (incluye inventario)
         worldEnemies_.clear();
         combat_.reset();
     }
@@ -1206,6 +1216,7 @@ void Game::returnToExploration()
     // Return to the same map without regenerating — just clear combat state
     combat_.reset();
     combatWorldEnemyIdx_ = -1;
+    explorationMsg_.clear(); // Limpiar mensaje anterior al volver
     state_ = GameState::Exploration;
 }
 
@@ -1341,6 +1352,7 @@ void Game::generateShopStock()
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
     Item bomb = DungeonPopulator::pickBomb(shopFloor);
+    bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});
     Item w = DungeonPopulator::pickWeapon(cls, shopFloor);
     shopStock_.push_back({w, w.value + shopFloor * 5, false});
@@ -1361,10 +1373,10 @@ void Game::useBomb()
 {
     if (!player_ || !map_) return;
 
-    // Verificar si tiene bombas
+    // Verificar si tiene bombas (sumar quantity total)
     int bombCount = 0;
     for (const auto& item : player_->getInventory().items())
-        if (item.type == ItemType::Bomb) bombCount++;
+        if (item.type == ItemType::Bomb) bombCount += item.quantity;
 
     if (bombCount == 0) {
         explorationMsg_ = "No tienes bombas.";
