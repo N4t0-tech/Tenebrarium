@@ -417,7 +417,11 @@ void Game::run()
                 pixelX = offX + (explosionX_ - camX) * cellW;
                 pixelY = offY + (explosionY_ - camY) * cellH;
             }
-
+            
+            // Determinar tamaño de celda según zoom
+            int drawCellW = (mapZoom_ > 1) ? (cellW * mapZoom_) : cellW;
+            int drawCellH = (mapZoom_ > 1) ? (cellH * mapZoom_) : cellH;
+            
             // Efecto de flash: blanco → naranja → rojo
             float progress = (GetTime() - (explosionEndTime_ - 0.5)) / 0.5f;
             Color expColor;
@@ -432,15 +436,15 @@ void Game::run()
             }
 
             // Dibujar un rectángulo que cubra el tile completo
-            DrawRectangle(pixelX, pixelY, cellW, cellH, expColor);
+            DrawRectangle(pixelX, pixelY, drawCellW, drawCellH, expColor);
 
             // Dibujar glifos animados
             const char glyphs[] = {'*', '+', '~', '#', '^', 'X'};
             int frame = (int)(GetTime() * 20) % 6;
             int glyphPixelW = (int)MeasureTextEx(font, "X", (float)kBaseFontSize, 0).x;
-            int glyphPixelH = cellH;
-            int glyphX = pixelX + (cellW - glyphPixelW) / 2;
-            int glyphY = pixelY + (cellH - glyphPixelH) / 2;
+            int glyphPixelH = drawCellH;
+            int glyphX = pixelX + (drawCellW - glyphPixelW) / 2;
+            int glyphY = pixelY + (drawCellH - glyphPixelH) / 2;
             DrawTextEx(font, std::string(1, glyphs[frame]).c_str(),
                       {(float)glyphX, (float)glyphY}, (float)kBaseFontSize, 0, BLACK);
         } else {
