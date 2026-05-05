@@ -630,7 +630,8 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
 // ─── drawInventory ────────────────────────────────────────────────────────────
 
-void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
+void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection,
+                             int tab, const std::string& msg) {
     int cx = scr.cols() / 2;
     int w  = 60, sc2 = cx - w / 2, r = 2;
     drawBorder(scr, sc2, 1, w, scr.rows() - 2);
