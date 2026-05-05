@@ -20,8 +20,8 @@ static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
 static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
 static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
-static constexpr Color COL_BLACK   = BLACK;
 
+static constexpr Color COL_BLACK   = BLACK;
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const char* Renderer::className(const Player& p) {
@@ -253,7 +253,7 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
         for (unsigned char c : line)
             if ((c & 0xC0) != 0x80) cols++;
         int x = cx - cols / 2;
-        scr.putStr(x, ty++, line, COL_YELLOW, COL_BLACK, CELL_BOLD);
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
     }
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
@@ -281,12 +281,21 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
 
 void Renderer::drawCredits(TerminalScreen& scr) {
-    int cy = scr.rows() / 2;
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    std::ifstream f(assetsDir() + "title.txt");
+    std::string line;
+    int ty = cy - 8;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = cx - cols / 2;
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
+    }
+    ty++;
+    drawCentered(scr, ty++, 0, scr.cols(), "~ Creditos ~", COL_WHITE);
 
-    drawCentered(scr, cy - 8, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 6, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
-
-    int y = cy - 4;
+    int y = ty + 1;
     drawCentered(scr, y++, 0, scr.cols(), "Halley & Nato Co.", COL_WHITE);
     y++;
     drawCentered(scr, y,   0, scr.cols(), "ESC para volver", COL_GRAY, CELL_DIM);
@@ -295,13 +304,26 @@ void Renderer::drawCredits(TerminalScreen& scr) {
 // ─── drawNameInput ────────────────────────────────────────────────────────────
 
 void Renderer::drawNameInput(TerminalScreen& scr, const std::string& name, bool blink) {
-    int cy = scr.rows() / 2;
-    drawCentered(scr, cy - 4, 0, scr.cols(), "T E N E B R A R I U M",
-                 COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 2, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    std::ifstream f(assetsDir() + "title.txt");
+    std::string line;
+    int ty = cy - 8;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = cx - cols / 2;
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
+    }
+    ty++;
+    scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
+    ty++;
+    drawCentered(scr, ty, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
+    ty++;
     std::string display = "> " + name + (blink ? "_" : " ");
-    drawCentered(scr, cy, 0, scr.cols(), display, COL_YELLOW);
-    drawCentered(scr, cy + 2, 0, scr.cols(),
+    drawCentered(scr, ty, 0, scr.cols(), display, COL_YELLOW);
+    ty += 2;
+    drawCentered(scr, ty, 0, scr.cols(),
                  "ENTER para continuar  |  ESC para volver",
                  COL_GRAY, CELL_DIM);
 }
