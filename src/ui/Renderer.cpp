@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 #include <fstream>
-#include <sstream>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -21,8 +20,8 @@ static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
 static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
 static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
-static constexpr Color COL_BLACK   = BLACK;
 
+static constexpr Color COL_BLACK   = BLACK;
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const char* Renderer::className(const Player& p) {
@@ -94,11 +93,6 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
 
 // ─── drawMap ─────────────────────────────────────────────────────────────────
 
-// drawMap — renderiza el mapa centrado en el jugador con FOV y gradiente de brillo.
-// Cámara: el jugador queda siempre en el centro de la vista (camX, camY son el offset).
-// FOV: las celdas visibles se muestran con brillo según distancia al jugador (0.45–1.0).
-// Las celdas exploradas pero no visibles se muestran en gris oscuro (COL_DARK).
-// Las paredes secretas no exploradas/visibles se omiten para no revelarlas.
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities) {
@@ -111,7 +105,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                  (uint8_t)(c.b * f), c.a };
     };
 
-    static constexpr float FOV_RADIUS = 8.0f;  // radio del FOV en celdas
+    static constexpr float FOV_RADIUS = 8.0f;
 
     for (int sy = 0; sy < viewH; sy++) {
         for (int sx = 0; sx < viewW; sx++) {
@@ -161,7 +155,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 // ─── drawPortrait ─────────────────────────────────────────────────────────────
 
 void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
-                             const char* filename, float scale) {
+                              const char* filename, float scale) {
     if (!filename) {
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
@@ -206,44 +200,45 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         player.getEquippedArmor() ? COL_GREEN : COL_GRAY,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, 20);
-    put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
-    put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
-    int fl = player.getDungeonFloor();
+     put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
+     put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
+     put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
+     int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, 20);
-    put("WASD  mover",    COL_GRAY, CELL_DIM);
-    put("  P   pocion",   COL_GRAY, CELL_DIM);
-    put("  I   mochila",  COL_GRAY, CELL_DIM);
-    put("  M   misiones", COL_GRAY, CELL_DIM);
-    put("  Q   salir",    COL_GRAY, CELL_DIM);
-    put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
+     put("WASD  mover",    COL_GRAY, CELL_DIM);
+     put("  E   bomba",    COL_GRAY, CELL_DIM);
+     put("  P   pocion",   COL_GRAY, CELL_DIM);
+     put("  I   mochila",  COL_GRAY, CELL_DIM);
+     put("  M   misiones", COL_GRAY, CELL_DIM);
+     put("  Q   salir",    COL_GRAY, CELL_DIM);
+     put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
+// HUD inferior: línea 1 = jugador/hp/mp, línea 2 = stats/bombas/controles
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
-    drawHSep(scr, 0, row, scr.cols());
+    drawHSep(scr, 0, row, scr.cols());  // Línea separadora
     int c = 1;
     auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
         c += scr.putStr(c, row + 1, s, col, COL_BLACK, f);
     };
-    a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
-    a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
-    a("  HP:", COL_GREEN, CELL_BOLD);
-    a(std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
-    a("  MP:", COL_CYAN, CELL_BOLD);
-    a(std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
+     a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
+     a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
+     a(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
+     a(" MP:" + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
 
-    c = 1;
-    auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
-    };
-    b("ATK:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
-    b(" DEF:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
-    b("  $" + std::to_string(player.getCoins()), COL_YELLOW);
-    b("  +" + std::to_string(player.countConsumables()), COL_GREEN);
-    b("  WASD:mover  P:pocion  I:mochila  M:misiones  Q:salir"
-      "  +/-:zoom(" + std::to_string(mapZoom) + "x)", COL_GRAY, CELL_DIM);
+     c = 1;
+     auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
+         c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
+     };
+     b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
+     b(" Df:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
+     b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
+     b(" +" + std::to_string(player.countConsumables()), COL_GREEN);       // Pociones
+     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE); // Bombas
+     b(" W:E P:I M:Q Z:" + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM); // Controles
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -258,7 +253,7 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
         for (unsigned char c : line)
             if ((c & 0xC0) != 0x80) cols++;
         int x = cx - cols / 2;
-        scr.putStr(x, ty++, line, COL_YELLOW, COL_BLACK, CELL_BOLD);
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
     }
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
@@ -286,12 +281,21 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
 
 void Renderer::drawCredits(TerminalScreen& scr) {
-    int cy = scr.rows() / 2;
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    std::ifstream f(assetsDir() + "title.txt");
+    std::string line;
+    int ty = cy - 8;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = cx - cols / 2;
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
+    }
+    ty++;
+    drawCentered(scr, ty++, 0, scr.cols(), "~ Creditos ~", COL_WHITE);
 
-    drawCentered(scr, cy - 8, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 6, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
-
-    int y = cy - 4;
+    int y = ty + 1;
     drawCentered(scr, y++, 0, scr.cols(), "Halley & Nato Co.", COL_WHITE);
     y++;
     drawCentered(scr, y,   0, scr.cols(), "ESC para volver", COL_GRAY, CELL_DIM);
@@ -300,13 +304,26 @@ void Renderer::drawCredits(TerminalScreen& scr) {
 // ─── drawNameInput ────────────────────────────────────────────────────────────
 
 void Renderer::drawNameInput(TerminalScreen& scr, const std::string& name, bool blink) {
-    int cy = scr.rows() / 2;
-    drawCentered(scr, cy - 4, 0, scr.cols(), "T E N E B R A R I U M",
-                 COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 2, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    std::ifstream f(assetsDir() + "title.txt");
+    std::string line;
+    int ty = cy - 8;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = cx - cols / 2;
+        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
+    }
+    ty++;
+    scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
+    ty++;
+    drawCentered(scr, ty, 0, scr.cols(), "Ingresa el nombre de tu personaje:", COL_WHITE);
+    ty++;
     std::string display = "> " + name + (blink ? "_" : " ");
-    drawCentered(scr, cy, 0, scr.cols(), display, COL_YELLOW);
-    drawCentered(scr, cy + 2, 0, scr.cols(),
+    drawCentered(scr, ty, 0, scr.cols(), display, COL_YELLOW);
+    ty += 2;
+    drawCentered(scr, ty, 0, scr.cols(),
                  "ENTER para continuar  |  ESC para volver",
                  COL_GRAY, CELL_DIM);
 }
@@ -317,22 +334,16 @@ struct ClassInfo {
     const char* name;
     const char* role;
     const char* desc;
-    const char* lore;
     const char* portrait;
     int hp, atk, def, mana;
 };
-// Para añadir una clase: agregar entrada aquí y crear el archivo .xp en assets/art/.
-// portraitPath == nullptr muestra "[sin retrato]" como placeholder.
 static constexpr ClassInfo kClasses[3] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
-     "Absorbe golpes y contraataca sin piedad. Usa Escudo Total para sobrevivir situaciones comprometidas y Grito de Guerra justo antes de los jefes.",
      "warrior.xp", 120,15,8,20},
     {"MAGO","Arcano","Domina las artes magicas. Poder devastador.",
-     "Sus hechizos escalan con el mana disponible: cuanto mas MP conserves, mas destruye la Bola de Fuego. Vulnerable en combate directo; el posicionamiento y el control son su supervivencia.",
-     "mago.xp", 100,10,3,100},
+     "mago.xp", 70,8,3,100},
     {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
-     "Especialista en debilitar enemigos antes de que actuen. Veneno y Trampa generan presion sostenida sin gastar recursos. Ideal para jugadores que prefieren pensar antes de golpear.",
-     nullptr, 90,12,5,50},
+     "ranger.xp", 90,12,5,50},
 };
 
 void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
@@ -377,34 +388,15 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
     }
 
     // Centrar el retrato escalado en el espacio entre la lista y el borde derecho
-    static constexpr float kPortScale = 0.95f;
+    static constexpr float kPortScale = 1.0f;
     static constexpr int kSrcSize = 60;
-    int portW = static_cast<int>(kSrcSize * kPortScale);
-    int portH = static_cast<int>(kSrcSize * kPortScale / 2);  // half-block divide alto entre 2
+    int portW = kSrcSize;
+    int portH = kSrcSize / 2;  // half-block divide alto entre 2
     int spaceStart = listCol + boxW + 2;
     int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
     if (portCol < spaceStart) portCol = spaceStart;
     drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
     drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
-
-    // Lore de la clase seleccionada debajo del retrato
-    int loreY = 4 + portH + 2 + 1;
-    int loreW = portW + 2;
-    std::string lore = kClasses[selection].lore;
-    // Word-wrap manual: partir en líneas de loreW caracteres sin cortar palabras
-    int loreX = portCol - 1;
-    std::istringstream ss(lore);
-    std::string word, line;
-    while (ss >> word) {
-        if (!line.empty() && static_cast<int>(line.size() + 1 + word.size()) > loreW) {
-            scr.putStr(loreX, loreY++, line, COL_GRAY, COL_BLACK, CELL_DIM);
-            line.clear();
-        }
-        if (!line.empty()) line += ' ';
-        line += word;
-    }
-    if (!line.empty())
-        scr.putStr(loreX, loreY, line, COL_GRAY, COL_BLACK, CELL_DIM);
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  "Arriba/Abajo navegar  |  ENTER confirmar  |  ESC volver",
@@ -499,7 +491,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     } else {
         int hudH = 3;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 0, 0, scr.cols(), mapH, map, entities);
+        drawMap(scr, 0,0, scr.cols(), mapH, map, entities);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),
@@ -638,149 +630,70 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
 // ─── drawInventory ────────────────────────────────────────────────────────────
 
-void Renderer::drawInventory(TerminalScreen& scr, const Player& player,
-                              int selection, int tab, const std::string& msg) {
-    const int w   = std::min(scr.cols() - 4, 64);
-    const int x0  = (scr.cols() - w) / 2;
-    const int y0  = 1;
-    const int h   = scr.rows() - 2;
-    drawBorder(scr, x0, y0, w, h);
+void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
+    int cx = scr.cols() / 2;
+    int w  = 60, sc2 = cx - w / 2, r = 2;
+    drawBorder(scr, sc2, 1, w, scr.rows() - 2);
+    scr.putStr(sc2 + 2, r++, "=== EQUIPO ===", COL_CYAN, COL_BLACK, CELL_BOLD);
 
-    // ── Pestañas ──────────────────────────────────────────────────────────────
-    const char* tabs[2] = { " POCIONES ", " EQUIPO " };
-    int tx = x0 + 2;
-    for (int t = 0; t < 2; t++) {
-        bool active = (t == tab);
-        scr.putStr(tx, y0, tabs[t],
-                   active ? COL_YELLOW : COL_GRAY,
-                   COL_BLACK,
-                   active ? CELL_BOLD | CELL_INVERTED : CELL_DIM);
-        tx += static_cast<int>(std::string(tabs[t]).size()) + 1;
-    }
-    scr.putStr(tx, y0, " ←/→ cambiar ", COL_GRAY, COL_BLACK, CELL_DIM);
-
-    // Vista filtrada+ordenada por statBonus desc
-    const auto& allItems = player.getInventory().items();
-    std::vector<int> idx;
-    for (int i = 0; i < static_cast<int>(allItems.size()); i++) {
-        bool isConsumable = (allItems[i].type == ItemType::Consumable);
-        if (tab == 0 ? isConsumable : !isConsumable)
-            idx.push_back(i);
-    }
-    std::sort(idx.begin(), idx.end(), [&](int a, int b) {
-        return allItems[a].statBonus > allItems[b].statBonus;
-    });
-
-    int r = y0 + 2;
-    const int contentBottom = y0 + h - 4;  // reservar 3 filas para descripción + controles
-
-    if (tab == 0) {
-        // ── Pestaña Pociones ──────────────────────────────────────────────────
-        // Barra de HP
-        int hp = player.getHp(), maxHp = player.getMaxHp();
-        bool full = (hp >= maxHp);
-        Color hpCol = full ? COL_GREEN : hpColor(hp, maxHp);
-        std::string hpLabel = "HP " + std::to_string(hp) + "/" + std::to_string(maxHp);
-        if (full) hpLabel += "  *** LLENO ***";
-        scr.putStr(x0 + 2, r, hpLabel, hpCol, COL_BLACK, full ? CELL_BOLD : 0);
-        r++;
-        drawStatBar(scr, x0 + 2, r++, hp, maxHp, w - 4, hpCol);
-        drawHSep(scr, x0 + 1, r++, w - 2);
-
-        if (idx.empty()) {
-            scr.putStr(x0 + 2, r, "(sin pociones)", COL_GRAY, COL_BLACK, CELL_DIM);
+    auto makeSlot = [&](int row, int sel, const char* label,
+                        const std::optional<Item>& slot) {
+        std::string line;
+        Color c = COL_GRAY;
+        uint8_t f = CELL_DIM;
+        if (slot) {
+            std::string tag = (slot->type == ItemType::Weapon) ? "[ARMA]   " : "[ARMADURA]";
+            line = tag + " " + slot->name + "  +" + std::to_string(slot->statBonus)
+                 + (slot->type == ItemType::Weapon ? " ATK" : " DEF");
+            c = (slot->type == ItemType::Weapon) ? COL_YELLOW : COL_GREEN;
+            f = 0;
         } else {
-            for (int i = 0; i < static_cast<int>(idx.size()) && r < contentBottom; i++) {
-                const auto& item = allItems[idx[i]];
-                bool sel = (selection == i);
-                std::string line = "[POCION]  " + item.name + "  +" + std::to_string(item.statBonus) + " HP";
-                scr.putStr(x0 + 2, r++, line,
-                           sel ? COL_WHITE : COL_CYAN,
-                           COL_BLACK,
-                           sel ? CELL_INVERTED : 0);
-            }
+            line = std::string(label) + "  (vacio)";
         }
+        if (selection == sel) f |= CELL_INVERTED;
+        scr.putStr(sc2 + 2, row, line, c, COL_BLACK, f);
+    };
+    makeSlot(r++, 0, "Arma    ", player.getEquippedWeapon());
+    makeSlot(r++, 1, "Armadura", player.getEquippedArmor());
+    drawHSep(scr, sc2 + 1, r++, w - 2);
+
+    scr.putStr(sc2 + 2, r++, "=== MOCHILA ===", COL_CYAN, COL_BLACK, CELL_BOLD);
+    const auto& items = player.getInventory().items();
+    if (items.empty()) {
+        scr.putStr(sc2 + 2, r++, "(vacia)", COL_GRAY, COL_BLACK, CELL_DIM);
     } else {
-        // ── Pestaña Equipo ────────────────────────────────────────────────────
-        // Slots equipados
-        auto drawSlot = [&](int sel, const char* label, const std::optional<Item>& slot, bool isWeapon) {
-            bool active = (selection == sel);
-            std::string line;
-            Color c;
-            if (slot) {
-                line = std::string(label) + ": " + slot->name +
-                       "  +" + std::to_string(slot->statBonus) +
-                       (isWeapon ? " ATK" : " DEF") + "  [E=desequipar]";
-                c = isWeapon ? COL_YELLOW : COL_GREEN;
-            } else {
-                line = std::string(label) + ": (vacio)";
-                c = COL_GRAY;
+        for (int i = 0; i < static_cast<int>(items.size()); i++) {
+            const auto& item = items[i];
+            std::string tag; Color ic = COL_WHITE;
+            switch (item.type) {
+                case ItemType::Weapon:     tag = "[ARMA]   "; ic = COL_YELLOW; break;
+                case ItemType::Armor:      tag = "[ARMADURA]"; ic = COL_GREEN; break;
+                case ItemType::Consumable: tag = "[POCION] "; ic = COL_CYAN;  break;
+                case ItemType::Bomb:       tag = "[BOMBA]  "; ic = COL_ORANGE; break;
+                default:                  tag = "[MISC]   "; break;
             }
-            scr.putStr(x0 + 2, r, line, c, COL_BLACK,
-                       active ? CELL_INVERTED : (slot ? 0 : CELL_DIM));
-        };
-        drawSlot(0, "Arma    ", player.getEquippedWeapon(), true);  r++;
-        drawSlot(1, "Armadura", player.getEquippedArmor(),  false); r++;
-        drawHSep(scr, x0 + 1, r++, w - 2);
-
-        if (idx.empty()) {
-            scr.putStr(x0 + 2, r, "(mochila vacia)", COL_GRAY, COL_BLACK, CELL_DIM);
-        } else {
-            for (int i = 0; i < static_cast<int>(idx.size()) && r < contentBottom; i++) {
-                const auto& item = allItems[idx[i]];
-                bool sel = (selection == 2 + i);
-                bool isWeapon = (item.type == ItemType::Weapon);
-                std::string tag  = isWeapon ? "[ARMA]    " : "[ARMADURA]";
-                std::string stat = isWeapon ? " ATK" : " DEF";
-                std::string line = tag + " " + item.name + "  +" + std::to_string(item.statBonus) + stat;
-
-                // Diferencia vs equipado
-                const auto& equipped = isWeapon ? player.getEquippedWeapon() : player.getEquippedArmor();
-                std::string diffStr;
-                Color diffCol = COL_WHITE;
-                if (equipped) {
-                    int d = item.statBonus - equipped->statBonus;
-                    if (d > 0)      { diffStr = "  ↑+" + std::to_string(d); diffCol = COL_GREEN;  }
-                    else if (d < 0) { diffStr = "  ↓"  + std::to_string(d); diffCol = COL_RED;    }
-                    else            { diffStr = "  =";                       diffCol = COL_GRAY;   }
-                }
-
-                Color baseCol = isWeapon ? COL_YELLOW : COL_GREEN;
-                scr.putStr(x0 + 2, r, line, sel ? COL_WHITE : baseCol, COL_BLACK,
-                           sel ? CELL_INVERTED : 0);
-                if (!diffStr.empty())
-                    scr.putStr(x0 + 2 + static_cast<int>(line.size()), r, diffStr,
-                               diffCol, COL_BLACK, sel ? CELL_INVERTED : 0);
-                r++;
-            }
+            std::string line = tag + " " + item.name;
+            if (item.quantity > 1)
+                line += " x" + std::to_string(item.quantity);
+            if (item.type != ItemType::Consumable && item.type != ItemType::Bomb)
+                line += "  +" + std::to_string(item.statBonus)
+                      + (item.type == ItemType::Weapon ? " ATK" : " DEF");
+            else if (item.type == ItemType::Consumable)
+                line += "  +" + std::to_string(item.statBonus) + " HP";
+            uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
+            scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
         }
     }
-
-    // ── Panel inferior: descripción + mensaje + controles ─────────────────────
-    drawHSep(scr, x0 + 1, contentBottom, w - 2);
-
-    // Descripción del ítem seleccionado
-    std::string desc;
-    if (tab == 0 && !idx.empty() && selection < static_cast<int>(idx.size())) {
-        desc = allItems[idx[selection]].description;
-    } else if (tab == 1) {
-        if (selection == 0 && player.getEquippedWeapon())
-            desc = player.getEquippedWeapon()->description;
-        else if (selection == 1 && player.getEquippedArmor())
-            desc = player.getEquippedArmor()->description;
-        else if (selection >= 2 && (selection - 2) < static_cast<int>(idx.size()))
-            desc = allItems[idx[selection - 2]].description;
-    }
-
-    if (!msg.empty())
-        scr.putStr(x0 + 2, contentBottom + 1, msg, COL_YELLOW, COL_BLACK, CELL_BOLD);
-    else if (!desc.empty())
-        scr.putStr(x0 + 2, contentBottom + 1, desc.substr(0, w - 4), COL_GRAY, COL_BLACK, CELL_DIM);
-
-    const char* hint = (tab == 0)
-        ? "[↑↓] Nav  [E/U] Usar  [ESC] Cerrar"
-        : "[↑↓] Nav  [E] Equipar/Desequipar  [ESC] Cerrar";
-    scr.putStr(x0 + 2, contentBottom + 2, hint, COL_GRAY, COL_BLACK, CELL_DIM);
+    drawHSep(scr, sc2 + 1, r++, w - 2);
+    scr.putStr(sc2 + 2, r++,
+        "ATK:" + std::to_string(player.getAttack()) +
+        "  DEF:" + std::to_string(player.getDefense()) +
+        "  $" + std::to_string(player.getCoins()) +
+        "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
+        "/" + std::to_string(player.getInventory().totalSlots()), COL_GREEN);
+    scr.putStr(sc2 + 2, r,
+               "[Arriba/Abajo] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar",
+               COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
 // ─── drawQuestLog ─────────────────────────────────────────────────────────────
@@ -879,20 +792,25 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
 
 void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
     int cy = scr.rows() / 2;
-    if (victory) {
-        drawCentered(scr, cy - 5, 0, scr.cols(), "* * * V I C T O R I A * * *",
-                     COL_YELLOW, CELL_BOLD);
-        drawCentered(scr, cy - 3, 0, scr.cols(), "Has conquistado la mazmorra.",
-                     COL_WHITE, CELL_BOLD);
-        drawCentered(scr, cy - 2, 0, scr.cols(), "Gracias por jugar Tenebrarium.",
-                     COL_CYAN, 0);
-        drawCentered(scr, cy,     0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
-        drawCentered(scr, cy + 1, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
-    } else {
-        drawCentered(scr, cy - 1, 0, scr.cols(), "G A M E   O V E R",
-                     COL_RED, CELL_BOLD);
+    const char* filename = victory ? "victoryTitle.txt" : "gameOverTitle.txt";
+    std::ifstream f(assetsDir() + filename);
+    std::string line;
+    int ty = cy - 8;
+    Color color = victory ? COL_YELLOW : COL_RED;
+    while (std::getline(f, line)) {
+        int cols = 0;
+        for (unsigned char c : line)
+            if ((c & 0xC0) != 0x80) cols++;
+        int x = scr.cols() / 2 - cols / 2;
+        scr.putStr(x, ty++, line, color, COL_BLACK, CELL_BOLD);
     }
-    drawCentered(scr, cy + 3, 0, scr.cols(), "ENTER para volver al menu",
+    if (victory) {
+        drawCentered(scr, ty + 1, 0, scr.cols(), "Gracias por jugar Tenebrarium.", COL_CYAN, 0);
+        drawCentered(scr, ty + 2, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
+        drawCentered(scr, ty + 3, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
+    }
+    drawCentered(scr, scr.rows() - 3, 0, scr.cols(),
+                 "ENTER para volver al menu",
                  COL_GRAY, CELL_DIM);
 }
 

@@ -131,7 +131,7 @@ int Player::useConsumable() {
 int Player::countConsumables() const {
     int count = 0;
     for (const auto& item : inventory_.items())
-        if (item.type == ItemType::Consumable) count++;
+        if (item.type == ItemType::Consumable) count += item.quantity;
     return count;
 }
 

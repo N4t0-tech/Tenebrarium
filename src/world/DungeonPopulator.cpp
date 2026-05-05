@@ -104,29 +104,29 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
 Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 {
     static const std::vector<Item> warrior = {
-        {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3},
-        {"Estoque",        "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3},
-        {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5},
-        {"Espada",         "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5},
-        {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8},
-        {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7},
+        {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3, 1},
+        {"Estoque",        "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5, 1},
+        {"Espada",         "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5, 1},
+        {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8, 1},
+        {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7, 1},
     };
     static const std::vector<Item> mage = {
-        {"Varita de Roble",   "Canaliza magia.",           ItemType::Weapon, 30, 1, 2},
-        {"Varita de Sauco",   "Madera antigua y potente.", ItemType::Weapon, 30, 1, 2},
-        {"Baculo de Cristal", "Poder arcano.",             ItemType::Weapon, 50, 1, 4},
-        {"Baculo de Rayos",   "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4},
-        {"Grimorio Oscuro",   "Magia devastadora.",        ItemType::Weapon, 80, 2, 6},
-        {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7},
+        {"Varita de Roble",   "Canaliza magia.",           ItemType::Weapon, 30, 1, 2, 1},
+        {"Varita de Sauco",   "Madera antigua y potente.", ItemType::Weapon, 30, 1, 2, 1},
+        {"Baculo de Cristal", "Poder arcano.",             ItemType::Weapon, 50, 1, 4, 1},
+        {"Baculo de Rayos",   "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4, 1},
+        {"Grimorio Oscuro",   "Magia devastadora.",        ItemType::Weapon, 80, 2, 6, 1},
+        {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7, 1},
     };
     static const std::vector<Item> ranger = {
-        {"Arco Corto",     "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3},
-        {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2},
-        {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5},
-        {"Arco Elfico",    "Tallado en madera elfica.", ItemType::Weapon, 50, 1, 5},
-        {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7},
-        {"Arco Encantado", "Flechas magicas.",          ItemType::Weapon, 80, 2, 7},
-        {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8},
+        {"Arco Corto",     "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2, 1},
+        {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5, 1},
+        {"Arco Elfico",    "Tallado en madera elfica.", ItemType::Weapon, 50, 1, 5, 1},
+        {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7, 1},
+        {"Arco Encantado", "Flechas magicas.",          ItemType::Weapon, 80, 2, 7, 1},
+        {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
     };
     const auto& pool = (cls == PlayerClass::Warrior) ? warrior
                      : (cls == PlayerClass::Mage)    ? mage
@@ -139,12 +139,12 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 {
     static const Item a[3][2] = {
-        {{"Cota de Malla",      "Proteccion media.",   ItemType::Armor, 40, 1, 3},
-         {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6}},
-        {{"Tunica Arcana",      "Ligera y magica.",    ItemType::Armor, 30, 1, 1},
-         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3}},
-        {{"Cuero Reforzado",    "Agil y resistente.",  ItemType::Armor, 35, 1, 2},
-         {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4}},
+        {{"Cota de Malla",      "Proteccion media.",   ItemType::Armor, 40, 1, 3, 1},
+         {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
+        {{"Tunica Arcana",      "Ligera y magica.",    ItemType::Armor, 30, 1, 1, 1},
+         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3, 1}},
+        {{"Cuero Reforzado",    "Agil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
+         {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
     Item item = a[ci][std::rand() % 2];
@@ -155,10 +155,16 @@ Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 Item DungeonPopulator::pickPotion(int floor)
 {
     if (floor >= 5 || std::rand() % 3 == 0)
-        return {"Pocion Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80};
+        return {"Pocion Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80, 1};
     if (floor >= 3 || std::rand() % 2 == 0)
-        return {"Pocion de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40};
-    return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20};
+        return {"Pocion de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40, 1};
+    return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20, 1};
+}
+
+Item DungeonPopulator::pickBomb(int floor)
+{
+    int price = 20 + floor * 3;
+    return {"Bomba", "Destruye paredes secretas.", ItemType::Bomb, price, 1, 0, 1};
 }
 
 // ─── Position helper ──────────────────────────────────────────────────────────

@@ -53,10 +53,10 @@ void GameSerializer::witem(std::ostream& o, const Item& item)
     wstr(o, item.name);
     wstr(o, item.description);
     o << static_cast<int>(item.type) << ' ' << item.value << ' '
-      << item.slots << ' ' << item.statBonus << '\n';
+      << item.slots << ' ' << item.statBonus << ' ' << item.quantity << '\n';
 }
 
-bool GameSerializer::ritem(std::istream& in, Item& item)
+bool GameSerializer::ritem(std::istream& in, Item& item, int version)
 {
     if (!rstr(in, item.name) || !rstr(in, item.description))
         return false;
@@ -64,6 +64,12 @@ bool GameSerializer::ritem(std::istream& in, Item& item)
     if (!(in >> t >> item.value >> item.slots >> item.statBonus))
         return false;
     item.type = static_cast<ItemType>(t);
+    if (version >= 2) {
+        if (!(in >> item.quantity))
+            return false;
+    } else {
+        item.quantity = 1; // Default for version 1
+    }
     return true;
 }
 
@@ -89,7 +95,7 @@ void GameSerializer::save(Game& g)
     if (!f || !g.player_ || !g.map_)
         return;
 
-    f << 1 << '\n'; // version
+    f << 2 << '\n'; // version 2 includes item.quantity
 
     // Player
     wstr(f, g.player_->name_);
@@ -191,7 +197,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version != 1)
+    if (!(f >> version) || (version != 1 && version != 2))
         return false;
 
     // Player
@@ -226,7 +232,7 @@ bool GameSerializer::load(Game& g)
     if (!(f >> hasWeapon)) return false;
     if (hasWeapon) {
         Item w;
-        if (!ritem(f, w)) return false;
+        if (!ritem(f, w, version)) return false;
         g.player_->equippedWeapon_ = w;
     }
 
@@ -234,7 +240,7 @@ bool GameSerializer::load(Game& g)
     if (!(f >> hasArmor)) return false;
     if (hasArmor) {
         Item a;
-        if (!ritem(f, a)) return false;
+        if (!ritem(f, a, version)) return false;
         g.player_->equippedArmor_ = a;
     }
 
@@ -242,7 +248,7 @@ bool GameSerializer::load(Game& g)
     if (!(f >> invCount)) return false;
     for (size_t i = 0; i < invCount; i++) {
         Item item;
-        if (!ritem(f, item)) return false;
+        if (!ritem(f, item, version)) return false;
         g.player_->getInventory().addItem(item);
     }
 
@@ -288,7 +294,7 @@ bool GameSerializer::load(Game& g)
             return false;
         ch.opened = opened;
         ch.loot   = static_cast<ChestLoot>(loot);
-        if (!ritem(f, ch.item)) return false;
+        if (!ritem(f, ch.item, version)) return false;
     }
 
     // Locked door
@@ -322,7 +328,7 @@ bool GameSerializer::load(Game& g)
         int sold;
         if (!(f >> sold >> s.price)) return false;
         s.sold = sold;
-        if (!ritem(f, s.item)) return false;
+        if (!ritem(f, s.item, version)) return false;
     }
 
     // Quests

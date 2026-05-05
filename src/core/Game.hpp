@@ -94,6 +94,14 @@ private:
     int  mapZoom_{1};   // 1–3; escala la celda del mapa overlay
     bool victory_{false};
 
+    // Message display timing
+    double                explorationMsgEndTime_{0.0};
+
+    // Bomb explosion effect
+    bool                  explosionActive_{false};
+    double                explosionEndTime_{0.0};
+    int                   explosionX_{0}, explosionY_{0};
+
     void saveGame();
     bool loadGame();
     bool hasSave() const;
@@ -127,6 +135,7 @@ private:
     void inputQuestLog(int key);
     void generateShopStock();
     bool isInShopRoom(Position p) const;
+    void useBomb();
 
     void initQuests();
     void checkQuestProgress();

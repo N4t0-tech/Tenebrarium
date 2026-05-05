@@ -25,3 +25,6 @@ XpFile loadXp(const std::string& path);
 
 // Vuelca una capa XP en el TerminalScreen en (col, row) con half-block (▀)
 void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);
+
+// Vuelca una capa XP usando los glyphs CP437 reales (conserva texturas/detalles)
+void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);

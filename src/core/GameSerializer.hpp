@@ -25,5 +25,5 @@ private:
     static void wstr(std::ostream& o, const std::string& s);
     static bool rstr(std::istream& in, std::string& s);
     static void witem(std::ostream& o, const Item& item);
-    static bool ritem(std::istream& in, Item& item);
+    static bool ritem(std::istream& in, Item& item, int version);
 };
