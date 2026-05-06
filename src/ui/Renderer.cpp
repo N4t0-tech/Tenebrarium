@@ -506,6 +506,67 @@ static Color hpColor(int hp, int maxHp) {
     return COL_RED;
 }
 
+// ─── log message coloring ────────────────────────────────────────────────────
+
+static Color logColor(const std::string& msg) {
+    // Victoria / derrota
+    if (msg.find("Victoria") != std::string::npos ||
+        msg.find("Victory") != std::string::npos ||
+        msg.find("derrotado") != std::string::npos ||
+        msg.find("derrotada") != std::string::npos)
+        return COL_GREEN;
+    // Daño crítico
+    if (msg.find("CRITICO") != std::string::npos)
+        return COL_ORANGE;
+    // Daño recibido / veneno / trampa
+    if (msg.find("daño") != std::string::npos ||
+        msg.find("veneno") != std::string::npos ||
+        msg.find("Trampa") != std::string::npos ||
+        msg.find("envenena") != std::string::npos ||
+        msg.find("drena") != std::string::npos)
+        return COL_RED;
+    // Curación / pocion / regeneración
+    if (msg.find("recupera") != std::string::npos ||
+        msg.find("pocion") != std::string::npos ||
+        msg.find("cura") != std::string::npos ||
+        (msg.find("HP") != std::string::npos && msg.find("recupera") != std::string::npos))
+        return COL_GREEN;
+    // Mana / habilidades
+    if (msg.find("Mana") != std::string::npos ||
+        msg.find("habilidad") != std::string::npos ||
+        msg.find("usa") != std::string::npos ||
+        msg.find("Habilidades") != std::string::npos)
+        return COL_CYAN;
+    // Defensa / escudo
+    if (msg.find("defens") != std::string::npos ||
+        msg.find("Escudo") != std::string::npos ||
+        msg.find("Defendiendo") != std::string::npos)
+        return COL_CYAN;
+    // Fracasos / errores
+    if (msg.find("insuficiente") != std::string::npos ||
+        msg.find("falla") != std::string::npos ||
+        msg.find("No hay") != std::string::npos)
+        return COL_GRAY;
+    // Fase de turno
+    if (msg.find("===") != std::string::npos ||
+        msg.find("PA disponibles") != std::string::npos)
+        return COL_YELLOW;
+    // Turno enemigo
+    if (msg.find("Turno enemigo") != std::string::npos ||
+        msg.find("enemigo ---") != std::string::npos)
+        return COL_DK_GRAY;
+    // Huye
+    if (msg.find("huye") != std::string::npos ||
+        msg.find("huir") != std::string::npos)
+        return COL_GRAY;
+    // Congelado / efectos de estado
+    if (msg.find("congelado") != std::string::npos ||
+        msg.find("ATK+") != std::string::npos ||
+        msg.find("Boost") != std::string::npos)
+        return COL_YELLOW;
+    return COL_WHITE;
+}
+
 // ─── drawCombat ──────────────────────────────────────────────────────────────
 
 void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
@@ -557,7 +618,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     const auto& log = combat.getLog();
     int logStart = std::max(0, static_cast<int>(log.size()) - (rows - 12));
     for (int i = logStart; i < static_cast<int>(log.size()); i++)
-        scr.putStr(halfW + 2, lr++, log[i], COL_WHITE);
+        scr.putStr(halfW + 2, lr++, log[i], logColor(log[i]));
 
     // Barra jugador
     int br = rows - 7;
@@ -589,15 +650,13 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     drawHSep(scr, 0, br++, cols);
 
     if (!showingArts) {
-        scr.putStr(1,        br,   "[A] Atacar  1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 2, br++, "[H] Habilidad", COL_WHITE);
-        scr.putStr(1,        br,   "[F] At.Fuerte 2PA", ap >= 2 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 2, br++, "[D] Defender  1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(1,        br,   "[1] Atacar      1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(cols / 2, br++, "[2] At.Fuerte  2PA 8MP", ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
+        scr.putStr(1,        br,   "[3] Habilidades", COL_WHITE);
+        scr.putStr(cols / 2, br++, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(1,        br,   "[5] Pocion (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
+        scr.putStr(cols / 2, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,        br,   "[SPACE] Fin turno", COL_WHITE);
-        scr.putStr(cols / 2, br++, "[R] Huir  3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
-        int pots = player.countConsumables();
-        std::string uLabel = "[U] Usar pocion (" + std::to_string(pots) + ")";
-        scr.putStr(1,        br,   uLabel, pots > 0 ? COL_CYAN : COL_GRAY);
         scr.putStr(cols / 2, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
         if (combat.getPhase() == CombatPhase::EnemyTurn)
             drawCentered(scr, br + 1, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);

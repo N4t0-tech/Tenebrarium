@@ -509,6 +509,20 @@ void Game::processInput()
         {258, '\t'},           // KEY_TAB
         {259, GKEY_BACKSPACE}, // KEY_BACKSPACE
         {32, ' '},             // KEY_SPACE
+        // Numeros 1-6 (fila superior)
+        {49, '1'},             // KEY_ONE
+        {50, '2'},             // KEY_TWO
+        {51, '3'},             // KEY_THREE
+        {52, '4'},             // KEY_FOUR
+        {53, '5'},             // KEY_FIVE
+        {54, '6'},             // KEY_SIX
+        // Numpad 1-6
+        {320, '1'},            // KEY_KP_1
+        {321, '2'},            // KEY_KP_2
+        {322, '3'},            // KEY_KP_3
+        {323, '4'},            // KEY_KP_4
+        {324, '5'},            // KEY_KP_5
+        {325, '6'},            // KEY_KP_6
     };
     // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
     if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
@@ -1500,37 +1514,31 @@ void Game::inputCombat(int key)
     // Main action menu
     switch (key)
     {
-    case 'a':
-    case 'A':
+    case '1':
         combat_->doAttack();
         combatFlashIdx_ = combat_->getCurrentTarget();
         combatFlashEndTime_ = GetTime() + 0.25;
         break;
-    case 'f':
-    case 'F':
+    case '2':
         combat_->doHeavyAttack();
         combatFlashIdx_ = combat_->getCurrentTarget();
         combatFlashEndTime_ = GetTime() + 0.25;
         break;
-    case 'h':
-    case 'H':
+    case '3':
         combatShowingArts_ = true;
         combatArtSelection_ = 0;
         break;
-    case 'd':
-    case 'D':
+    case '4':
         combat_->doDefend();
+        break;
+    case '5':
+        combat_->doUseItem();
+        break;
+    case '6':
+        combat_->doFlee();
         break;
     case ' ':
         combat_->doEndTurn();
-        break;
-    case 'r':
-    case 'R':
-        combat_->doFlee();
-        break;
-    case 'u':
-    case 'U':
-        combat_->doUseItem();
         break;
     case '\t': // TAB
         combat_->cycleTarget();
