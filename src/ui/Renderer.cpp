@@ -700,7 +700,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             if (sel && canAfford) rc = COL_YELLOW;
             scr.putStr(1, br++, line, rc, COL_BLACK, rf);
         }
-        scr.putStr(1, br, "Arriba/Abajo  |  ENTER confirmar",
+        scr.putStr(1, br, "W/S  |  ENTER confirmar",
                    COL_GRAY, COL_BLACK, CELL_DIM);
     }
 }
@@ -769,7 +769,7 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
         "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
         "/" + std::to_string(player.getInventory().totalSlots()), COL_GREEN);
     scr.putStr(sc2 + 2, r,
-               "[Arriba/Abajo] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar",
+               "[W/S] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar",
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
@@ -862,7 +862,7 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
     }
 
     drawCentered(scr, y0 + h - 1, x0, w,
-                 " Arriba/Abajo navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
+                 " W/S navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawGameOver ─────────────────────────────────────────────────────────────
