@@ -14,17 +14,13 @@
 #include <fstream>
 #include <filesystem>
 
-// Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
-static constexpr int GKEY_UP = 0x1001;
-static constexpr int GKEY_DOWN = 0x1002;
-static constexpr int GKEY_LEFT = 0x1003;
-static constexpr int GKEY_RIGHT = 0x1004;
+// Keycode interno del juego (evita conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_BACKSPACE = 0x1005;
 
 // Vertical menu navigation: wraps selection_ within [0, n)
 static inline void navV(int key, int& sel, int n) {
-    if (key == GKEY_UP)   sel = (sel - 1 + n) % n;
-    if (key == GKEY_DOWN) sel = (sel + 1) % n;
+    if (key == 'w') sel = (sel - 1 + n) % n;
+    if (key == 's') sel = (sel + 1) % n;
 }
 
 // Forward declarations of file-local helpers (defined near setState)
@@ -499,10 +495,6 @@ void Game::processInput()
         int rl;
         int g;
     } mapping[] = {
-        {265, GKEY_UP},        // KEY_UP
-        {264, GKEY_DOWN},      // KEY_DOWN
-        {263, GKEY_LEFT},      // KEY_LEFT
-        {262, GKEY_RIGHT},     // KEY_RIGHT
         {257, '\n'},           // KEY_ENTER
         {335, '\n'},           // KEY_KP_ENTER
         {256, 27},             // KEY_ESCAPE
@@ -652,13 +644,13 @@ void Game::dispatchInput(int key)
         }
 
         int nx = pos.x, ny = pos.y;
-        if (key == GKEY_UP || key == 'w' || key == 'k')
+        if (key == 'w')
             ny--;
-        else if (key == GKEY_DOWN || key == 's' || key == 'j')
+        else if (key == 's')
             ny++;
-        else if (key == GKEY_LEFT || key == 'a' || key == 'h')
+        else if (key == 'a')
             nx--;
-        else if (key == GKEY_RIGHT || key == 'd' || key == 'l')
+        else if (key == 'd')
             nx++;
         if (!map_->isWalkable(nx, ny))
             break;
@@ -668,6 +660,7 @@ void Game::dispatchInput(int key)
         {
             generateShopStock();
             shopSelection_ = 0;
+            explorationMsg_.clear();
             setState(GameState::Shop);
             break;
         }
@@ -763,12 +756,12 @@ void Game::inputTitle(int key)
     const int n = hs ? 4 : 3;
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_LEFT:
+    case 'w':
+    case 'a':
         menuSelection_ = (menuSelection_ - 1 + n) % n;
         break;
-    case GKEY_DOWN:
-    case GKEY_RIGHT:
+    case 's':
+    case 'd':
         menuSelection_ = (menuSelection_ + 1) % n;
         break;
     case '\n':
@@ -829,12 +822,12 @@ void Game::inputQuitDialog(int key)
 {
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_LEFT:
+    case 'w':
+    case 'a':
         menuSelection_ = (menuSelection_ - 1 + 2) % 2;
         break;
-    case GKEY_DOWN:
-    case GKEY_RIGHT:
+    case 's':
+    case 'd':
         menuSelection_ = (menuSelection_ + 1) % 2;
         break;
     case '\n':
@@ -879,8 +872,8 @@ void Game::inputClassSelect(int key)
 {
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         navV(key, classSelection_, 3);
         break;
     case 27:
@@ -897,8 +890,8 @@ void Game::inputHudSelect(int key)
 {
     switch (key)
     {
-    case GKEY_LEFT:
-    case GKEY_RIGHT:
+    case 'a':
+    case 'd':
         hudSelection_ = (hudSelection_ + 1) % 2;
         break;
     case 27:
@@ -1247,8 +1240,8 @@ void Game::inputInventory(int key)
     const int total = 2 + bagSize;
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         navV(key, inventorySelection_, total);
         break;
     case 'e':
@@ -1301,8 +1294,8 @@ void Game::inputQuestLog(int key)
     int n = static_cast<int>(quests_.size());
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         if (n > 0) navV(key, questLogSelection_, n);
         break;
     case 27:
@@ -1323,8 +1316,8 @@ void Game::inputShop(int key)
     }
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         navV(key, shopSelection_, n);
         break;
     case '\n':
@@ -1495,8 +1488,8 @@ void Game::inputCombat(int key)
         int n = static_cast<int>(arts.size());
         switch (key)
         {
-        case GKEY_UP:
-        case GKEY_DOWN:
+        case 'w':
+        case 's':
             navV(key, combatArtSelection_, n);
             break;
         case '\n':

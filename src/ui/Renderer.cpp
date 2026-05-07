@@ -292,7 +292,7 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     }
     ty++;
     drawCentered(scr, ty, 0, scr.cols(),
-                 "Flechas para navegar  |  ENTER para confirmar",
+                 "W/S navegar  |  ENTER para confirmar",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -417,7 +417,7 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
     drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
-                 "Arriba/Abajo navegar  |  ENTER confirmar  |  ESC volver",
+                 "W/S navegar  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -487,7 +487,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
     }
 
     drawCentered(scr, cy + 4, 0, scr.cols(),
-                 "Izq/Der navegar  |  ENTER confirmar  |  ESC volver",
+                 "A/D navegar  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -939,6 +939,6 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     if (!message.empty())
         scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
     scr.putStr(sc2 + 2, r,
-               "Arriba/Abajo navegar  |  ENTER comprar  |  ESC salir",
+               "W/S navegar  |  ENTER comprar  |  ESC salir",
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
