@@ -564,7 +564,7 @@ void Game::dispatchInput(int key)
     case GameState::Exploration:
     {
         // No limpiar mensaje aquí, se oculta solo tras 2 segundos
-        if (key == 'q' || key == 'Q')
+        if (key == 27)
         {
             menuSelection_ = 0;
             setState(GameState::QuitDialog);
@@ -582,6 +582,30 @@ void Game::dispatchInput(int key)
                 explorationMsg_ = "Usas una pocion: +" + std::to_string(healed) + " HP!";
             else
                 explorationMsg_ = "No tienes pociones.";
+            explorationMsgEndTime_ = GetTime() + 2.0;
+            break;
+        }
+
+        // Use beer (Warrior) or mana potion (Mage/Ranger)
+        if (key == 'r' || key == 'R')
+        {
+            bool used = false;
+            for (const auto& item : player_->getInventory().items())
+            {
+                if (item.type == ItemType::Consumable && item.statBonus == 0)
+                {
+                    int restored = player_->getMaxMana() / 2;
+                    player_->restoreMana(restored);
+                    player_->getInventory().removeItem(item.name);
+                    std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
+                    explorationMsg_ = "Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!";
+                    explorationMsgEndTime_ = GetTime() + 2.0;
+                    used = true;
+                    break;
+                }
+            }
+            if (!used)
+                explorationMsg_ = "No tienes cerveza/pocion de mana.";
             explorationMsgEndTime_ = GetTime() + 2.0;
             break;
         }
@@ -1363,6 +1387,12 @@ void Game::generateShopStock()
     Item p2 = DungeonPopulator::pickPotion(shopFloor);
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
+    Item beer = DungeonPopulator::pickBeer();
+    beer.quantity = 3;
+    shopStock_.push_back({beer, 5, false});
+    Item manaPot = DungeonPopulator::pickManaPotion();
+    manaPot.quantity = 3;
+    shopStock_.push_back({manaPot, 8, false});
     Item bomb = DungeonPopulator::pickBomb(shopFloor);
     bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});
@@ -1466,11 +1496,19 @@ void Game::inputCombat(int key)
             }
             // Regeneración post-combate
             int hpRegen = std::max(1, player_->getMaxHp() * 15 / 100);
-            int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
             player_->heal(hpRegen);
-            player_->restoreMana(mpRegen);
-            if (explorationMsg_.empty())
-                explorationMsg_ = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
+            if (player_->getClass() != PlayerClass::Warrior)
+            {
+                int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
+                player_->restoreMana(mpRegen);
+                if (explorationMsg_.empty())
+                    explorationMsg_ = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
+            }
+            else
+            {
+                if (explorationMsg_.empty())
+                    explorationMsg_ = "Recuperas " + std::to_string(hpRegen) + " HP.";
+            }
             explorationMsgEndTime_ = GetTime() + 2.0;
             returnToExploration();
         }

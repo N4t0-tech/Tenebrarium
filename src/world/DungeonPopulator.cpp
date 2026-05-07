@@ -159,6 +159,16 @@ Item DungeonPopulator::pickPotion(int floor)
     return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20, 1};
 }
 
+Item DungeonPopulator::pickBeer()
+{
+    return {"Cerveza", "Restaura la mitad del aguante.", ItemType::Consumable, 5, 1, 0, 1};
+}
+
+Item DungeonPopulator::pickManaPotion()
+{
+    return {"Pocion de Mana", "Restaura la mitad del mana.", ItemType::Consumable, 8, 1, 0, 1};
+}
+
 Item DungeonPopulator::pickBomb(int floor)
 {
     int price = 20 + floor * 3;

@@ -34,7 +34,8 @@ void Player::levelUp() {
     attack_  = baseAttack_  + (equippedWeapon_ ? equippedWeapon_->statBonus : 0);
     defense_ = baseDefense_ + (equippedArmor_  ? equippedArmor_->statBonus  : 0);
     maxMana_ += 5;
-    mana_ = maxMana_;
+    if (class_ != PlayerClass::Warrior)
+        mana_ = maxMana_;  // Guerrero no recupera aguante al subir nivel
 }
 
 int Player::baseHp(PlayerClass c) {
@@ -103,7 +104,8 @@ void Player::equipItem(int idx) {
 
 int Player::useConsumable() {
     for (const auto& item : inventory_.items()) {
-        if (item.type == ItemType::Consumable) {
+        // statBonus > 0 filtra cerveza/pocion de mana (restauran mana, no HP)
+        if (item.type == ItemType::Consumable && item.statBonus > 0) {
             int healed = std::min(item.statBonus, maxHp_ - hp_);
             hp_ += healed;
             inventory_.removeItem(item.name);

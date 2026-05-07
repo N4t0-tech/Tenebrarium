@@ -183,7 +183,8 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     drawHSep(scr, col, r++, 20);
     put("HP " + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
     drawStatBar(scr, col + 1, r++, player.getHp(), player.getMaxHp(), 14, COL_GREEN);
-    put("MP " + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
+    std::string mpLabel = player.getClass() == PlayerClass::Warrior ? "AG " : "MP ";
+    put(mpLabel + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
     drawStatBar(scr, col + 1, r++, player.getMana(), player.getMaxMana(), 14, COL_CYAN);
     put("XP " + std::to_string(player.getXp()), COL_YELLOW);
     drawHSep(scr, col, r++, 20);
@@ -202,6 +203,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     drawHSep(scr, col, r++, 20);
      put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
      put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
+     put("C " + std::to_string(player.getInventory().getItemCount("Cerveza")) + " cerveza(s)", COL_CYAN);
      put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
      int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
@@ -211,9 +213,10 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
      put("  P   pocion",   COL_GRAY, CELL_DIM);
+     put("  R   tomar",   COL_GRAY, CELL_DIM);
      put("  I   mochila",  COL_GRAY, CELL_DIM);
      put("  M   misiones", COL_GRAY, CELL_DIM);
-     put("  Q   salir",    COL_GRAY, CELL_DIM);
+     put("  Esc salir",   COL_GRAY, CELL_DIM);
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
@@ -234,8 +237,9 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
         scr.put(c++, row + 1, i < hpPct * 8 ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
     a(" ", COL_GREEN);
 
-    // Barra MP visual (8 celdas)
-    a(" MP:" + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
+    // Barra MP/AG visual (8 celdas)
+    std::string mpLbl = player.getClass() == PlayerClass::Warrior ? " AG:" : " MP:";
+    a(mpLbl + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
     float mpPct = (float)player.getMana() / player.getMaxMana();
     for (int i = 0; i < 8; i++)
         scr.put(c++, row + 1, i < mpPct * 8 ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
@@ -248,6 +252,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     b(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
     b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
     b(" P:" + std::to_string(player.countConsumables()), COL_GREEN);
+    b(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
 
     // Piso + dificultad (con color como en sidebar)
@@ -256,7 +261,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     b("  " + std::to_string(fl) + "[" + diff + "]", dc, CELL_DIM);
 
-    b(" [WASD]Mover [E]Bomba [P]Poc [I]Inv [M]Mis [Q]Sal  [-/+]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
+    b(" [WASD]Mover [E]Bomba [R]Tomar [P]Poc [I]Inv [M]Mis [Esc]Sal  [-/+]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -397,11 +402,12 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
         scr.putStr(listCol + 2, br + 2,
                    std::string("[ ") + c.role + " ]", tc, COL_BLACK, tf);
         drawHSep(scr, listCol + 1, br + 3, boxW - 2, tc);
+        std::string manaLabel = (i == 0) ? " AG:" : " MP:";
         scr.putStr(listCol + 2, br + 4,
             "HP:" + std::to_string(c.hp) +
             " ATK:" + std::to_string(c.atk) +
             " DEF:" + std::to_string(c.def) +
-            " MP:" + std::to_string(c.mana), COL_GREEN, COL_BLACK, tf);
+            manaLabel + std::to_string(c.mana), COL_GREEN, COL_BLACK, tf);
         scr.putStr(listCol + 2, br + 5, c.desc, tc, COL_BLACK, CELL_DIM);
     }
 
@@ -660,7 +666,8 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     scr.putStr(20, br, "HP:", phpc, COL_BLACK, CELL_BOLD);
     scr.putStr(24, br, std::to_string(player.getHp()) + "/" +
                std::to_string(player.getMaxHp()), phpc);
-    scr.putStr(35, br, "MP:", COL_CYAN, COL_BLACK, CELL_BOLD);
+    std::string mpLbl2 = player.getClass() == PlayerClass::Warrior ? "AG:" : "MP:";
+    scr.putStr(35, br, mpLbl2.c_str(), COL_CYAN, COL_BLACK, CELL_BOLD);
     scr.putStr(39, br++, std::to_string(player.getMana()) + "/" +
                std::to_string(player.getMaxMana()), COL_CYAN);
     scr.putStr(1, br++, apStr, COL_YELLOW);
@@ -669,7 +676,8 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
     if (!showingArts) {
         scr.putStr(1,        br,   "[1] Atacar      1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 2, br++, "[2] At.Fuerte  2PA 8MP", ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
+        std::string mpCost = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
+        scr.putStr(cols / 2, br++, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,        br,   "[3] Habilidades", COL_WHITE);
         scr.putStr(cols / 2, br++, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,        br,   "[5] Pocion (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
@@ -692,9 +700,10 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             const auto& art = arts[i];
             bool canAfford = (ap >= art.apCost) && (player.getMana() >= art.manaCost);
             bool sel = (i == artSelection);
+            std::string mpUnit = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
             std::string line = "[" + std::to_string(i + 1) + "] " + art.name +
                 "  " + std::to_string(art.apCost) + "PA  " +
-                std::to_string(art.manaCost) + "MP  " + art.description;
+                std::to_string(art.manaCost) + mpUnit + "  " + art.description;
             Color rc = canAfford ? COL_WHITE : COL_GRAY;
             uint8_t rf = sel ? CELL_INVERTED : (canAfford ? 0 : CELL_DIM);
             if (sel && canAfford) rc = COL_YELLOW;
