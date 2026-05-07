@@ -217,28 +217,46 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
-// HUD inferior: línea 1 = jugador/hp/mp, línea 2 = stats/bombas/controles
+// HUD inferior: línea 1 = jugador/hp/mp (con barras visuales), línea 2 = stats/recursos/piso/controles
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
-    drawHSep(scr, 0, row, scr.cols());  // Línea separadora
+    drawHSep(scr, 0, row, scr.cols());
     int c = 1;
     auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
         c += scr.putStr(c, row + 1, s, col, COL_BLACK, f);
     };
-     a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
-     a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
-     a(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
-     a(" MP:" + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
+    a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
+    a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
 
-     c = 1;
-     auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
-         c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
-     };
-     b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
-     b(" Df:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
-     b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
-     b(" +" + std::to_string(player.countConsumables()), COL_GREEN);       // Pociones
-     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE); // Bombas
-     b(" W:E P:I M:Q Z:" + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM); // Controles
+    // Barra HP visual (8 celdas)
+    a(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()) + " ", COL_GREEN);
+    float hpPct = (float)player.getHp() / player.getMaxHp();
+    for (int i = 0; i < 8; i++)
+        scr.put(c++, row + 1, i < hpPct * 8 ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
+    a(" ", COL_GREEN);
+
+    // Barra MP visual (8 celdas)
+    a(" MP:" + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
+    float mpPct = (float)player.getMana() / player.getMaxMana();
+    for (int i = 0; i < 8; i++)
+        scr.put(c++, row + 1, i < mpPct * 8 ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
+
+    c = 1;
+    auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
+    };
+    b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
+    b(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
+    b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
+    b(" P:" + std::to_string(player.countConsumables()), COL_GREEN);
+    b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
+
+    // Piso + dificultad (con color como en sidebar)
+    int fl = player.getDungeonFloor();
+    std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
+    Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
+    b("  " + std::to_string(fl) + "[" + diff + "]", dc, CELL_DIM);
+
+    b(" [WASD]Mover [E]Bomba [P]Poc [I]Inv [M]Mis [Q]Sal  [-/+]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
