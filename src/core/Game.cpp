@@ -1131,7 +1131,8 @@ void Game::setState(GameState newState)
     if (newState == GameState::MainMenu)
     {
         // Guardar antes de limpiar (permitir continuar después)
-        if (player_ && map_)
+        // No guardar si venimos de GameOver (muerte/victoria) — ya se borró el save
+        if (state_ != GameState::GameOver && player_ && map_)
             saveGame();
         pendingCombatEnemy_ = -1;
         victory_ = false;
