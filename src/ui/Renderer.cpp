@@ -675,15 +675,16 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     drawHSep(scr, 0, br++, cols);
 
     if (!showingArts) {
-        scr.putStr(1,        br,   "[1] Atacar      1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         std::string mpCost = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
-        scr.putStr(cols / 2, br++, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
-        scr.putStr(1,        br,   "[3] Habilidades", COL_WHITE);
-        scr.putStr(cols / 2, br++, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(1,        br,   "[5] Pocion (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
-        scr.putStr(cols / 2, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
-        scr.putStr(1,        br,   "[SPACE] Fin turno", COL_WHITE);
-        scr.putStr(cols / 2, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
+        scr.putStr(1,            br, "[1] Atacar      1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(cols / 3,     br, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
+        scr.putStr(2 * cols / 3, br++, "[3] Habilidades", COL_WHITE);
+        scr.putStr(1,            br, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(cols / 3,     br, "[5] Pocion (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
+        scr.putStr(2 * cols / 3, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
+        scr.putStr(1,            br, "[7] Saquear     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
+        scr.putStr(2 * cols / 3, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
         if (combat.getPhase() == CombatPhase::EnemyTurn)
             drawCentered(scr, br + 1, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);
         if (combat.isOver()) {

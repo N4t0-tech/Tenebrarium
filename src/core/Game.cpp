@@ -1569,6 +1569,11 @@ void Game::inputCombat(int key)
     case '6':
         combat_->doFlee();
         break;
+    case '7':
+        combat_->doLoot();
+        combatFlashIdx_ = combat_->getCurrentTarget();
+        combatFlashEndTime_ = GetTime() + 0.25;
+        break;
     case ' ':
         combat_->doEndTurn();
         break;

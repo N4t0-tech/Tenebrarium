@@ -1,4 +1,5 @@
 #include "CombatSystem.hpp"
+#include "../world/DungeonPopulator.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
@@ -51,7 +52,7 @@ void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
         return;
     }
 
-    int rawAtk = static_cast<int>(player_.getAttack() * atkMultiplier);
+    int rawAtk = static_cast<int>(getEffectiveAttack() * atkMultiplier);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
     int  dmg  = std::max(1, rawAtk - target->getDefense());
     bool crit = rollCritical();
@@ -160,6 +161,40 @@ void CombatSystem::doFlee() {
         logMessage("!" + player_.getName() + " intenta huir pero falla!");
         if (currentAp_ <= 0) processEnemyTurn();
     }
+}
+
+void CombatSystem::doLoot() {
+    if (phase_ != CombatPhase::PlayerTurn) return;
+    if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
+    auto& target = enemies_[currentTarget_];
+    if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
+    if (!hasEnoughAp(1)) { logMessage("PA insuficientes para saquear."); return; }
+
+    currentAp_ -= 1;
+    int roll = std::rand() % 100;
+
+    if (roll < 40) {
+        // Saqueo exitoso
+        Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
+        player_.getInventory().addItem(loot);
+        logMessage("Saqueo exitoso! Obtienes " + loot.name + ".");
+    } else if (roll < 70) {
+        // Saqueo parcial: recibes la mitad del daño del enemigo
+        Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
+        player_.getInventory().addItem(loot);
+        int dmg = std::max(1, target->getAttack() - player_.getDefense()) / 2;
+        player_.takeDamageRaw(dmg);
+        logMessage("Saqueas pero " + target->getName() + " te golpea! Recibes " + ts(dmg) + " daño.");
+    } else {
+        // Fracaso: el enemigo te golpea con todo
+        int dmg = std::max(1, target->getAttack() - player_.getDefense());
+        player_.takeDamageRaw(dmg);
+        logMessage("No logras saquear! " + target->getName() + " te golpea por " + ts(dmg) + " daño.");
+    }
+
+    checkCombatOver();
+    if (isOver()) return;
+    if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }
 
 void CombatSystem::cycleTarget() {
@@ -338,7 +373,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::GolpeDemoledor: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.4f) - target->getDefense() / 2);
+            int dmg = std::max(1, static_cast<int>(getEffectiveAttack() * 1.4f) - target->getDefense() / 2);
             target->takeDamageRaw(dmg);
             logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
             if (!target->isAlive()) {
@@ -462,4 +497,14 @@ int CombatSystem::getPlayerAttackBoost() const {
         if (fx.type == StatusEffect::Type::AttackBoosted)
             return fx.magnitude;
     return 0;
+}
+
+int CombatSystem::getEffectiveAttack() const {
+    int atk = player_.getAttack();
+    if (player_.getClass() == PlayerClass::Warrior) {
+        int pct = player_.getMana() * 100 / std::max(1, player_.getMaxMana());
+        int factor = std::max(40, pct);
+        atk = atk * factor / 100;
+    }
+    return atk;
 }

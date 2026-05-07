@@ -49,6 +49,7 @@ public:
     void doUseItem();
     void doEndTurn();           // 0 PA — force enemy turn
     void doFlee();              // 3 PA — 70% chance to escape
+    void doLoot();              // 1 PA — attempt to loot current target, 3 outcomes
     void cycleTarget();         // TAB — cycle to next alive enemy
 
 private:
@@ -77,5 +78,6 @@ private:
 
     bool isPlayerAttackBoosted()  const;
     int  getPlayerAttackBoost()   const;
+    int  getEffectiveAttack()     const;
     bool rollCritical()           const;
 };
