@@ -654,9 +654,9 @@ void Game::dispatchInput(int key)
                         map_->updateFov();
                         explorationMsg_ = "BOOM! La pared se hace polvo!";
                     } else {
-                        map_->revealSecretWall(ax, ay);
-                        map_->updateFov();
-                        explorationMsg_ = "Encontraste una sala secreta!";
+                        explorationMsg_ = "No tienes bombas.";
+                        explorationMsgEndTime_ = GetTime() + 2.0;
+                        return;
                     }
                     explorationMsgEndTime_ = GetTime() + 2.0;
                     found = true;
