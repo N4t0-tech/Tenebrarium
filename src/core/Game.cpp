@@ -729,7 +729,13 @@ void Game::dispatchInput(int key)
         {
             if (!ch.opened && ch.pos.x == nx && ch.pos.y == ny)
             {
-                openChest(ch);
+                if (ch.isMimic) {
+                    ch.opened = true;
+                    mimicCombat_ = true;
+                    setState(GameState::Combat);
+                } else {
+                    openChest(ch);
+                }
                 break;
             }
         }
@@ -1117,6 +1123,7 @@ static char glyphForEnemy(EnemyType t)
     case EnemyType::Zombie:   return 'z';
     case EnemyType::Demon:    return 'd';
     case EnemyType::Shadow:   return 'S';
+    case EnemyType::Mimic:    return 'M';
     }
     return '?';
 }
@@ -1133,6 +1140,7 @@ static int colorPairForEnemy(EnemyType t)
     case EnemyType::Zombie:   return 10; // COL_DK_GREEN
     case EnemyType::Demon:    return  6; // COL_RED
     case EnemyType::Shadow:   return 11; // COL_DK_GRAY
+    case EnemyType::Mimic:    return  9; // COL_ORANGE
     }
     return 6; // COL_RED fallback
 }
@@ -1166,6 +1174,7 @@ void Game::setState(GameState newState)
     if (newState == GameState::Exploration)
     {
         pendingCombatEnemy_ = -1;
+        mimicCombat_ = false;
         worldEnemies_.clear();
         worldChests_.clear();
         lockedDoorExists_ = false;
@@ -1200,7 +1209,10 @@ void Game::setState(GameState newState)
 
         std::vector<std::unique_ptr<Enemy>> enemies;
         int fl = player_ ? player_->getDungeonFloor() : 1;
-        if (combatWorldEnemyIdx_ >= 0)
+        if (mimicCombat_) {
+            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Mimic, fl));
+            mimicCombat_ = false;
+        } else if (combatWorldEnemyIdx_ >= 0)
         {
             bool boss = worldEnemies_[combatWorldEnemyIdx_].isBoss;
             enemies.push_back(DungeonPopulator::makeEnemy(worldEnemies_[combatWorldEnemyIdx_].type, fl, boss));

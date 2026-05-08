@@ -20,4 +20,5 @@ struct WorldChest {
     ChestLoot loot;
     int       coins;
     Item      item;
+    bool      isMimic = false;
 };

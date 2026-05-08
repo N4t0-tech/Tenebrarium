@@ -58,6 +58,8 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "Demonio";  hp = sc(150); atk = sc(25); def = sc(8);  xp = sc(100); pa = 1; break;
     case EnemyType::Shadow:
         name = "Sombra";   hp = sc(70);  atk = sc(18); def = sc(2);  xp = sc(35);  pa = 2; break;
+    case EnemyType::Mimic:
+        name = "Mimico";   hp = sc(110); atk = sc(18); def = sc(10); xp = sc(30);  pa = 1; break;
     default:
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
@@ -92,6 +94,7 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Zombie:   base = 25; break;
     case EnemyType::Demon:    base = 60; break;
     case EnemyType::Shadow:   base = 18; break;
+    case EnemyType::Mimic:    base = 25; break;
     default:                  base =  5; break;
     }
     return base + (floor - 1) * 5;
@@ -350,6 +353,11 @@ DungeonPopulator::Result DungeonPopulator::populate(
         }
         result.chests.push_back({pickPos(rooms[eligible[ci]], taken), false, loot, coins, item});
     }
+
+    // Mimics: small chance (~12%) that a chest is actually a mimic
+    for (auto& ch : result.chests)
+        if (!ch.opened && std::rand() % 100 < 12)
+            ch.isMimic = true;
 
     // Secret rooms
     int numSecret = 1 + std::rand() % 2;

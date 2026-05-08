@@ -86,7 +86,7 @@ void GameSerializer::save(Game& g)
     if (!f || !g.player_ || !g.map_)
         return;
 
-    f << 2 << '\n'; // version 2 includes item.quantity
+    f << 3 << '\n'; // version 3 adds ch.isMimic
 
     // Player
     wstr(f, g.player_->name_);
@@ -139,6 +139,7 @@ void GameSerializer::save(Game& g)
     for (const auto& ch : g.worldChests_) {
         f << ch.pos.x << ' ' << ch.pos.y << ' '
           << static_cast<int>(ch.opened) << ' '
+          << static_cast<int>(ch.isMimic) << ' '
           << static_cast<int>(ch.loot) << ' '
           << ch.coins << ' ';
         witem(f, ch.item);
@@ -188,7 +189,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || (version != 1 && version != 2))
+    if (!(f >> version) || (version != 1 && version != 2 && version != 3))
         return false;
 
     // Player
@@ -281,9 +282,15 @@ bool GameSerializer::load(Game& g)
     g.worldChests_.resize(chestCount);
     for (auto& ch : g.worldChests_) {
         int opened, loot;
-        if (!(f >> ch.pos.x >> ch.pos.y >> opened >> loot >> ch.coins))
+        if (!(f >> ch.pos.x >> ch.pos.y >> opened))
             return false;
         ch.opened = opened;
+        if (version >= 3) {
+            int mimic;
+            if (!(f >> mimic)) return false;
+            ch.isMimic = mimic != 0;
+        }
+        if (!(f >> loot >> ch.coins)) return false;
         ch.loot   = static_cast<ChestLoot>(loot);
         if (!ritem(f, ch.item, version)) return false;
     }

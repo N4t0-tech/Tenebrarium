@@ -57,6 +57,7 @@ private:
     int                      combatWorldEnemyIdx_;
 
     std::vector<WorldChest>  worldChests_;
+    bool                     mimicCombat_{false};
 
     // Locked door and stairs
     Position  lockedDoorPos_;
