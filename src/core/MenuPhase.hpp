@@ -6,4 +6,5 @@ enum class MenuPhase {
     ClassSelect,
     HudSelect,
     Credits,
+    Settings,
 };

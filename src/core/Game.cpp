@@ -370,17 +370,16 @@ void Game::run()
 
         EndTextureMode();
 
-        // 2) Dibujar texture con shader CRT
-        BeginDrawing();
-        ClearBackground(BLACK);
-        BeginShaderMode(crtShader);
-        // La RenderTexture está volteada verticalmente en Raylib
-        DrawTexturePro(
-            renderTarget.texture,
-            {0, 0, (float)rtW, -(float)rtH},
-            {0, 0, (float)screenW, (float)screenH},
-            {0, 0}, 0.0f, WHITE);
-        EndShaderMode();
+    // 2) Dibujar texture (con o sin shader CRT)
+    BeginDrawing();
+    ClearBackground(BLACK);
+    if (shaderEnabled_) BeginShaderMode(crtShader);
+    DrawTexturePro(
+        renderTarget.texture,
+        {0, 0, (float)rtW, -(float)rtH},
+        {0, 0, (float)screenW, (float)screenH},
+        {0, 0}, 0.0f, WHITE);
+    if (shaderEnabled_) EndShaderMode();
 
         // 3) Efecto de explosión de bomba (sobre el tile destruido)
         if (explosionActive_ && GetTime() < explosionEndTime_) {
@@ -558,6 +557,9 @@ void Game::dispatchInput(int key)
             break;
         case MenuPhase::HudSelect:
             inputHudSelect(key);
+            break;
+        case MenuPhase::Settings:
+            inputSettings(key);
             break;
         }
         break;
@@ -783,7 +785,7 @@ void Game::dispatchInput(int key)
 void Game::inputTitle(int key)
 {
     const bool hs = hasSave();
-    const int n = hs ? 4 : 3;
+    const int n = hs ? 5 : 4;
     switch (key)
     {
     case 'w':
@@ -808,6 +810,10 @@ void Game::inputTitle(int key)
             }
             else if (menuSelection_ == 2)
             {
+                menuPhase_ = MenuPhase::Settings;
+            }
+            else if (menuSelection_ == 3)
+            {
                 menuPhase_ = MenuPhase::Credits;
             }
             else
@@ -823,6 +829,10 @@ void Game::inputTitle(int key)
                 menuPhase_ = MenuPhase::NameInput;
             }
             else if (menuSelection_ == 1)
+            {
+                menuPhase_ = MenuPhase::Settings;
+            }
+            else if (menuSelection_ == 2)
             {
                 menuPhase_ = MenuPhase::Credits;
             }
@@ -845,6 +855,44 @@ void Game::inputCredits(int key)
     {
         menuSelection_ = 0;
         menuPhase_ = MenuPhase::Title;
+    }
+}
+
+void Game::inputSettings(int key)
+{
+    static constexpr int n = 4;
+    switch (key)
+    {
+    case 'w':
+    case 'a':
+        settingsSelection_ = (settingsSelection_ - 1 + n) % n;
+        break;
+    case 's':
+    case 'd':
+        settingsSelection_ = (settingsSelection_ + 1) % n;
+        break;
+    case '\n':
+    case ' ':
+        if (settingsSelection_ == 0) {
+            hudLayout_ = (hudLayout_ == HudLayout::Sidebar) ? HudLayout::Bottom : HudLayout::Sidebar;
+            saveSettings();
+        } else if (settingsSelection_ == 1) {
+            mapZoom_ = (mapZoom_ % 3) + 1;
+            saveSettings();
+        } else if (settingsSelection_ == 2) {
+            shaderEnabled_ = !shaderEnabled_;
+            saveSettings();
+        } else {
+            menuSelection_ = 0;
+            settingsSelection_ = 0;
+            menuPhase_ = MenuPhase::Title;
+        }
+        break;
+    case 27:
+        menuSelection_ = 0;
+        settingsSelection_ = 0;
+        menuPhase_ = MenuPhase::Title;
+        break;
     }
 }
 
@@ -1055,6 +1103,9 @@ void Game::render(TerminalScreen &scr)
             break;
         case MenuPhase::HudSelect:
             Renderer::drawHudSelect(scr, hudSelection_);
+            break;
+        case MenuPhase::Settings:
+            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
             break;
         }
         break;
@@ -1607,7 +1658,11 @@ void Game::saveSettings() const {
     std::string dir = std::string(GetApplicationDirectory()) + "saves";
     std::filesystem::create_directories(dir);
     std::ofstream f(dir + "/settings.dat");
-    if (f) f << "mapZoom=" << mapZoom_ << "\n";
+    if (f) {
+        f << "mapZoom=" << mapZoom_ << "\n";
+        f << "hudLayout=" << static_cast<int>(hudLayout_) << "\n";
+        f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
+    }
 }
 
 void Game::loadSettings() {
@@ -1616,6 +1671,12 @@ void Game::loadSettings() {
     while (std::getline(f, line)) {
         if (line.rfind("mapZoom=", 0) == 0) {
             try { mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3); }
+            catch (...) {}
+        } else if (line.rfind("hudLayout=", 0) == 0) {
+            try { hudLayout_ = static_cast<HudLayout>(std::stoi(line.substr(10))); }
+            catch (...) {}
+        } else if (line.rfind("shaderEnabled=", 0) == 0) {
+            try { shaderEnabled_ = std::stoi(line.substr(14)) != 0; }
             catch (...) {}
         }
     }

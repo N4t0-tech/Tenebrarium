@@ -281,10 +281,10 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
     ty++;
-    const char* opts3[] = { "Continuar", "Nueva Partida", "Creditos", "Salir" };
-    const char* opts2[] = { "Nueva Partida", "Creditos", "Salir" };
-    int n = hasSave ? 4 : 3;
-    const char** opts = hasSave ? opts3 : opts2;
+    const char* opts4[] = { "Continuar", "Nueva Partida", "Configuracion", "Creditos", "Salir" };
+    const char* opts3[] = { "Nueva Partida", "Configuracion", "Creditos", "Salir" };
+    int n = hasSave ? 5 : 4;
+    const char** opts = hasSave ? opts4 : opts3;
     for (int i = 0; i < n; i++) {
         std::string label = std::string("  ") + opts[i] + "  ";
         int x = cx - static_cast<int>(label.size()) / 2;
@@ -497,7 +497,48 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
                  COL_GRAY, CELL_DIM);
 }
 
-// ─── drawExploration ─────────────────────────────────────────────────────────
+// ─── drawSettings ──────────────────────────────────────────────────────────────
+
+void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
+                            int mapZoom, bool shaderOn) {
+    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
+                 COL_CYAN, CELL_BOLD);
+    drawCentered(scr, cy - 4, 0, scr.cols(), "Configuracion", COL_WHITE);
+
+    struct Setting {
+        const char* label;
+        const char* value;
+    };
+
+    const char* hudVal = (hud == HudLayout::Sidebar) ? "Panel lateral" : "Barra inferior";
+    const char* zoomVal = (mapZoom == 1) ? "1x" : (mapZoom == 2) ? "2x" : "3x";
+    const char* shaderVal = shaderOn ? "On" : "Off";
+
+    Setting items[] = {
+        {"Estilo HUD",   hudVal},
+        {"Zoom Mapa",    zoomVal},
+        {"Shader CRT",   shaderVal},
+        {"Volver",       ""},
+    };
+
+    for (int i = 0; i < 4; i++) {
+        int y = cy - 1 + i * 2;
+        bool sel = (i == selection);
+        Color c = sel ? COL_YELLOW : COL_WHITE;
+        uint8_t fl = sel ? CELL_BOLD : 0;
+        std::string line = std::string("  ") + items[i].label;
+        scr.putStr(cx - 16, y, line.c_str(), c, COL_BLACK, fl);
+        if (items[i].value[0] != '\0') {
+            std::string val = std::string("[") + items[i].value + "]";
+            scr.putStr(cx + 4, y, val.c_str(), sel ? COL_CYAN : COL_GRAY, COL_BLACK, fl);
+        }
+    }
+
+    drawCentered(scr, cy + 7, 0, scr.cols(),
+                 "W/S navegar  |  ENTER cambiar  |  ESC volver",
+                 COL_GRAY, CELL_DIM);
+}
 
 void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,

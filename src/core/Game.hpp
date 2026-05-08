@@ -41,6 +41,7 @@ private:
     std::string   playerName_;
     int           classSelection_;
     int           hudSelection_;
+    int           settingsSelection_{0};
 
     HudLayout     hudLayout_;
 
@@ -85,6 +86,7 @@ private:
     int                chestsOpened_{0};
 
     int  mapZoom_{1};
+    bool shaderEnabled_{true};
     bool victory_{false};
 
     // Message display timing
@@ -122,6 +124,7 @@ private:
     void inputInventory(int key);
     void inputShop(int key);
     void inputQuestLog(int key);
+    void inputSettings(int key);
     void generateShopStock();
     bool isInShopRoom(Position p) const;
     void useBomb();
