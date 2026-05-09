@@ -6,6 +6,8 @@
 
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
+    if (floor == 1) return EnemyType::Slime;
+
     bool zombieAvail  = (floor >= 2);
     bool shadowAvail  = (floor >= 4);
     bool demonAvail   = (floor >= 6);
@@ -60,6 +62,8 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "Sombra";   hp = sc(70);  atk = sc(18); def = sc(2);  xp = sc(35);  pa = 2; break;
     case EnemyType::Mimic:
         name = "Mimico";   hp = sc(110); atk = sc(18); def = sc(10); xp = sc(30);  pa = 1; break;
+    case EnemyType::Slime:
+        name = "Slime";    hp = sc(60);  atk = sc(8);  def = sc(1);  xp = sc(10);  pa = 1; break;
     default:
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
@@ -79,7 +83,10 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         default: break;
         }
     }
-    return std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
+    auto enemy = std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
+    if (t == EnemyType::Slime && !isBoss)
+        enemy->setSplitsOnDeath(true);
+    return enemy;
 }
 
 int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
@@ -95,6 +102,7 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Demon:    base = 60; break;
     case EnemyType::Shadow:   base = 18; break;
     case EnemyType::Mimic:    base = 25; break;
+    case EnemyType::Slime:    base =  5; break;
     default:                  base =  5; break;
     }
     return base + (floor - 1) * 5;

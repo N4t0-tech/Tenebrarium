@@ -23,7 +23,7 @@ static inline void navV(int key, int& sel, int n) {
 }
 
 // Forward declarations of file-local helpers (defined near setState)
-static char glyphForEnemy(EnemyType t);
+static int glyphForEnemy(EnemyType t);
 static int colorPairForEnemy(EnemyType t);
 
 Game::Game()
@@ -1172,7 +1172,7 @@ void Game::render(TerminalScreen &scr)
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-static char glyphForEnemy(EnemyType t)
+static int glyphForEnemy(EnemyType t)
 {
     switch (t)
     {
@@ -1185,6 +1185,7 @@ static char glyphForEnemy(EnemyType t)
     case EnemyType::Demon:    return 'd';
     case EnemyType::Shadow:   return 'S';
     case EnemyType::Mimic:    return 'M';
+    case EnemyType::Slime:    return 0x25CF; // ●
     }
     return '?';
 }
@@ -1201,7 +1202,8 @@ static int colorPairForEnemy(EnemyType t)
     case EnemyType::Zombie:   return 10; // COL_DK_GREEN
     case EnemyType::Demon:    return  6; // COL_RED
     case EnemyType::Shadow:   return 11; // COL_DK_GRAY
-    case EnemyType::Mimic:    return  9; // COL_ORANGE
+    case EnemyType::Mimic:    return 9; // COL_ORANGE
+    case EnemyType::Slime:    return 10; // COL_DK_GREEN
     }
     return 6; // COL_RED fallback
 }

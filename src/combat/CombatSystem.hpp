@@ -75,6 +75,7 @@ private:
     void tickPlayerEffects();
     void tickEnemyEffects();
     void resolveArt(ArtEffect effect);
+    void handleSlimeSplits();
 
     bool isPlayerAttackBoosted()  const;
     int  getPlayerAttackBoost()   const;

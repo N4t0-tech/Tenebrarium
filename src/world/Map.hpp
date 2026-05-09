@@ -24,7 +24,7 @@ struct Position {
 // A renderable entity placed on the map (enemy, chest, door, stairs…)
 struct MapEntity {
     Position pos;
-    char     glyph;
+    int      glyph;      // codepoint
     int      colorPair;  // ncurses color pair index
     bool     bold = true;
 };

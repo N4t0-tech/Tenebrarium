@@ -228,11 +228,31 @@ void CombatSystem::logMessage(const std::string& msg) {
     if (log_.size() > 20) log_.erase(log_.begin());
 }
 
+void CombatSystem::handleSlimeSplits() {
+    for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
+        if (!enemies_[i]->isAlive() && enemies_[i]->getSplitsOnDeath()) {
+            int babyXP = std::max(1, enemies_[i]->getXpReward() / 2);
+            int babyHp = std::max(1, enemies_[i]->getMaxHp() / 2);
+            int babyAtk = std::max(1, enemies_[i]->getAttack() / 2);
+            int babyDef = std::max(1, enemies_[i]->getDefense() / 2);
+            logMessage("El Slime se divide en 2!");
+            for (int b = 0; b < 2; b++) {
+                enemies_.push_back(std::make_unique<Enemy>(
+                    "Slime Pequenio", babyHp, babyAtk, babyDef,
+                    babyXP, EnemyType::Slime, 1, false));
+                enemyEffects_.emplace_back();
+            }
+            enemies_[i]->setSplitsOnDeath(false);
+        }
+    }
+}
+
 void CombatSystem::checkCombatOver() {
     if (!player_.isAlive() || fled_) {
         phase_ = CombatPhase::CombatOver;
         return;
     }
+    handleSlimeSplits();
     bool allDead = std::all_of(enemies_.begin(), enemies_.end(),
         [](const std::unique_ptr<Enemy>& e) { return !e->isAlive(); });
     if (allDead) {
