@@ -6,9 +6,7 @@
 #include "entities/Player.hpp"
 #include "entities/Enemy.hpp"
 #include "combat/CombatSystem.hpp"
-#include "world/Map.hpp"
-#include "world/BSPDungeon.hpp"
-#include "world/WorldObjects.hpp"
+#include "world/Dungeon.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -32,7 +30,7 @@ public:
     void run();
 
 private:
-    GameState     state_;
+    std::atomic<GameState>  state_{GameState::MainMenu};
     MenuPhase     menuPhase_;
     bool          quitRequested_;
 
@@ -46,56 +44,34 @@ private:
     HudLayout     hudLayout_;
 
     std::unique_ptr<Player>        player_;
-    std::unique_ptr<Map>           map_;
+    std::unique_ptr<Dungeon>       dungeon_;
     std::unique_ptr<CombatSystem>  combat_;
     bool                           combatShowingArts_;
     int                            combatArtSelection_;
     int                            combatFlashIdx_;
     double                         combatFlashEndTime_;
 
-    // World enemies
-    std::vector<WorldEnemy>  worldEnemies_;
-    int                      combatWorldEnemyIdx_;
+    // World enemy index that triggered current combat
+    int           combatWorldEnemyIdx_{-1};
+    bool          mimicCombat_{false};
 
-    std::vector<WorldChest>  worldChests_;
-    bool                     mimicCombat_{false};
+    // AI communication (written by AI thread, read by main thread)
+    std::atomic<int>  pendingCombatEnemy_{-1};
 
-    // Locked door and stairs
-    Position  lockedDoorPos_;
-    bool      lockedDoorExists_;
-    bool      lockedDoorOpen_;
-    Position  stairsPos_;
-
-    // Inventory
-    int       inventorySelection_{0};
-
-    // Shop
-    std::vector<ShopItem>   shopStock_;
-    int                     shopSelection_{0};
-    BSPDungeon::Room        shopRoom_{};
-    bool                    shopExists_{false};
-    Position                shopMerchantPos_{};
-
-    // Exploration message
-    std::string explorationMsg_;
-
-    // Quest system
-    std::vector<Quest> quests_;
-    int                questLogSelection_{0};
-    int                enemiesKilled_{0};
-    int                chestsOpened_{0};
-
+    // HUD layout
     int  mapZoom_{1};
     bool shaderEnabled_{true};
     bool victory_{false};
 
-    // Message display timing
-    double                explorationMsgEndTime_{0.0};
+    // Shop stock (UI-only, not world state)
+    std::vector<ShopItem>   shopStock_;
+    int                     shopSelection_{0};
 
-    // Bomb explosion effect
-    bool                  explosionActive_{false};
-    double                explosionEndTime_{0.0};
-    int                   explosionX_{0}, explosionY_{0};
+    // Quest tracking
+    std::vector<Quest> quests_;
+    int                questLogSelection_{0};
+
+    int                   inventorySelection_{0};
 
     void saveGame();
     bool loadGame();
@@ -126,17 +102,15 @@ private:
     void inputQuestLog(int key);
     void inputSettings(int key);
     void generateShopStock();
-    bool isInShopRoom(Position p) const;
-    void useBomb();
+    bool isInShopRoom(Dungeon::Lock& acc, Position p) const;
+    void useBomb(Dungeon::Lock& acc);
 
     void initQuests();
     void checkQuestProgress();
 
     // AI movement thread
     std::thread          aiThread_;
-    std::mutex           worldMutex_;
     std::atomic<bool>    aiRunning_{false};
     std::atomic<bool>    pendingRedraw_{false};
-    int                  pendingCombatEnemy_{-1};
     void aiLoop();
 };
