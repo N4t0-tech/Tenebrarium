@@ -288,13 +288,14 @@ DungeonPopulator::Result DungeonPopulator::populate(
     std::vector<Position> taken;
     taken.push_back({rooms[0].centerX(), rooms[0].centerY()});
 
-    // Stairs in last room
-    result.stairsPos = pickPos(rooms[n - 1], taken);
-
-    // Locked door in second-to-last room
+    // Locked door in second-to-last room; stairs appear there when it opens
     if (n >= 3) {
         result.lockedDoorPos    = pickPos(rooms[n - 2], taken);
         result.lockedDoorExists = true;
+        result.stairsPos        = result.lockedDoorPos;
+    } else {
+        // Stairs in last room when there is no locked door
+        result.stairsPos = pickPos(rooms[n - 1], taken);
     }
 
     // Shop room: any room that is not start, last, or locked-door room

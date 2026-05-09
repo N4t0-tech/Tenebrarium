@@ -685,9 +685,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     for (int i = logStart; i < static_cast<int>(log.size()); i++)
         scr.putStr(halfW + 2, lr++, log[i], logColor(log[i]));
 
-    // Barra jugador
-    int br = rows - 7;
-    drawHSep(scr, 0, br++, cols);
+    // Bottom bar — calculate start row dynamically so content never overflows
     int ap = combat.getCurrentAp(), maxAp = combat.getMaxAp();
     std::string apStr = "PA: ";
     for (int i = 0; i < maxAp; i++) apStr += (i < ap) ? "\xe2\x97\x8f " : "\xe2\x97\x8b ";
@@ -701,6 +699,18 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         if (fx.type == StatusEffect::Type::AttackBoosted)  ptags += "[ATK+]";
     }
 
+    int bottomRows = 4;  // sep + name/HP/MP + AP/tags + sep
+    if (showingArts) {
+        auto artsList = player.getAvailableArts();
+        bottomRows += 1 + static_cast<int>(artsList.size()) + 1;  // header + arts + hint
+    } else {
+        bottomRows += 3;  // action buttons
+        if (combat.getPhase() == CombatPhase::EnemyTurn || combat.isOver())
+            bottomRows += 1;
+    }
+    int br = std::max(0, rows - bottomRows);
+
+    drawHSep(scr, 0, br++, cols);
     scr.putStr(1, br, player.getName() + " [" + className(player) + "]",
                COL_CYAN, COL_BLACK, CELL_BOLD);
     Color phpc = hpColor(player.getHp(), player.getMaxHp());
@@ -711,8 +721,8 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
     scr.putStr(35, br, mpLbl2.c_str(), COL_CYAN, COL_BLACK, CELL_BOLD);
     scr.putStr(39, br++, std::to_string(player.getMana()) + "/" +
                std::to_string(player.getMaxMana()), COL_CYAN);
+    if (!ptags.empty()) apStr += "  " + ptags;
     scr.putStr(1, br++, apStr, COL_YELLOW);
-    if (!ptags.empty()) scr.putStr(1, br++, ptags, COL_YELLOW, COL_BLACK, CELL_DIM);
     drawHSep(scr, 0, br++, cols);
 
     if (!showingArts) {
@@ -727,12 +737,12 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
         scr.putStr(2 * cols / 3, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
         if (combat.getPhase() == CombatPhase::EnemyTurn)
-            drawCentered(scr, br + 1, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);
+            drawCentered(scr, br, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);
         if (combat.isOver()) {
             const char* msg = combat.playerWon()
                 ? "VICTORIA!  Cualquier tecla para continuar"
                 : "DERROTA!   Cualquier tecla para continuar";
-            drawCentered(scr, br + 1, 0, cols, msg, COL_YELLOW, CELL_BOLD);
+            drawCentered(scr, br, 0, cols, msg, COL_YELLOW, CELL_BOLD);
         }
     } else {
         scr.putStr(1, br++, "=== Habilidades ===  (ESC para volver)",

@@ -992,10 +992,10 @@ void Game::inputHudSelect(int key)
             break;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
-        // Dar 5 bombas iniciales (como 1 item con quantity=5)
+        // Dar 2 bombas iniciales (como 1 item con quantity=2)
         {
             Item bomba = DungeonPopulator::pickBomb(1);
-            bomba.quantity = 5;
+            bomba.quantity = 2;
             player_->getInventory().addItem(bomba);
         }
         initQuests();
@@ -1593,6 +1593,16 @@ void Game::inputCombat(int key)
         case 's':
             navV(key, combatArtSelection_, n);
             break;
+        case '1': case '2': case '3': {
+            int idx = key - '1';
+            if (idx < n) {
+                combat_->doArt(idx);
+                combatFlashIdx_ = combat_->getCurrentTarget();
+                combatFlashEndTime_ = GetTime() + 0.25;
+                combatShowingArts_ = false;
+            }
+            break;
+        }
         case '\n':
             combat_->doArt(combatArtSelection_);
             combatFlashIdx_ = combat_->getCurrentTarget();
