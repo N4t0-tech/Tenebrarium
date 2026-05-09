@@ -577,7 +577,7 @@ void Game::dispatchInput(int key)
         {
             int healed = player_->useConsumable();
             if (healed > 0)
-                dungeon_->message = "Usas una pocion: +" + std::to_string(healed) + " HP!";
+                dungeon_->message = "Usas una poción: +" + std::to_string(healed) + " HP!";
             else
                 dungeon_->message = "No tienes pociones.";
             dungeon_->messageEndTime = GetTime() + 2.0;
@@ -603,7 +603,7 @@ void Game::dispatchInput(int key)
                 }
             }
             if (!used)
-                dungeon_->message = "No tienes cerveza/pocion de mana.";
+                dungeon_->message = "No tienes cerveza/poción de mana.";
             dungeon_->messageEndTime = GetTime() + 2.0;
             break;
         }
@@ -661,7 +661,7 @@ void Game::dispatchInput(int key)
                 }
             }
             if (!found)
-                dungeon_->message = "No hay nada aqui...";
+                dungeon_->message = "No hay nada aquí...";
             dungeon_->messageEndTime = GetTime() + 2.0;
             break;
         }
@@ -700,7 +700,7 @@ void Game::dispatchInput(int key)
             if (acc.lockedDoorExists() && !acc.lockedDoorOpen() &&
                 acc.lockedDoorPos().x == nx && acc.lockedDoorPos().y == ny)
             {
-                dungeon_->message = "La puerta permanece sellada. Algo en las sombras aun respira.";
+                dungeon_->message = "La puerta permanece sellada. Algo en las sombras aún respira.";
                 dungeon_->messageEndTime = GetTime() + 2.0;
                 break;
             }
@@ -1041,8 +1041,8 @@ void Game::initQuests()
 
     quests_.push_back({"primer_sangre", "Primer Sangre", "Derrota a tu primer enemigo en el Tenebrarium.", QuestStatus::InProgress, {{"Mata 1 enemigo", false}}, 50, 0});
     quests_.push_back({"cazador", "Cazador", "Los monstruos del Tenebrarium son peligrosos. Demuestra que no te amedrentan.", QuestStatus::InProgress, {{"Mata 5 enemigos", false}}, 150, 20});
-    quests_.push_back({"buscador", "Buscador de Tesoros", "Las criptas estan llenas de riquezas olvidadas. Encuentralas.", QuestStatus::InProgress, {{"Abre 3 cofres", false}}, 100, 30});
-    quests_.push_back({"descenso", "Descenso a las Profundidades", "Las criaturas mas peligrosas habitan los pisos inferiores.", QuestStatus::InProgress, {{"Llega al piso 2", false}, {"Llega al piso 3", false}}, 200, 50});
+    quests_.push_back({"buscador", "Buscador de Tesoros", "Las criptas están llenas de riquezas olvidadas. Encuéntralas.", QuestStatus::InProgress, {{"Abre 3 cofres", false}}, 100, 30});
+    quests_.push_back({"descenso", "Descenso a las Profundidades", "Las criaturas más peligrosas habitan los pisos inferiores.", QuestStatus::InProgress, {{"Llega al piso 2", false}, {"Llega al piso 3", false}}, 200, 50});
 }
 
 void Game::checkQuestProgress()
@@ -1077,7 +1077,7 @@ void Game::checkQuestProgress()
             q.status = QuestStatus::Completed;
             player_->gainXp(q.xpReward);
             player_->addCoins(q.goldReward);
-            dungeon_->message = "Mision completada: " + q.title + "!";
+            dungeon_->message = "Misión completada: " + q.title + "!";
             dungeon_->messageEndTime = GetTime() + 2.0;
         }
     }
@@ -1546,7 +1546,7 @@ void Game::inputCombat(int key)
                 {
                     Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
                     player_->getInventory().addItem(pot);
-                    dungeon_->message = "El enemigo solto una " + pot.name + "!";
+                    dungeon_->message = "El enemigo soltó una " + pot.name + "!";
                     dungeon_->messageEndTime = GetTime() + 2.0;
                 }
             }

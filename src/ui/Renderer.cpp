@@ -162,7 +162,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
     }
     try {
         XpFile xp = loadXp(assetsDir() + "art/" + filename);
-        if (xp.layers.empty()) throw std::runtime_error("vacio");
+        if (xp.layers.empty()) throw std::runtime_error("vacío");
         xpDrawHalfBlock(scr, xp.layers[0], col, row, scale);
     } catch (...) {
         scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
@@ -202,17 +202,17 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, 20);
      put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
-     put("+ " + std::to_string(player.countConsumables()) + " pocion(es)", COL_GREEN);
+     put("+ " + std::to_string(player.countConsumables()) + " poción(es)", COL_GREEN);
      put("C " + std::to_string(player.getInventory().getItemCount("Cerveza")) + " cerveza(s)", COL_CYAN);
      put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
      int fl = player.getDungeonFloor();
-    std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
+    std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, 20);
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
-     put("  P   pocion",   COL_GRAY, CELL_DIM);
+      put("  P   poción",   COL_GRAY, CELL_DIM);
      put("  R   tomar",   COL_GRAY, CELL_DIM);
      put("  I   mochila",  COL_GRAY, CELL_DIM);
      put("  M   misiones", COL_GRAY, CELL_DIM);
@@ -257,7 +257,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
 
     // Piso + dificultad (con color como en sidebar)
     int fl = player.getDungeonFloor();
-    std::string diff = fl <= 2 ? "Facil" : fl <= 4 ? "Normal" : fl <= 6 ? "Dificil" : "Peligroso";
+    std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     b("  " + std::to_string(fl) + "[" + diff + "]", dc, CELL_DIM);
 
@@ -281,8 +281,8 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
     ty++;
-    const char* opts4[] = { "Continuar", "Nueva Partida", "Configuracion", "Creditos", "Salir" };
-    const char* opts3[] = { "Nueva Partida", "Configuracion", "Creditos", "Salir" };
+    const char* opts4[] = { "Continuar", "Nueva Partida", "Configuración", "Créditos", "Salir" };
+    const char* opts3[] = { "Nueva Partida", "Configuración", "Créditos", "Salir" };
     int n = hasSave ? 5 : 4;
     const char** opts = hasSave ? opts4 : opts3;
     for (int i = 0; i < n; i++) {
@@ -316,7 +316,7 @@ void Renderer::drawCredits(TerminalScreen& scr) {
         scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
     }
     ty++;
-    drawCentered(scr, ty++, 0, scr.cols(), "~ Creditos ~", COL_WHITE);
+    drawCentered(scr, ty++, 0, scr.cols(), "~ Créditos ~", COL_WHITE);
 
     int y = ty + 1;
     drawCentered(scr, y++, 0, scr.cols(), "Halley & Nato Co.", COL_WHITE);
@@ -363,9 +363,9 @@ struct ClassInfo {
 static constexpr ClassInfo kClasses[3] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
      "warrior.xp", 120,15,8,20},
-    {"MAGO","Arcano","Domina las artes magicas. Poder devastador.",
+    {"MAGO","Arcano","Domina las artes mágicas. Poder devastador.",
      "mago.xp", 70,8,3,100},
-    {"RANGER","Explorador","Agil y versatil. Experto en trampas y arco.",
+    {"RANGER","Explorador","Ágil y versátil. Experto en trampas y arco.",
      "ranger.xp", 90,12,5,50},
 };
 
@@ -504,7 +504,7 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
     drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
-    drawCentered(scr, cy - 4, 0, scr.cols(), "Configuracion", COL_WHITE);
+    drawCentered(scr, cy - 4, 0, scr.cols(), "Configuración", COL_WHITE);
 
     struct Setting {
         const char* label;
@@ -590,9 +590,9 @@ static Color logColor(const std::string& msg) {
         msg.find("envenena") != std::string::npos ||
         msg.find("drena") != std::string::npos)
         return COL_RED;
-    // Curación / pocion / regeneración
+    // Curación / poción / regeneración
     if (msg.find("recupera") != std::string::npos ||
-        msg.find("pocion") != std::string::npos ||
+        msg.find("poción") != std::string::npos ||
         msg.find("cura") != std::string::npos ||
         (msg.find("HP") != std::string::npos && msg.find("recupera") != std::string::npos))
         return COL_GREEN;
@@ -731,7 +731,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(cols / 3,     br, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
         scr.putStr(2 * cols / 3, br++, "[3] Habilidades", COL_WHITE);
         scr.putStr(1,            br, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 3,     br, "[5] Pocion (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
+        scr.putStr(cols / 3,     br, "[5] Poción (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
         scr.putStr(2 * cols / 3, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,            br, "[7] Saquear     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
@@ -806,7 +806,7 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
             switch (item.type) {
                 case ItemType::Weapon:     tag = "[ARMA]   "; ic = COL_YELLOW; break;
                 case ItemType::Armor:      tag = "[ARMADURA]"; ic = COL_GREEN; break;
-                case ItemType::Consumable: tag = "[POCION] "; ic = COL_CYAN;  break;
+                case ItemType::Consumable: tag = "[POCIÓN] "; ic = COL_CYAN;  break;
                 case ItemType::Bomb:       tag = "[BOMBA]  "; ic = COL_ORANGE; break;
                 default:                  tag = "[MISC]   "; break;
             }
@@ -944,7 +944,7 @@ void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
     }
     if (victory) {
         drawCentered(scr, ty + 1, 0, scr.cols(), "Gracias por jugar Tenebrarium.", COL_CYAN, 0);
-        drawCentered(scr, ty + 2, 0, scr.cols(), "~ Creditos ~", COL_WHITE, CELL_BOLD);
+        drawCentered(scr, ty + 2, 0, scr.cols(), "~ Créditos ~", COL_WHITE, CELL_BOLD);
         drawCentered(scr, ty + 3, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
     }
     drawCentered(scr, scr.rows() - 3, 0, scr.cols(),
@@ -960,8 +960,8 @@ void Renderer::drawQuitDialog(TerminalScreen& scr, int selection) {
     int bx = cx - w / 2, by = cy - h / 2;
     drawBorder(scr, bx, by, w, h, COL_YELLOW);
     drawCentered(scr, by + 1, bx, w, "Salir del juego", COL_WHITE, CELL_BOLD);
-    drawCentered(scr, by + 2, bx, w, "Que deseas hacer?", COL_GRAY, CELL_DIM);
-    const char* opts[] = { "Menu Principal", "Salir al escritorio" };
+    drawCentered(scr, by + 2, bx, w, "¿Qué deseas hacer?", COL_GRAY, CELL_DIM);
+    const char* opts[] = { "Menú Principal", "Salir al escritorio" };
     for (int i = 0; i < 2; i++) {
         bool sel = (i == selection);
         std::string label = std::string("  ") + opts[i] + "  ";

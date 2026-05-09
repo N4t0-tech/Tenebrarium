@@ -132,7 +132,7 @@ void CombatSystem::doUseItem() {
         logMessage("No tienes pociones.");
         return;
     }
-    logMessage(player_.getName() + " usa una pocion y recupera " +
+    logMessage(player_.getName() + " usa una poción y recupera " +
                std::to_string(healed) + " HP.");
     currentAp_--;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
@@ -238,7 +238,7 @@ void CombatSystem::handleSlimeSplits() {
             logMessage("El Slime se divide en 2!");
             for (int b = 0; b < 2; b++) {
                 enemies_.push_back(std::make_unique<Enemy>(
-                    "Slime Pequenio", babyHp, babyAtk, babyDef,
+                    "Slime Pequeño", babyHp, babyAtk, babyDef,
                     babyXP, EnemyType::Slime, 1, false));
                 enemyEffects_.emplace_back();
             }
@@ -296,13 +296,13 @@ void CombatSystem::processEnemyTurn() {
             if (heavyIt != playerEffects_.end()) {
                 rawDmg = std::max(1, rawDmg * 30 / 100);
                 playerEffects_.erase(heavyIt);
-                logMessage("Escudo Total! Dano reducido 70%.");
+                logMessage("Escudo Total! Daño reducido 70%.");
             } else {
                 bool defending = std::any_of(playerEffects_.begin(), playerEffects_.end(),
                     [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Defending; });
                 if (defending) {
                     rawDmg = std::max(1, rawDmg / 2);
-                    logMessage("Postura defensiva! Dano reducido 50%.");
+                    logMessage("Postura defensiva! Daño reducido 50%.");
                 }
             }
 
@@ -317,7 +317,7 @@ void CombatSystem::processEnemyTurn() {
                 if (!already) {
                     StatusEffect p; p.type = StatusEffect::Type::Poisoned; p.turnsLeft = 3; p.magnitude = 5;
                     playerEffects_.push_back(p);
-                    logMessage("La Arana te envenena!");
+                    logMessage("La Araña te envenena!");
                 }
             }
             // Vampiro: se cura 30% del daño infligido
@@ -328,7 +328,7 @@ void CombatSystem::processEnemyTurn() {
             }
 
             if (!player_.isAlive()) {
-                logMessage(player_.getName() + " ha caido en batalla...");
+                logMessage(player_.getName() + " ha caído en batalla...");
                 phase_ = CombatPhase::CombatOver;
                 return;
             }
@@ -419,13 +419,13 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             fx.turnsLeft = 1;
             fx.magnitude = 70;
             playerEffects_.push_back(fx);
-            logMessage("Escudo Total! -70% daño en el proximo golpe.");
+            logMessage("Escudo Total! -70% daño en el próximo golpe.");
             break;
         }
 
         case ArtEffect::BolaDeFuego: {
             int dmg = player_.getAttack() + 10;
-            logMessage("Bola de Fuego! " + ts(dmg) + " daño magico a todos!");
+            logMessage("Bola de Fuego! " + ts(dmg) + " daño mágico a todos!");
             for (auto& e : enemies_) {
                 if (e->isAlive()) {
                     e->takeDamageRaw(dmg);
@@ -484,7 +484,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             fx.magnitude = player_.getAttack();
             enemyEffects_[currentTarget_].push_back(fx);
             logMessage("Trampa colocada! " + target->getName()
-                       + " recibira " + ts(fx.magnitude) + " daño.");
+                       + " recibirá " + ts(fx.magnitude) + " daño.");
             break;
         }
 
