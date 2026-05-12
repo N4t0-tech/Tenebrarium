@@ -6,7 +6,6 @@
 #include "entities/Enemy.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
-#include <vector>
 #include <chrono>
 #include <algorithm>
 #include <cstdlib>
@@ -14,26 +13,21 @@
 #include <fstream>
 #include <filesystem>
 
-// Keycodes internos del juego (evitan conflicto con KeyboardKey de Raylib)
-static constexpr int GKEY_UP = 0x1001;
-static constexpr int GKEY_DOWN = 0x1002;
-static constexpr int GKEY_LEFT = 0x1003;
-static constexpr int GKEY_RIGHT = 0x1004;
+// Keycode interno del juego (evita conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_BACKSPACE = 0x1005;
 
 // Vertical menu navigation: wraps selection_ within [0, n)
 static inline void navV(int key, int& sel, int n) {
-    if (key == GKEY_UP)   sel = (sel - 1 + n) % n;
-    if (key == GKEY_DOWN) sel = (sel + 1) % n;
+    if (key == 'w') sel = (sel - 1 + n) % n;
+    if (key == 's') sel = (sel + 1) % n;
 }
 
 // Forward declarations of file-local helpers (defined near setState)
-static char glyphForEnemy(EnemyType t);
+static int glyphForEnemy(EnemyType t);
 static int colorPairForEnemy(EnemyType t);
 
 Game::Game()
-    : state_(GameState::MainMenu),
-      menuPhase_(MenuPhase::Title),
+    : menuPhase_(MenuPhase::Title),
       quitRequested_(false),
       menuSelection_(0),
       classSelection_(0),
@@ -42,12 +36,7 @@ Game::Game()
       combatShowingArts_(false),
       combatArtSelection_(0),
       combatFlashIdx_(-1),
-      combatFlashEndTime_(0.0),
-      combatWorldEnemyIdx_(-1),
-      lockedDoorPos_({0, 0}),
-      lockedDoorExists_(false),
-      lockedDoorOpen_(false),
-      stairsPos_({0, 0})
+      combatFlashEndTime_(0.0)
 {
     aiRunning_ = true;
     aiThread_ = std::thread(&Game::aiLoop, this);
@@ -314,11 +303,11 @@ void Game::run()
         if (pendingRedraw_.load(std::memory_order_acquire))
         {
             pendingRedraw_.store(false, std::memory_order_release);
-            std::lock_guard<std::mutex> lk(worldMutex_);
-            if (pendingCombatEnemy_ >= 0 && state_ == GameState::Exploration)
+            int combatIdx = pendingCombatEnemy_.load();
+            if (combatIdx >= 0 && state_.load() == GameState::Exploration)
             {
-                combatWorldEnemyIdx_ = pendingCombatEnemy_;
-                pendingCombatEnemy_ = -1;
+                combatWorldEnemyIdx_ = combatIdx;
+                pendingCombatEnemy_.store(-1);
                 setState(GameState::Combat);
             }
         }
@@ -338,10 +327,7 @@ void Game::run()
         ClearBackground(BLACK);
         scr.render(offX, offY);
 
-        // Overlay del mapa a font-zoom (solo en exploración y si zoom > 1).
-        // Se crea un TerminalScreen adicional con celda más grande y se dibuja
-        // encima del área del mapa usando el mismo offset de padding.
-        if (mapZoom_ > 1 && state_ == GameState::Exploration && map_ && player_) {
+        if (mapZoom_ > 1 && state_.load() == GameState::Exploration && dungeon_ && player_) {
             static constexpr int kSidebarW = 22;
             static constexpr int kHudBarH  = 3;
 
@@ -366,44 +352,44 @@ void Game::run()
             mapScr.clear();
 
             std::vector<MapEntity> zEntities;
-            for (const auto& we : worldEnemies_)
-                if (we.alive)
-                    zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
-            for (const auto& ch : worldChests_)
-                if (!ch.opened)
-                    zEntities.push_back({ch.pos, '$', 2, true});
-            if (lockedDoorExists_ && !lockedDoorOpen_)
-                zEntities.push_back({lockedDoorPos_, '+', 1, false});
-            if (!lockedDoorExists_ || lockedDoorOpen_)
-                zEntities.push_back({stairsPos_, '>', 3, true});
-            if (shopExists_)
-                zEntities.push_back({shopMerchantPos_, '$', 4, true});
+            {
+                auto acc = dungeon_->lock();
+                for (const auto& we : acc.enemies())
+                    if (we.alive)
+                        zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
+                for (const auto& ch : acc.chests())
+                    if (!ch.opened)
+                        zEntities.push_back({ch.pos, '$', 2, true});
+                if (acc.lockedDoorExists() && !acc.lockedDoorOpen())
+                    zEntities.push_back({acc.lockedDoorPos(), '+', 1, false});
+                if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
+                    zEntities.push_back({acc.stairsPos(), '>', 3, true});
+                if (acc.shopExists())
+                    zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
-            Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
-                               *map_, zEntities);
+                Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
+                                   acc.map(), zEntities);
+            }
 
              mapScr.render(offX, offY);
          }
 
         EndTextureMode();
 
-        // 2) Presentar con shader CRT.
-        // La RenderTexture de Raylib está volteada en Y respecto a OpenGL,
-        // por eso el src rect usa altura negativa (flip vertical).
-        BeginDrawing();
-        ClearBackground(BLACK);
-        BeginShaderMode(crtShader);
-        DrawTexturePro(
-            renderTarget.texture,
-            {0, 0, (float)rtW, -(float)rtH},
-            {0, 0, (float)screenW, (float)screenH},
-            {0, 0}, 0.0f, WHITE);
-        EndShaderMode();
+    BeginDrawing();
+    ClearBackground(BLACK);
+    if (shaderEnabled_) BeginShaderMode(crtShader);
+    DrawTexturePro(
+        renderTarget.texture,
+        {0, 0, (float)rtW, -(float)rtH},
+        {0, 0, (float)screenW, (float)screenH},
+        {0, 0}, 0.0f, WHITE);
+    if (shaderEnabled_) EndShaderMode();
 
         // 3) Efecto de explosión de bomba (sobre el tile destruido)
-        if (explosionActive_ && GetTime() < explosionEndTime_) {
+        if (dungeon_ && dungeon_->explosionActive && GetTime() < dungeon_->explosionEndTime) {
             // Convertir coordenadas del mapa a píxeles
-            Position pp = map_->getPlayerPos();
+            Position pp = dungeon_->lock().playerPos();
 
             int pixelX, pixelY;
             if (mapZoom_ > 1) {
@@ -420,16 +406,16 @@ void Game::run()
                 }
                 int camX = pp.x - mapPixW / zCellW / 2;
                 int camY = pp.y - mapPixH / zCellH / 2;
-                pixelX = offX + (explosionX_ - camX) * zCellW;
-                pixelY = offY + (explosionY_ - camY) * zCellH;
+                pixelX = offX + (dungeon_->explosionX - camX) * zCellW;
+                pixelY = offY + (dungeon_->explosionY - camY) * zCellH;
             } else {
                 // Sin zoom: usar cálculo normal
                 int viewW = (hudLayout_ == HudLayout::Sidebar) ? (cols - 22 - 1) : cols;
                 int viewH = (hudLayout_ == HudLayout::Bottom) ? (rows - 3) : rows;
                 int camX = pp.x - viewW / 2;
                 int camY = pp.y - viewH / 2;
-                pixelX = offX + (explosionX_ - camX) * cellW;
-                pixelY = offY + (explosionY_ - camY) * cellH;
+                pixelX = offX + (dungeon_->explosionX - camX) * cellW;
+                pixelY = offY + (dungeon_->explosionY - camY) * cellH;
             }
             
             // Determinar tamaño de celda según zoom
@@ -437,7 +423,7 @@ void Game::run()
             int drawCellH = (mapZoom_ > 1) ? (cellH * mapZoom_) : cellH;
             
             // Efecto de flash: blanco → naranja → rojo
-            float progress = (GetTime() - (explosionEndTime_ - 0.5)) / 0.5f;
+            float progress = (GetTime() - (dungeon_->explosionEndTime - 0.5)) / 0.5f;
             Color expColor;
             if (progress < 0.5f) {
                 // Blanco a naranja
@@ -461,13 +447,13 @@ void Game::run()
             int glyphY = pixelY + (drawCellH - glyphPixelH) / 2;
             DrawTextEx(font, std::string(1, glyphs[frame]).c_str(),
                       {(float)glyphX, (float)glyphY}, (float)kBaseFontSize, 0, BLACK);
-        } else {
-            explosionActive_ = false;
+        } else if (dungeon_) {
+            dungeon_->explosionActive = false;
         }
 
         // 4) Dibujar mensaje con Raylib directo (encima de todo, sin shader)
-        if (!explorationMsg_.empty() && GetTime() < explorationMsgEndTime_) {
-            std::string msgText = " " + explorationMsg_ + " ";
+        if (dungeon_ && !dungeon_->message.empty() && GetTime() < dungeon_->messageEndTime) {
+            std::string msgText = " " + dungeon_->message + " ";
             int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)kBaseFontSize, 0).x;
             int msgPixelH = cellH;
 
@@ -513,16 +499,26 @@ void Game::processInput()
         int rl;
         int g;
     } mapping[] = {
-        {265, GKEY_UP},        // KEY_UP
-        {264, GKEY_DOWN},      // KEY_DOWN
-        {263, GKEY_LEFT},      // KEY_LEFT
-        {262, GKEY_RIGHT},     // KEY_RIGHT
         {257, '\n'},           // KEY_ENTER
         {335, '\n'},           // KEY_KP_ENTER
         {256, 27},             // KEY_ESCAPE
         {258, '\t'},           // KEY_TAB
         {259, GKEY_BACKSPACE}, // KEY_BACKSPACE
         {32, ' '},             // KEY_SPACE
+        // Numeros 1-6 (fila superior)
+        {49, '1'},             // KEY_ONE
+        {50, '2'},             // KEY_TWO
+        {51, '3'},             // KEY_THREE
+        {52, '4'},             // KEY_FOUR
+        {53, '5'},             // KEY_FIVE
+        {54, '6'},             // KEY_SIX
+        // Numpad 1-6
+        {320, '1'},            // KEY_KP_1
+        {321, '2'},            // KEY_KP_2
+        {322, '3'},            // KEY_KP_3
+        {323, '4'},            // KEY_KP_4
+        {324, '5'},            // KEY_KP_5
+        {325, '6'},            // KEY_KP_6
     };
     // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
     if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
@@ -567,30 +563,57 @@ void Game::dispatchInput(int key)
         case MenuPhase::HudSelect:
             inputHudSelect(key);
             break;
+        case MenuPhase::Settings:
+            inputSettings(key);
+            break;
         }
         break;
     case GameState::Exploration:
     {
         // No limpiar mensaje aquí, se oculta solo tras 2 segundos
-        if (key == 'q' || key == 'Q')
+        if (key == 27)
         {
             menuSelection_ = 0;
             setState(GameState::QuitDialog);
             break;
         }
-        if (!map_)
+        if (!dungeon_)
             break;
-        Position pos = map_->getPlayerPos();
+        Position pos = dungeon_->lock().playerPos();
 
         // Use a potion
         if (key == 'p' || key == 'P')
         {
             int healed = player_->useConsumable();
             if (healed > 0)
-                explorationMsg_ = "Usas una pocion: +" + std::to_string(healed) + " HP!";
+                dungeon_->message = "Usas una poción: +" + std::to_string(healed) + " HP!";
             else
-                explorationMsg_ = "No tienes pociones.";
-            explorationMsgEndTime_ = GetTime() + 2.0;
+                dungeon_->message = "No tienes pociones.";
+            dungeon_->messageEndTime = GetTime() + 2.0;
+            break;
+        }
+
+        // Use beer (Warrior) or mana potion (Mage/Ranger)
+        if (key == 'r' || key == 'R')
+        {
+            bool used = false;
+            for (const auto& item : player_->getInventory().items())
+            {
+                if (item.type == ItemType::Consumable && item.statBonus == 0)
+                {
+                    int restored = player_->getMaxMana() / 2;
+                    player_->restoreMana(restored);
+                    player_->getInventory().removeItem(item.name);
+                    std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
+                    dungeon_->message = "Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!";
+                    dungeon_->messageEndTime = GetTime() + 2.0;
+                    used = true;
+                    break;
+                }
+            }
+            if (!used)
+                dungeon_->message = "No tienes cerveza/poción de mana.";
+            dungeon_->messageEndTime = GetTime() + 2.0;
             break;
         }
 
@@ -598,8 +621,6 @@ void Game::dispatchInput(int key)
         if (key == 'i' || key == 'I')
         {
             inventorySelection_ = 0;
-            inventoryTab_ = 0;
-            inventoryMsg_.clear();
             setState(GameState::Inventory);
             break;
         }
@@ -621,86 +642,98 @@ void Game::dispatchInput(int key)
             for (int i = 0; i < 4; i++)
             {
                 int ax = pos.x + sdx[i], ay = pos.y + sdy[i];
-                if (map_->isSecretWall(ax, ay))
+                auto acc = dungeon_->lock();
+                if (acc.isSecretWall(ax, ay))
                 {
                     // Try to use bomb first, if none available reveal normally
                     int bombCount = 0;
                     for (const auto& item : player_->getInventory().items())
                         if (item.type == ItemType::Bomb) bombCount += item.quantity;
                     if (bombCount > 0) {
-                        map_->destroyTile(ax, ay);
+                        acc.map().destroyTile(ax, ay);
                         player_->getInventory().removeItem("Bomba");
                         // Activar efecto visual de explosión
-                        explosionActive_ = true;
-                        explosionEndTime_ = GetTime() + 0.5;
-                        explosionX_ = ax;
-                        explosionY_ = ay;
-                        map_->updateFov();
-                        explorationMsg_ = "BOOM! La pared se hace polvo!";
+                        dungeon_->explosionActive = true;
+                        dungeon_->explosionEndTime = GetTime() + 0.5;
+                        dungeon_->explosionX = ax;
+                        dungeon_->explosionY = ay;
+                        acc.map().updateFov();
+                        dungeon_->message = "BOOM! La pared se hace polvo!";
                     } else {
-                        map_->revealSecretWall(ax, ay);
-                        map_->updateFov();
-                        explorationMsg_ = "Encontraste una sala secreta!";
+                        dungeon_->message = "No tienes bombas.";
+                        dungeon_->messageEndTime = GetTime() + 2.0;
+                        return;
                     }
-                    explorationMsgEndTime_ = GetTime() + 2.0;
+                    dungeon_->messageEndTime = GetTime() + 2.0;
                     found = true;
                     break;
                 }
             }
             if (!found)
-                explorationMsg_ = "No hay nada aqui...";
-            explorationMsgEndTime_ = GetTime() + 2.0;
+                dungeon_->message = "No hay nada aquí...";
+            dungeon_->messageEndTime = GetTime() + 2.0;
             break;
         }
 
+        // Movement
         int nx = pos.x, ny = pos.y;
-        if (key == GKEY_UP || key == 'w' || key == 'k')
+        if (key == 'w')
             ny--;
-        else if (key == GKEY_DOWN || key == 's' || key == 'j')
+        else if (key == 's')
             ny++;
-        else if (key == GKEY_LEFT || key == 'a' || key == 'h')
+        else if (key == 'a')
             nx--;
-        else if (key == GKEY_RIGHT || key == 'd' || key == 'l')
+        else if (key == 'd')
             nx++;
-        if (!map_->isWalkable(nx, ny))
+        if (nx == pos.x && ny == pos.y)
             break;
 
         // Merchant tile → open shop
-        if (shopExists_ && nx == shopMerchantPos_.x && ny == shopMerchantPos_.y)
         {
-            generateShopStock();
-            shopSelection_ = 0;
-            setState(GameState::Shop);
-            break;
+            auto acc = dungeon_->lock();
+            if (!acc.isWalkable(nx, ny))
+                break;
+            if (acc.shopExists() && nx == acc.shopMerchantPos().x && ny == acc.shopMerchantPos().y)
+            {
+                generateShopStock();
+                shopSelection_ = 0;
+                dungeon_->message.clear();
+                setState(GameState::Shop);
+                break;
+            }
         }
 
         // Locked door blocks movement
-        if (lockedDoorExists_ && !lockedDoorOpen_ &&
-            lockedDoorPos_.x == nx && lockedDoorPos_.y == ny)
         {
-            explorationMsg_ = "La puerta permanece sellada. Algo en las sombras aun respira.";
-            explorationMsgEndTime_ = GetTime() + 2.0;
-            break;
+            auto acc = dungeon_->lock();
+            if (acc.lockedDoorExists() && !acc.lockedDoorOpen() &&
+                acc.lockedDoorPos().x == nx && acc.lockedDoorPos().y == ny)
+            {
+                dungeon_->message = "La puerta permanece sellada. Algo en las sombras aún respira.";
+                dungeon_->messageEndTime = GetTime() + 2.0;
+                break;
+            }
         }
 
-        // Enemy collision → combat (protected against AI thread)
+        // Enemy collision → combat
         bool triggered = false;
         {
-            std::lock_guard<std::mutex> lk(worldMutex_);
-            for (int i = 0; i < static_cast<int>(worldEnemies_.size()); i++)
+            auto acc = dungeon_->lock();
+            int idx = 0;
+            for (auto &we : acc.enemies())
             {
-                auto &we = worldEnemies_[i];
                 if (we.alive && we.pos.x == nx && we.pos.y == ny)
                 {
-                    combatWorldEnemyIdx_ = i;
+                    combatWorldEnemyIdx_ = idx;
                     triggered = true;
                     break;
                 }
+                idx++;
             }
             if (!triggered)
             {
-                map_->setPlayerPos(nx, ny);
-                map_->updateFov();
+                acc.setPlayerPos(nx, ny);
+                acc.map().updateFov();
             }
         }
         if (triggered)
@@ -710,29 +743,41 @@ void Game::dispatchInput(int key)
         }
 
         // Chest on new tile
-        for (auto &ch : worldChests_)
         {
-            if (!ch.opened && ch.pos.x == nx && ch.pos.y == ny)
+            auto acc = dungeon_->lock();
+            for (auto &ch : acc.chests())
             {
-                openChest(ch);
-                break;
+                if (!ch.opened && ch.pos.x == nx && ch.pos.y == ny)
+                {
+                    if (ch.isMimic) {
+                        ch.opened = true;
+                        mimicCombat_ = true;
+                        setState(GameState::Combat);
+                    } else {
+                        openChest(ch);
+                    }
+                    break;
+                }
             }
         }
 
         // Stairs on new tile
-        if ((!lockedDoorExists_ || lockedDoorOpen_) &&
-            stairsPos_.x == nx && stairsPos_.y == ny)
         {
-            if (player_->getDungeonFloor() >= 20) {
-                victory_ = true;
-                setState(GameState::GameOver);
-            } else {
-                player_->descendFloor();
-                setState(GameState::Exploration);
-                explorationMsg_ = "Desciendes al piso " +
-                                  std::to_string(player_->getDungeonFloor()) + "...";
-                explorationMsgEndTime_ = GetTime() + 2.0;
-                saveGame();
+            auto acc = dungeon_->lock();
+            if ((!acc.lockedDoorExists() || acc.lockedDoorOpen()) &&
+                acc.stairsPos().x == nx && acc.stairsPos().y == ny)
+            {
+                if (player_->getDungeonFloor() >= 20) {
+                    victory_ = true;
+                    setState(GameState::GameOver);
+                } else {
+                    player_->descendFloor();
+                    setState(GameState::Exploration);
+                    dungeon_->message = "Desciendes al piso " +
+                                       std::to_string(player_->getDungeonFloor()) + "...";
+                    dungeon_->messageEndTime = GetTime() + 2.0;
+                    saveGame();
+                }
             }
         }
         break;
@@ -762,15 +807,15 @@ void Game::dispatchInput(int key)
 void Game::inputTitle(int key)
 {
     const bool hs = hasSave();
-    const int n = hs ? 4 : 3;
+    const int n = hs ? 5 : 4;
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_LEFT:
+    case 'w':
+    case 'a':
         menuSelection_ = (menuSelection_ - 1 + n) % n;
         break;
-    case GKEY_DOWN:
-    case GKEY_RIGHT:
+    case 's':
+    case 'd':
         menuSelection_ = (menuSelection_ + 1) % n;
         break;
     case '\n':
@@ -787,6 +832,10 @@ void Game::inputTitle(int key)
             }
             else if (menuSelection_ == 2)
             {
+                menuPhase_ = MenuPhase::Settings;
+            }
+            else if (menuSelection_ == 3)
+            {
                 menuPhase_ = MenuPhase::Credits;
             }
             else
@@ -802,6 +851,10 @@ void Game::inputTitle(int key)
                 menuPhase_ = MenuPhase::NameInput;
             }
             else if (menuSelection_ == 1)
+            {
+                menuPhase_ = MenuPhase::Settings;
+            }
+            else if (menuSelection_ == 2)
             {
                 menuPhase_ = MenuPhase::Credits;
             }
@@ -827,16 +880,54 @@ void Game::inputCredits(int key)
     }
 }
 
+void Game::inputSettings(int key)
+{
+    static constexpr int n = 4;
+    switch (key)
+    {
+    case 'w':
+    case 'a':
+        settingsSelection_ = (settingsSelection_ - 1 + n) % n;
+        break;
+    case 's':
+    case 'd':
+        settingsSelection_ = (settingsSelection_ + 1) % n;
+        break;
+    case '\n':
+    case ' ':
+        if (settingsSelection_ == 0) {
+            hudLayout_ = (hudLayout_ == HudLayout::Sidebar) ? HudLayout::Bottom : HudLayout::Sidebar;
+            saveSettings();
+        } else if (settingsSelection_ == 1) {
+            mapZoom_ = (mapZoom_ % 3) + 1;
+            saveSettings();
+        } else if (settingsSelection_ == 2) {
+            shaderEnabled_ = !shaderEnabled_;
+            saveSettings();
+        } else {
+            menuSelection_ = 0;
+            settingsSelection_ = 0;
+            menuPhase_ = MenuPhase::Title;
+        }
+        break;
+    case 27:
+        menuSelection_ = 0;
+        settingsSelection_ = 0;
+        menuPhase_ = MenuPhase::Title;
+        break;
+    }
+}
+
 void Game::inputQuitDialog(int key)
 {
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_LEFT:
+    case 'w':
+    case 'a':
         menuSelection_ = (menuSelection_ - 1 + 2) % 2;
         break;
-    case GKEY_DOWN:
-    case GKEY_RIGHT:
+    case 's':
+    case 'd':
         menuSelection_ = (menuSelection_ + 1) % 2;
         break;
     case '\n':
@@ -881,8 +972,8 @@ void Game::inputClassSelect(int key)
 {
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         navV(key, classSelection_, 3);
         break;
     case 27:
@@ -899,8 +990,8 @@ void Game::inputHudSelect(int key)
 {
     switch (key)
     {
-    case GKEY_LEFT:
-    case GKEY_RIGHT:
+    case 'a':
+    case 'd':
         hudSelection_ = (hudSelection_ + 1) % 2;
         break;
     case 27:
@@ -923,10 +1014,10 @@ void Game::inputHudSelect(int key)
             break;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
-        // Dar 5 bombas iniciales (como 1 item con quantity=5)
+        // Dar 2 bombas iniciales (como 1 item con quantity=2)
         {
             Item bomba = DungeonPopulator::pickBomb(1);
-            bomba.quantity = 5;
+            bomba.quantity = 2;
             player_->getInventory().addItem(bomba);
         }
         initQuests();
@@ -941,41 +1032,31 @@ void Game::update()
     checkQuestProgress();
 
     // Abrir puerta bloqueada cuando todos los enemigos del piso estén muertos
-    if (state_ == GameState::Exploration &&
-        lockedDoorExists_ && !lockedDoorOpen_)
+    if (dungeon_ && state_.load() == GameState::Exploration && dungeon_->allEnemiesDead())
     {
-        bool anyAlive = false;
-        for (const auto &we : worldEnemies_)
-            if (we.alive)
-            {
-                anyAlive = true;
-                break;
-            }
-
-        if (!anyAlive)
-        {
-            lockedDoorOpen_ = true;
-            explorationMsg_ = "El silencio se apodera del Tenebrarium... algo cede en la oscuridad.";
-            explorationMsgEndTime_ = GetTime() + 2.0;
-        }
+        dungeon_->openLockedDoor();
+        dungeon_->message = "El silencio se apodera del Tenebrarium... algo cede en la oscuridad.";
+        dungeon_->messageEndTime = GetTime() + 2.0;
     }
 }
 
 void Game::initQuests()
 {
     quests_.clear();
-    enemiesKilled_ = 0;
-    chestsOpened_ = 0;
+    if (dungeon_) {
+        dungeon_->enemiesKilled = 0;
+        dungeon_->chestsOpened = 0;
+    }
 
     quests_.push_back({"primer_sangre", "Primer Sangre", "Derrota a tu primer enemigo en el Tenebrarium.", QuestStatus::InProgress, {{"Mata 1 enemigo", false}}, 50, 0});
     quests_.push_back({"cazador", "Cazador", "Los monstruos del Tenebrarium son peligrosos. Demuestra que no te amedrentan.", QuestStatus::InProgress, {{"Mata 5 enemigos", false}}, 150, 20});
-    quests_.push_back({"buscador", "Buscador de Tesoros", "Las criptas estan llenas de riquezas olvidadas. Encuentralas.", QuestStatus::InProgress, {{"Abre 3 cofres", false}}, 100, 30});
-    quests_.push_back({"descenso", "Descenso a las Profundidades", "Las criaturas mas peligrosas habitan los pisos inferiores.", QuestStatus::InProgress, {{"Llega al piso 2", false}, {"Llega al piso 3", false}}, 200, 50});
+    quests_.push_back({"buscador", "Buscador de Tesoros", "Las criptas están llenas de riquezas olvidadas. Encuéntralas.", QuestStatus::InProgress, {{"Abre 3 cofres", false}}, 100, 30});
+    quests_.push_back({"descenso", "Descenso a las Profundidades", "Las criaturas más peligrosas habitan los pisos inferiores.", QuestStatus::InProgress, {{"Llega al piso 2", false}, {"Llega al piso 3", false}}, 200, 50});
 }
 
 void Game::checkQuestProgress()
 {
-    if (!player_)
+    if (!player_ || !dungeon_)
         return;
     int floor = player_->getDungeonFloor();
 
@@ -985,15 +1066,15 @@ void Game::checkQuestProgress()
             continue;
         if (q.id == "primer_sangre")
         {
-            q.objectives[0].completed = (enemiesKilled_ >= 1);
+            q.objectives[0].completed = (dungeon_->enemiesKilled >= 1);
         }
         else if (q.id == "cazador")
         {
-            q.objectives[0].completed = (enemiesKilled_ >= 5);
+            q.objectives[0].completed = (dungeon_->enemiesKilled >= 5);
         }
         else if (q.id == "buscador")
         {
-            q.objectives[0].completed = (chestsOpened_ >= 3);
+            q.objectives[0].completed = (dungeon_->chestsOpened >= 3);
         }
         else if (q.id == "descenso")
         {
@@ -1005,8 +1086,8 @@ void Game::checkQuestProgress()
             q.status = QuestStatus::Completed;
             player_->gainXp(q.xpReward);
             player_->addCoins(q.goldReward);
-            explorationMsg_ = "Mision completada: " + q.title + "!";
-            explorationMsgEndTime_ = GetTime() + 2.0;
+            dungeon_->message = "Misión completada: " + q.title + "!";
+            dungeon_->messageEndTime = GetTime() + 2.0;
         }
     }
 }
@@ -1035,33 +1116,43 @@ void Game::render(TerminalScreen &scr)
         case MenuPhase::HudSelect:
             Renderer::drawHudSelect(scr, hudSelection_);
             break;
+        case MenuPhase::Settings:
+            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            break;
         }
         break;
     case GameState::Exploration:
-        if (map_ && player_)
+        if (dungeon_ && player_)
         {
             std::vector<MapEntity> entities;
-            for (const auto &we : worldEnemies_)
-                if (we.alive)
-                    entities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
-            for (const auto &ch : worldChests_)
-                if (!ch.opened)
-                    entities.push_back({ch.pos, '$', 2, true});
-            if (lockedDoorExists_ && !lockedDoorOpen_)
-                entities.push_back({lockedDoorPos_, '+', 1, false});
-            if (!lockedDoorExists_ || lockedDoorOpen_)
-                entities.push_back({stairsPos_, '>', 3, true});
-            if (shopExists_)
-                entities.push_back({shopMerchantPos_, '$', 4, true});
-            // No pasar mensaje (se dibuja aparte con Raylib directo)
-            Renderer::drawExploration(scr, *map_, *player_, hudLayout_,
-                                       entities, "", mapZoom_);
+            {
+                auto acc = dungeon_->lock();
+                for (const auto &we : acc.enemies())
+                    if (we.alive)
+                        entities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
+                for (const auto &ch : acc.chests())
+                    if (!ch.opened)
+                        entities.push_back({ch.pos, '$', 2, true});
+                if (acc.lockedDoorExists() && !acc.lockedDoorOpen())
+                    entities.push_back({acc.lockedDoorPos(), '+', 1, false});
+                if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
+                    entities.push_back({acc.stairsPos(), '>', 3, true});
+                if (acc.shopExists())
+                    entities.push_back({acc.shopMerchantPos(), '$', 4, true});
+                Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,
+                                           entities, "", mapZoom_);
+             }
          }
         break;
     case GameState::Combat:
-        if (combat_ && player_)
+        if (combat_ && player_ && dungeon_)
         {
-            bool boss = combatWorldEnemyIdx_ >= 0 && worldEnemies_[combatWorldEnemyIdx_].isBoss;
+            bool boss = false;
+            if (combatWorldEnemyIdx_ >= 0) {
+                auto acc = dungeon_->lock();
+                if (combatWorldEnemyIdx_ < static_cast<int>(acc.enemies().size()))
+                    boss = acc.enemies()[combatWorldEnemyIdx_].isBoss;
+            }
             int flashIdx = (GetTime() < combatFlashEndTime_) ? combatFlashIdx_ : -1;
             Renderer::drawCombat(scr, *combat_, *player_,
                                  combatShowingArts_, combatArtSelection_, boss, flashIdx);
@@ -1070,11 +1161,11 @@ void Game::render(TerminalScreen &scr)
     case GameState::Shop:
         if (player_)
             Renderer::drawShop(scr, shopStock_, shopSelection_,
-                               *player_, explorationMsg_);
+                               *player_, dungeon_ ? dungeon_->message : "");
         break;
     case GameState::Inventory:
         if (player_)
-            Renderer::drawInventory(scr, *player_, inventorySelection_, inventoryTab_, inventoryMsg_);
+            Renderer::drawInventory(scr, *player_, inventorySelection_);
         break;
     case GameState::QuestLog:
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
@@ -1090,7 +1181,7 @@ void Game::render(TerminalScreen &scr)
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-static char glyphForEnemy(EnemyType t)
+static int glyphForEnemy(EnemyType t)
 {
     switch (t)
     {
@@ -1102,6 +1193,8 @@ static char glyphForEnemy(EnemyType t)
     case EnemyType::Zombie:   return 'z';
     case EnemyType::Demon:    return 'd';
     case EnemyType::Shadow:   return 'S';
+    case EnemyType::Mimic:    return 'M';
+    case EnemyType::Slime:    return 0x25CF; // ●
     }
     return '?';
 }
@@ -1118,6 +1211,8 @@ static int colorPairForEnemy(EnemyType t)
     case EnemyType::Zombie:   return 10; // COL_DK_GREEN
     case EnemyType::Demon:    return  6; // COL_RED
     case EnemyType::Shadow:   return 11; // COL_DK_GRAY
+    case EnemyType::Mimic:    return 9; // COL_ORANGE
+    case EnemyType::Slime:    return 10; // COL_DK_GREEN
     }
     return 6; // COL_RED fallback
 }
@@ -1136,53 +1231,37 @@ void Game::setState(GameState newState)
     if (newState == GameState::MainMenu)
     {
         // Guardar antes de limpiar (permitir continuar después)
-        if (player_ && map_)
+        // No guardar si venimos de GameOver (muerte/victoria) — ya se borró el save
+        if (state_.load() != GameState::GameOver && player_ && dungeon_)
             saveGame();
-        pendingCombatEnemy_ = -1;
+        pendingCombatEnemy_.store(-1);
         victory_ = false;
         menuPhase_ = MenuPhase::Title;
         menuSelection_ = 0;
         classSelection_ = 0;
         hudSelection_ = 0;
         playerName_.clear();
-        player_.reset(); // Limpiar jugador (incluye inventario)
-        worldEnemies_.clear();
+        player_.reset();
+        dungeon_.reset();
         combat_.reset();
     }
 
     if (newState == GameState::Exploration)
     {
-        pendingCombatEnemy_ = -1;
-        worldEnemies_.clear();
-        worldChests_.clear();
-        lockedDoorExists_ = false;
-        lockedDoorOpen_ = false;
+        pendingCombatEnemy_.store(-1);
+        mimicCombat_ = false;
         combat_.reset();
         shopStock_.clear();  // el stock se regenera la primera vez que se entra a la tienda del nuevo piso
 
-        // Generar nuevo piso: mapa BSP 80×40 con jugador en el centro de la sala 0
-        map_ = std::make_unique<Map>(80, 40);
-        BSPDungeon gen(80, 40);
-        gen.generate(*map_);
-
-        map_->setPlayerPos(gen.getRooms()[0].centerX(), gen.getRooms()[0].centerY());
-        map_->updateFov();
 
         int floor = player_ ? player_->getDungeonFloor() : 1;
         PlayerClass cls = player_ ? player_->getClass() : PlayerClass::Warrior;
 
-        auto pop = DungeonPopulator::populate(*map_, gen.getRooms(), floor, cls);
-        worldEnemies_    = std::move(pop.enemies);
-        worldChests_     = std::move(pop.chests);
-        stairsPos_       = pop.stairsPos;
-        lockedDoorPos_   = pop.lockedDoorPos;
-        lockedDoorExists_= pop.lockedDoorExists;
-        shopExists_      = pop.shopExists;
-        shopRoom_        = pop.shopRoom;
-        shopMerchantPos_ = pop.shopMerchantPos;
+        dungeon_ = std::make_unique<Dungeon>();
+        dungeon_->generate(floor, cls);
     }
 
-    if (newState == GameState::Combat && player_)
+    if (newState == GameState::Combat && player_ && dungeon_)
     {
         combatShowingArts_ = false;
         combatArtSelection_ = 0;
@@ -1191,13 +1270,19 @@ void Game::setState(GameState newState)
         // Si combatWorldEnemyIdx_ == -1 (caso raro/debug) se usan dos enemigos por defecto.
         std::vector<std::unique_ptr<Enemy>> enemies;
         int fl = player_ ? player_->getDungeonFloor() : 1;
-        if (combatWorldEnemyIdx_ >= 0)
+        if (mimicCombat_) {
+            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Mimic, fl));
+            mimicCombat_ = false;
+        } else if (combatWorldEnemyIdx_ >= 0)
         {
-            const auto& we = worldEnemies_[combatWorldEnemyIdx_];
-            auto enemy = DungeonPopulator::makeEnemy(we.type, fl, we.isBoss);
-            if (we.remainingHp > 0 && we.remainingHp < enemy->getMaxHp())
-                enemy->takeDamageRaw(enemy->getMaxHp() - we.remainingHp);
-            enemies.push_back(std::move(enemy));
+            auto acc = dungeon_->lock();
+            if (combatWorldEnemyIdx_ < static_cast<int>(acc.enemies().size())) {
+                bool boss = acc.enemies()[combatWorldEnemyIdx_].isBoss;
+                enemies.push_back(DungeonPopulator::makeEnemy(
+                    acc.enemies()[combatWorldEnemyIdx_].type, fl, boss));
+                if (!boss && enemies.back()->getType() == EnemyType::Spider && (std::rand() % 100) < 1)
+                    enemies.back()->setName("Ariatña");
+            }
         }
         else
         {
@@ -1210,32 +1295,36 @@ void Game::setState(GameState newState)
     if (newState == GameState::GameOver)
         GameSerializer::deleteSave();
 
-    state_ = newState;
+    state_.store(newState);
 }
 
-void Game::openChest(WorldChest &chest)
+void Game::openChest(WorldChest& chest)
 {
     chest.opened = true;
-    chestsOpened_++;
+    if (!dungeon_) return;
+    dungeon_->chestsOpened++;
+
     switch (chest.loot)
     {
     case ChestLoot::Coins:
         player_->addCoins(chest.coins);
-        explorationMsg_ = "Cofre: +" + std::to_string(chest.coins) + " monedas de oro!";
-        explorationMsgEndTime_ = GetTime() + 2.0;
+        dungeon_->message = "Cofre: +" + std::to_string(chest.coins) + " monedas de oro!";
+        dungeon_->messageEndTime = GetTime() + 2.0;
         break;
     case ChestLoot::Item:
         if (chest.item.type == ItemType::Consumable)
         {
             player_->getInventory().addItem(chest.item);
-            explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!";
+            dungeon_->message = "Cofre: encontraste " + chest.item.name + "!";
         }
         else
         {
-            player_->pickupItem(chest.item);
-            explorationMsg_ = "Cofre: encontraste " + chest.item.name + "!  (+" + std::to_string(chest.item.statBonus) + (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
+            player_->getInventory().addItem(chest.item);
+            dungeon_->message = "Cofre: encontraste " + chest.item.name + "!  (+" +
+                std::to_string(chest.item.statBonus) +
+                (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
         }
-        explorationMsgEndTime_ = GetTime() + 2.0;
+        dungeon_->messageEndTime = GetTime() + 2.0;
         break;
     }
 }
@@ -1246,69 +1335,62 @@ void Game::returnToExploration()
     // Return to the same map without regenerating — just clear combat state
     combat_.reset();
     combatWorldEnemyIdx_ = -1;
-    explorationMsg_.clear(); // Limpiar mensaje anterior al volver
-    state_ = GameState::Exploration;
+    if (dungeon_) dungeon_->message.clear();
+    state_.store(GameState::Exploration);
 }
 
 void Game::inputInventory(int key)
 {
-    if (!player_) return;
-
-    const auto& allItems = player_->getInventory().items();
-
-    // Construir vista filtrada+ordenada igual que el renderer
-    auto buildTab = [&](int tab) {
-        std::vector<int> idx;
-        for (int i = 0; i < static_cast<int>(allItems.size()); i++) {
-            bool isConsumable = (allItems[i].type == ItemType::Consumable);
-            if (tab == 0 ? isConsumable : !isConsumable)
-                idx.push_back(i);
-        }
-        std::sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return allItems[a].statBonus > allItems[b].statBonus;
-        });
-        return idx;
-    };
-
-    // Cambiar pestaña con ←/→
-    if (key == GKEY_LEFT || key == GKEY_RIGHT) {
-        inventoryTab_ = 1 - inventoryTab_;
-        inventorySelection_ = 0;
-        inventoryMsg_.clear();
+    if (!player_)
         return;
-    }
-
-    if (key == 27 || key == 'q' || key == 'Q') {
-        state_ = GameState::Exploration;
-        return;
-    }
-
-    if (inventoryTab_ == 0) {
-        // ── Pestaña Pociones ──────────────────────────────────────────────────
-        auto idx = buildTab(0);
-        int n = static_cast<int>(idx.size());
-        if (key == GKEY_UP || key == GKEY_DOWN) {
-            if (n > 0) { navV(key, inventorySelection_, n); inventoryMsg_.clear(); }
-            return;
+    const int bagSize = static_cast<int>(player_->getInventory().items().size());
+    const int total = 2 + bagSize;
+    switch (key)
+    {
+    case 'w':
+    case 's':
+        navV(key, inventorySelection_, total);
+        break;
+    case 'e':
+    case 'E':
+    case '\n':
+    {
+        int bagIdx = inventorySelection_ - 2;
+        if (bagIdx >= 0 && bagIdx < bagSize)
+        {
+            player_->equipItem(bagIdx);
+            int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
+            if (inventorySelection_ >= newTotal)
+                inventorySelection_ = std::max(0, newTotal - 1);
         }
-        if ((key == 'e' || key == 'E' || key == 'u' || key == 'U' || key == '\n') && n > 0) {
-            int bagIdx = idx[inventorySelection_];
-            const Item& item = allItems[bagIdx];
-            if (player_->getHp() >= player_->getMaxHp()) {
-                inventoryMsg_ = "HP ya esta al maximo!";
-            } else {
-                std::string name = item.name;
-                int bonus = item.statBonus;
-                player_->getInventory().removeItem(name);
-                int healed = std::min(bonus, player_->getMaxHp() - player_->getHp());
+        break;
+    }
+    case 'u':
+    case 'U':
+    {
+        int bagIdx = inventorySelection_ - 2;
+        if (bagIdx >= 0 && bagIdx < bagSize)
+        {
+            auto& items = player_->getInventory().items();
+            const auto& item = items[bagIdx];
+            if (item.type == ItemType::Consumable && item.statBonus > 0)
+            {
+                int healed = std::min(item.statBonus, player_->getMaxHp() - player_->getHp());
                 player_->heal(healed);
-                explorationMsg_ = "Usas " + name + ": +" + std::to_string(healed) + " HP!";
-                explorationMsgEndTime_ = GetTime() + 2.0;
-                int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
-                if (inventorySelection_ >= newTotal)
-                    inventorySelection_ = std::max(0, newTotal - 1);
+                player_->getInventory().removeItem(item.name);
+                if (dungeon_) {
+                    dungeon_->message = "Usas " + item.name + ": +" + std::to_string(healed) + " HP!";
+                    dungeon_->messageEndTime = GetTime() + 2.0;
+                }
             }
         }
+        break;
+    }
+    case 27:
+    case 'q':
+    case 'Q':
+        state_.store(GameState::Exploration, std::memory_order_release);
+        break;
     }
 }
 
@@ -1317,8 +1399,8 @@ void Game::inputQuestLog(int key)
     int n = static_cast<int>(quests_.size());
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         if (n > 0) navV(key, questLogSelection_, n);
         break;
     case 27:
@@ -1339,8 +1421,8 @@ void Game::inputShop(int key)
     }
     switch (key)
     {
-    case GKEY_UP:
-    case GKEY_DOWN:
+    case 'w':
+    case 's':
         navV(key, shopSelection_, n);
         break;
     case '\n':
@@ -1348,13 +1430,15 @@ void Game::inputShop(int key)
         auto &s = shopStock_[shopSelection_];
         if (s.sold)
         {
-            explorationMsg_ = "Ya vendido.";
+            if (dungeon_) dungeon_->message = "Ya vendido.";
             break;
         }
         if (player_->getCoins() < s.price)
         {
-            explorationMsg_ = "No tienes suficiente oro.";
-            explorationMsgEndTime_ = GetTime() + 2.0;
+            if (dungeon_) {
+                dungeon_->message = "No tienes suficiente oro.";
+                dungeon_->messageEndTime = GetTime() + 2.0;
+            }
             break;
         }
         player_->addCoins(-s.price);
@@ -1363,8 +1447,10 @@ void Game::inputShop(int key)
         else
             player_->pickupItem(s.item);
         s.sold = true;
-        explorationMsg_ = "Compraste: " + s.item.name + "!";
-        explorationMsgEndTime_ = GetTime() + 2.0;
+        if (dungeon_) {
+            dungeon_->message = "Compraste: " + s.item.name + "!";
+            dungeon_->messageEndTime = GetTime() + 2.0;
+        }
         break;
     }
     case 27:
@@ -1388,6 +1474,12 @@ void Game::generateShopStock()
     Item p2 = DungeonPopulator::pickPotion(shopFloor);
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
+    Item beer = DungeonPopulator::pickBeer();
+    beer.quantity = 3;
+    shopStock_.push_back({beer, 5, false});
+    Item manaPot = DungeonPopulator::pickManaPotion();
+    manaPot.quantity = 3;
+    shopStock_.push_back({manaPot, 8, false});
     Item bomb = DungeonPopulator::pickBomb(shopFloor);
     bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});
@@ -1397,65 +1489,49 @@ void Game::generateShopStock()
     shopStock_.push_back({a, a.value + shopFloor * 5, false});
 }
 
-bool Game::isInShopRoom(Position p) const
+bool Game::isInShopRoom(Dungeon::Lock& acc, Position p) const
 {
-    if (!shopExists_)
-        return false;
-    return p.x >= shopRoom_.x && p.x < shopRoom_.x + shopRoom_.w &&
-           p.y >= shopRoom_.y && p.y < shopRoom_.y + shopRoom_.h;
+    return acc.isInShopRoom(p);
 }
 
-// Usar bomba en pared secreta adyacente (tecla E)
-void Game::useBomb()
+void Game::useBomb(Dungeon::Lock& acc)
 {
-    if (!player_ || !map_) return;
-
-    // Verificar si tiene bombas (sumar quantity total)
-    int bombCount = 0;
-    for (const auto& item : player_->getInventory().items())
-        if (item.type == ItemType::Bomb) bombCount += item.quantity;
-
-    if (bombCount == 0) {
-        explorationMsg_ = "No tienes bombas.";
-        explorationMsgEndTime_ = GetTime() + 2.0;
-        return;
-    }
-
-    Position pos = map_->getPlayerPos();
-    const int dx[] = {0, 0, -1, 1};
-    const int dy[] = {-1, 1, 0, 0};
-
-    bool destroyed = false;
-
-    // Buscar pared secreta adyacente
-    int bombX = 0, bombY = 0;
-    for (int i = 0; i < 4; i++) {
-        int ax = pos.x + dx[i], ay = pos.y + dy[i];
-        if (map_->isSecretWall(ax, ay)) {
-            map_->destroyTile(ax, ay);
-            bombX = ax;
-            bombY = ay;
-            destroyed = true;
-            break;
+    for (const auto &item : player_->getInventory().items())
+    {
+        if (item.type == ItemType::Bomb)
+        {
+            player_->getInventory().removeItem(item.name);
+            const int sdx[] = {0, 0, -1, 1};
+            const int sdy[] = {-1, 1, 0, 0};
+            Position pos = acc.playerPos();
+            for (int i = 0; i < 4; i++)
+            {
+                int ax = pos.x + sdx[i], ay = pos.y + sdy[i];
+                if (acc.isSecretWall(ax, ay) && acc.map().destroyTile(ax, ay))
+                {
+                    dungeon_->explosionActive = true;
+                    dungeon_->explosionEndTime = GetTime() + 0.5;
+                    dungeon_->explosionX = ax;
+                    dungeon_->explosionY = ay;
+                    acc.map().updateFov();
+                    dungeon_->message = "La bomba destruye la pared!";
+                    dungeon_->messageEndTime = GetTime() + 2.0;
+                    return;
+                }
+            }
+            dungeon_->message = "No hay paredes secretas adyacentes.";
+            dungeon_->messageEndTime = GetTime() + 2.0;
+            return;
         }
     }
-
-    if (!destroyed) {
-        explorationMsg_ = "No hay pared secreta adyacente.";
-        explorationMsgEndTime_ = GetTime() + 2.0;
-        return;
-    }
-
-    // Consumir bomba y activar efecto visual (0.5s)
-    player_->getInventory().removeItem("Bomba");
-    explosionActive_ = true;
-    explosionEndTime_ = GetTime() + 0.5;
-    explosionX_ = bombX;
-    explosionY_ = bombY;
-    explorationMsg_ = "BOOM! La pared se hace polvo!";
-    explorationMsgEndTime_ = GetTime() + 2.0;
-    map_->updateFov(); // Actualizar visibilidad
+    dungeon_->message = "No tienes bombas.";
+    dungeon_->messageEndTime = GetTime() + 2.0;
 }
+
+
+
+
+
 
 void Game::inputCombat(int key)
 {
@@ -1467,39 +1543,45 @@ void Game::inputCombat(int key)
     {
         if (combat_->playerFled())
         {
-            if (combatWorldEnemyIdx_ >= 0 && !combat_->getEnemies().empty())
-                worldEnemies_[combatWorldEnemyIdx_].remainingHp =
-                    combat_->getEnemies()[0]->getHp();
             returnToExploration();
         }
         else if (combat_->playerWon())
         {
             if (combatWorldEnemyIdx_ >= 0)
             {
-                auto &we = worldEnemies_[combatWorldEnemyIdx_];
+                auto acc = dungeon_->lock();
+                auto &we = acc.enemies()[combatWorldEnemyIdx_];
                 int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor());
                 int xpGained = we.isBoss ? baseXp * 5 : baseXp;
                 player_->gainXp(xpGained);
                 we.alive = false;
-                enemiesKilled_++;
+                dungeon_->enemiesKilled++;
                 int lootChance = we.isBoss ? 45 : 15;
                 // chance the enemy drops a potion
                 if (std::rand() % 100 < lootChance)
                 {
                     Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
                     player_->getInventory().addItem(pot);
-                    explorationMsg_ = "El enemigo solto una " + pot.name + "!";
-                    explorationMsgEndTime_ = GetTime() + 2.0;
+                    dungeon_->message = "El enemigo soltó una " + pot.name + "!";
+                    dungeon_->messageEndTime = GetTime() + 2.0;
                 }
             }
             // Regeneración post-combate
             int hpRegen = std::max(1, player_->getMaxHp() * 15 / 100);
-            int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
             player_->heal(hpRegen);
-            player_->restoreMana(mpRegen);
-            if (explorationMsg_.empty())
-                explorationMsg_ = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
-            explorationMsgEndTime_ = GetTime() + 2.0;
+            if (player_->getClass() != PlayerClass::Warrior)
+            {
+                int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
+                player_->restoreMana(mpRegen);
+            if (dungeon_->message.empty())
+                dungeon_->message = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
+        }
+        else
+        {
+            if (dungeon_->message.empty())
+                dungeon_->message = "Recuperas " + std::to_string(hpRegen) + " HP.";
+        }
+        dungeon_->messageEndTime = GetTime() + 2.0;
             returnToExploration();
         }
         else
@@ -1516,10 +1598,20 @@ void Game::inputCombat(int key)
         int n = static_cast<int>(arts.size());
         switch (key)
         {
-        case GKEY_UP:
-        case GKEY_DOWN:
+        case 'w':
+        case 's':
             navV(key, combatArtSelection_, n);
             break;
+        case '1': case '2': case '3': {
+            int idx = key - '1';
+            if (idx < n) {
+                combat_->doArt(idx);
+                combatFlashIdx_ = combat_->getCurrentTarget();
+                combatFlashEndTime_ = GetTime() + 0.25;
+                combatShowingArts_ = false;
+            }
+            break;
+        }
         case '\n':
             combat_->doArt(combatArtSelection_);
             combatFlashIdx_ = combat_->getCurrentTarget();
@@ -1536,37 +1628,36 @@ void Game::inputCombat(int key)
     // Main action menu
     switch (key)
     {
-    case 'a':
-    case 'A':
+    case '1':
         combat_->doAttack();
         combatFlashIdx_ = combat_->getCurrentTarget();
         combatFlashEndTime_ = GetTime() + 0.25;
         break;
-    case 'f':
-    case 'F':
+    case '2':
         combat_->doHeavyAttack();
         combatFlashIdx_ = combat_->getCurrentTarget();
         combatFlashEndTime_ = GetTime() + 0.25;
         break;
-    case 'h':
-    case 'H':
+    case '3':
         combatShowingArts_ = true;
         combatArtSelection_ = 0;
         break;
-    case 'd':
-    case 'D':
+    case '4':
         combat_->doDefend();
+        break;
+    case '5':
+        combat_->doUseItem();
+        break;
+    case '6':
+        combat_->doFlee();
+        break;
+    case '7':
+        combat_->doLoot();
+        combatFlashIdx_ = combat_->getCurrentTarget();
+        combatFlashEndTime_ = GetTime() + 0.25;
         break;
     case ' ':
         combat_->doEndTurn();
-        break;
-    case 'r':
-    case 'R':
-        combat_->doFlee();
-        break;
-    case 'u':
-    case 'U':
-        combat_->doUseItem();
         break;
     case '\t': // TAB
         combat_->cycleTarget();
@@ -1586,7 +1677,11 @@ void Game::saveSettings() const {
     std::string dir = std::string(GetApplicationDirectory()) + "saves";
     std::filesystem::create_directories(dir);
     std::ofstream f(dir + "/settings.dat");
-    if (f) f << "mapZoom=" << mapZoom_ << "\n";
+    if (f) {
+        f << "mapZoom=" << mapZoom_ << "\n";
+        f << "hudLayout=" << static_cast<int>(hudLayout_) << "\n";
+        f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
+    }
 }
 
 void Game::loadSettings() {
@@ -1595,6 +1690,12 @@ void Game::loadSettings() {
     while (std::getline(f, line)) {
         if (line.rfind("mapZoom=", 0) == 0) {
             try { mapZoom_ = std::clamp(std::stoi(line.substr(8)), 1, 3); }
+            catch (...) {}
+        } else if (line.rfind("hudLayout=", 0) == 0) {
+            try { hudLayout_ = static_cast<HudLayout>(std::stoi(line.substr(10))); }
+            catch (...) {}
+        } else if (line.rfind("shaderEnabled=", 0) == 0) {
+            try { shaderEnabled_ = std::stoi(line.substr(14)) != 0; }
             catch (...) {}
         }
     }

@@ -35,7 +35,8 @@ void Player::levelUp() {
     attack_  = baseAttack_  + (equippedWeapon_ ? equippedWeapon_->statBonus : 0);
     defense_ = baseDefense_ + (equippedArmor_  ? equippedArmor_->statBonus  : 0);
     maxMana_ += 5;
-    mana_ = maxMana_;
+    if (class_ != PlayerClass::Warrior)
+        mana_ = maxMana_;  // Guerrero no recupera aguante al subir nivel
 }
 
 int Player::baseHp(PlayerClass c) {
@@ -118,7 +119,8 @@ void Player::unequipArmor() {
 
 int Player::useConsumable() {
     for (const auto& item : inventory_.items()) {
-        if (item.type == ItemType::Consumable) {
+        // statBonus > 0 filtra cerveza/poción de mana (restauran mana, no HP)
+        if (item.type == ItemType::Consumable && item.statBonus > 0) {
             int healed = std::min(item.statBonus, maxHp_ - hp_);
             hp_ += healed;
             inventory_.removeItem(item.name);
@@ -151,7 +153,7 @@ std::vector<Art> Player::getAvailableArts() const {
             return {
                 { "Golpe Demoledor", 2, 0,  ArtEffect::GolpeDemoledor, "ATK directo, ignora DEF" },
                 { "Grito de Guerra", 1, 10, ArtEffect::GritoDeGuerra,  "+ATK por 2 turnos" },
-                { "Escudo Total",    1, 5,  ArtEffect::EscudoTotal,    "-70% proximo golpe recibido" },
+                { "Escudo Total",    1, 5,  ArtEffect::EscudoTotal,    "-70% próximo golpe recibido" },
             };
         case PlayerClass::Mage:
             return {
@@ -161,7 +163,7 @@ std::vector<Art> Player::getAvailableArts() const {
             };
         case PlayerClass::Ranger:
             return {
-                { "Disparo Doble", 2, 0, ArtEffect::DisparoDoble, "2 ataques rapidos" },
+                { "Disparo Doble", 2, 0, ArtEffect::DisparoDoble, "2 ataques rápidos" },
                 { "Trampa",        1, 0, ArtEffect::Trampa,       "Daño retardado turno siguiente" },
                 { "Veneno",        1, 0, ArtEffect::Veneno,       "DoT 3 turnos" },
             };

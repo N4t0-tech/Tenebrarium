@@ -24,6 +24,7 @@ struct WorldChest {
     Position  pos;
     bool      opened;     // true = ya recogido, no se dibuja
     ChestLoot loot;
-    int       coins;      // solo válido si loot == ChestLoot::Coins
-    Item      item;       // solo válido si loot == ChestLoot::Item
+    int       coins;
+    Item      item;
+    bool      isMimic = false;
 };

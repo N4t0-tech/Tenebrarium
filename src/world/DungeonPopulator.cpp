@@ -8,6 +8,8 @@
 // Zombies desde piso 2, Sombras desde piso 4, Demonios desde piso 6.
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
+    if (floor == 1) return EnemyType::Slime;
+
     bool zombieAvail  = (floor >= 2);
     bool shadowAvail  = (floor >= 4);
     bool demonAvail   = (floor >= 6);
@@ -51,7 +53,7 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
     case EnemyType::Orc:
         name = "Orco";     hp = sc(140); atk = sc(20); def = sc(10); xp = sc(120); pa = 2; break;
     case EnemyType::Spider:
-        name = "Arana";    hp = sc(80);  atk = sc(12); def = sc(2);  xp = sc(40);  pa = 1; break;
+        name = "Araña";    hp = sc(80);  atk = sc(12); def = sc(2);  xp = sc(40);  pa = 1; break;
     case EnemyType::Vampire:
         name = "Vampiro";  hp = sc(110); atk = sc(18); def = sc(6);  xp = sc(80);  pa = 1; break;
     case EnemyType::Zombie:
@@ -60,6 +62,10 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "Demonio";  hp = sc(150); atk = sc(25); def = sc(8);  xp = sc(100); pa = 1; break;
     case EnemyType::Shadow:
         name = "Sombra";   hp = sc(70);  atk = sc(18); def = sc(2);  xp = sc(35);  pa = 2; break;
+    case EnemyType::Mimic:
+        name = "Mímico";   hp = sc(110); atk = sc(18); def = sc(10); xp = sc(30);  pa = 1; break;
+    case EnemyType::Slime:
+        name = "Slime";    hp = sc(60);  atk = sc(8);  def = sc(1);  xp = sc(10);  pa = 1; break;
     default:
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
@@ -69,9 +75,9 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         def = static_cast<int>(def * 2.5f);
         switch (t) {
         case EnemyType::Goblin:   name = "Rey Goblin";      break;
-        case EnemyType::Skeleton: name = "Senor Liche";     break;
+        case EnemyType::Skeleton: name = "Señor Liche";     break;
         case EnemyType::Orc:      name = "Gran Orco";       break;
-        case EnemyType::Spider:   name = "Reina Arana";     break;
+        case EnemyType::Spider:   name = "Reina Araña";     break;
         case EnemyType::Vampire:  name = "Vampiro Anciano"; break;
         case EnemyType::Zombie:   name = "Zombie Colosal";  break;
         case EnemyType::Demon:    name = "Archidemonio";    break;
@@ -79,7 +85,10 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         default: break;
         }
     }
-    return std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
+    auto enemy = std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
+    if (t == EnemyType::Slime && !isBoss)
+        enemy->setSplitsOnDeath(true);
+    return enemy;
 }
 
 int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
@@ -94,6 +103,8 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Zombie:   base = 25; break;
     case EnemyType::Demon:    base = 60; break;
     case EnemyType::Shadow:   base = 18; break;
+    case EnemyType::Mimic:    base = 25; break;
+    case EnemyType::Slime:    base =  5; break;
     default:                  base =  5; break;
     }
     return base + (floor - 1) * 5;
@@ -105,9 +116,9 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 {
     static const std::vector<Item> warrior = {
         {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3, 1},
-        {"Estoque",        "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Estoque",        "Rápido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
         {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5, 1},
-        {"Espada",         "Equilibrada y versatil.",   ItemType::Weapon, 50, 1, 5, 1},
+        {"Espada",         "Equilibrada y versátil.",   ItemType::Weapon, 50, 1, 5, 1},
         {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8, 1},
         {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7, 1},
     };
@@ -120,12 +131,12 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
         {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7, 1},
     };
     static const std::vector<Item> ranger = {
-        {"Arco Corto",     "Rapido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
+        {"Arco Corto",     "Rápido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
         {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2, 1},
         {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5, 1},
-        {"Arco Elfico",    "Tallado en madera elfica.", ItemType::Weapon, 50, 1, 5, 1},
+        {"Arco Elfico",    "Tallado en madera élfica.", ItemType::Weapon, 50, 1, 5, 1},
         {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7, 1},
-        {"Arco Encantado", "Flechas magicas.",          ItemType::Weapon, 80, 2, 7, 1},
+        {"Arco Encantado", "Flechas mágicas.",          ItemType::Weapon, 80, 2, 7, 1},
         {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
     };
     const auto& pool = (cls == PlayerClass::Warrior) ? warrior
@@ -139,11 +150,11 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
 Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 {
     static const Item a[3][2] = {
-        {{"Cota de Malla",      "Proteccion media.",   ItemType::Armor, 40, 1, 3, 1},
+        {{"Cota de Malla",      "Protección media.",   ItemType::Armor, 40, 1, 3, 1},
          {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
-        {{"Tunica Arcana",      "Ligera y magica.",    ItemType::Armor, 30, 1, 1, 1},
+         {{"Túnica Arcana",      "Ligera y mágica.",    ItemType::Armor, 30, 1, 1, 1},
          {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3, 1}},
-        {{"Cuero Reforzado",    "Agil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
+        {{"Cuero Reforzado",    "Ágil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
          {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
     };
     int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
@@ -155,10 +166,20 @@ Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 Item DungeonPopulator::pickPotion(int floor)
 {
     if (floor >= 5 || std::rand() % 3 == 0)
-        return {"Pocion Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80, 1};
+        return {"Poción Mayor",    "Recupera 80 HP.", ItemType::Consumable, 50, 1, 80, 1};
     if (floor >= 3 || std::rand() % 2 == 0)
-        return {"Pocion de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40, 1};
-    return     {"Pocion Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20, 1};
+        return {"Poción de Vida",  "Recupera 40 HP.", ItemType::Consumable, 25, 1, 40, 1};
+    return     {"Poción Pequeña",  "Recupera 20 HP.", ItemType::Consumable, 12, 1, 20, 1};
+}
+
+Item DungeonPopulator::pickBeer()
+{
+    return {"Cerveza", "Restaura la mitad del aguante.", ItemType::Consumable, 5, 1, 0, 1};
+}
+
+Item DungeonPopulator::pickManaPotion()
+{
+    return {"Poción de Mana", "Restaura la mitad del mana.", ItemType::Consumable, 8, 1, 0, 1};
 }
 
 Item DungeonPopulator::pickBomb(int floor)
@@ -285,12 +306,14 @@ DungeonPopulator::Result DungeonPopulator::populate(
     std::vector<Position> taken;
     taken.push_back({rooms[0].centerX(), rooms[0].centerY()});  // posición inicial del jugador
 
-    result.stairsPos = pickPos(rooms[n - 1], taken);
 
-    // Puerta bloqueada en la penúltima sala (si hay suficientes salas)
     if (n >= 3) {
         result.lockedDoorPos    = pickPos(rooms[n - 2], taken);
         result.lockedDoorExists = true;
+        result.stairsPos        = result.lockedDoorPos;
+    } else {
+        // Stairs in last room when there is no locked door
+        result.stairsPos = pickPos(rooms[n - 1], taken);
     }
 
     // Tienda: cualquier sala que no sea inicio, fin ni sala de puerta bloqueada
@@ -349,6 +372,11 @@ DungeonPopulator::Result DungeonPopulator::populate(
         }
         result.chests.push_back({pickPos(rooms[eligible[ci]], taken), false, loot, coins, item});
     }
+
+    // Mimics: small chance (~12%) that a chest is actually a mimic
+    for (auto& ch : result.chests)
+        if (!ch.opened && std::rand() % 100 < 12)
+            ch.isMimic = true;
 
     // Secret rooms
     int numSecret = 1 + std::rand() % 2;

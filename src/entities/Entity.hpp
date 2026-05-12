@@ -10,6 +10,7 @@ public:
     virtual ~Entity() = default;
 
     const std::string& getName() const { return name_; }
+    void setName(const std::string& name) { name_ = name; }
     int getHp() const { return hp_; }
     int getMaxHp() const { return maxHp_; }
     int getAttack() const { return attack_; }

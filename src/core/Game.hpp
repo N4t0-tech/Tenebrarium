@@ -11,9 +11,7 @@
 #include "entities/Player.hpp"
 #include "entities/Enemy.hpp"
 #include "combat/CombatSystem.hpp"
-#include "world/Map.hpp"
-#include "world/BSPDungeon.hpp"
-#include "world/WorldObjects.hpp"
+#include "world/Dungeon.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -38,8 +36,8 @@ public:
     void run();
 
 private:
-    GameState     state_;
-    MenuPhase     menuPhase_;   // sub-fase dentro de MainMenu
+    std::atomic<GameState>  state_{GameState::MainMenu};
+    MenuPhase     menuPhase_;
     bool          quitRequested_;
 
     // Estado del menú principal y flujo de creación de personaje
@@ -47,11 +45,12 @@ private:
     std::string   playerName_;
     int           classSelection_;
     int           hudSelection_;
+    int           settingsSelection_{0};
 
     HudLayout     hudLayout_;   // Sidebar o Bottom — elegido en HudSelect
 
     std::unique_ptr<Player>        player_;
-    std::unique_ptr<Map>           map_;
+    std::unique_ptr<Dungeon>       dungeon_;
     std::unique_ptr<CombatSystem>  combat_;
     bool                           combatShowingArts_;  // true = submenú de habilidades abierto
     int                            combatArtSelection_;
@@ -59,48 +58,22 @@ private:
     int                            combatFlashIdx_;
     double                         combatFlashEndTime_;
 
-    // Lista de enemigos vivos en el mundo; usada por el renderer y la IA
-    // INVARIANTE: acceder/modificar siempre bajo worldMutex_
-    std::vector<WorldEnemy>  worldEnemies_;
-    int                      combatWorldEnemyIdx_;  // índice en worldEnemies_ del combate activo (-1 si ninguno)
+    int           combatWorldEnemyIdx_{-1};
+    bool          mimicCombat_{false};
 
-    std::vector<WorldChest>  worldChests_;
+    std::atomic<int>  pendingCombatEnemy_{-1};
 
-    // La puerta bloqueada se abre cuando todos los enemigos del piso mueren
-    Position  lockedDoorPos_;
-    bool      lockedDoorExists_;
-    bool      lockedDoorOpen_;
-    Position  stairsPos_;
+    int  mapZoom_{1};
+    bool shaderEnabled_{true};
+    bool victory_{false};
 
-    int       inventorySelection_{0};
-    int       inventoryTab_{0};       // 0 = Pociones, 1 = Equipo
-    std::string inventoryMsg_;        // feedback dentro del inventario
-
-    // Stock de la tienda generado una sola vez por piso (ver generateShopStock)
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
-    BSPDungeon::Room        shopRoom_{};
-    bool                    shopExists_{false};
-    Position                shopMerchantPos_{};
-
-    // Mensaje flotante en exploración (se limpia al mover o al nuevo turno)
-    std::string explorationMsg_;
 
     std::vector<Quest> quests_;
     int                questLogSelection_{0};
-    int                enemiesKilled_{0};  // contadores para objetivos de misiones
-    int                chestsOpened_{0};
 
-    int  mapZoom_{1};   // 1–3; escala la celda del mapa overlay
-    bool victory_{false};
-
-    // Message display timing
-    double                explorationMsgEndTime_{0.0};
-
-    // Bomb explosion effect
-    bool                  explosionActive_{false};
-    double                explosionEndTime_{0.0};
-    int                   explosionX_{0}, explosionY_{0};
+    int                   inventorySelection_{0};
 
     void saveGame();
     bool loadGame();
@@ -133,9 +106,10 @@ private:
     void inputInventory(int key);
     void inputShop(int key);
     void inputQuestLog(int key);
+    void inputSettings(int key);
     void generateShopStock();
-    bool isInShopRoom(Position p) const;
-    void useBomb();
+    bool isInShopRoom(Dungeon::Lock& acc, Position p) const;
+    void useBomb(Dungeon::Lock& acc);
 
     void initQuests();
     void checkQuestProgress();
@@ -145,9 +119,7 @@ private:
     // pendingCombatEnemy_: cuando la IA detecta colisión con el jugador, pone aquí
     // el índice del enemigo; el hilo principal lo recoge en el próximo frame.
     std::thread          aiThread_;
-    std::mutex           worldMutex_;
     std::atomic<bool>    aiRunning_{false};
     std::atomic<bool>    pendingRedraw_{false};
-    int                  pendingCombatEnemy_{-1};
     void aiLoop();
 };

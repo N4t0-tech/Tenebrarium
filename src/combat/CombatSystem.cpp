@@ -1,4 +1,5 @@
 #include "CombatSystem.hpp"
+#include "../world/DungeonPopulator.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
@@ -54,7 +55,7 @@ void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
         return;
     }
 
-    int rawAtk = static_cast<int>(player_.getAttack() * atkMultiplier);
+    int rawAtk = static_cast<int>(getEffectiveAttack() * atkMultiplier);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
     int  dmg  = std::max(1, rawAtk - target->getDefense());
     bool crit = rollCritical();
@@ -134,7 +135,7 @@ void CombatSystem::doUseItem() {
         logMessage("No tienes pociones.");
         return;
     }
-    logMessage(player_.getName() + " usa una pocion y recupera " +
+    logMessage(player_.getName() + " usa una poción y recupera " +
                std::to_string(healed) + " HP.");
     currentAp_--;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
@@ -163,6 +164,40 @@ void CombatSystem::doFlee() {
         logMessage("!" + player_.getName() + " intenta huir pero falla!");
         if (currentAp_ <= 0) processEnemyTurn();
     }
+}
+
+void CombatSystem::doLoot() {
+    if (phase_ != CombatPhase::PlayerTurn) return;
+    if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
+    auto& target = enemies_[currentTarget_];
+    if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
+    if (!hasEnoughAp(1)) { logMessage("PA insuficientes para saquear."); return; }
+
+    currentAp_ -= 1;
+    int roll = std::rand() % 100;
+
+    if (roll < 40) {
+        // Saqueo exitoso
+        Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
+        player_.getInventory().addItem(loot);
+        logMessage("Saqueo exitoso! Obtienes " + loot.name + ".");
+    } else if (roll < 70) {
+        // Saqueo parcial: recibes la mitad del daño del enemigo
+        Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
+        player_.getInventory().addItem(loot);
+        int dmg = std::max(1, target->getAttack() - player_.getDefense()) / 2;
+        player_.takeDamageRaw(dmg);
+        logMessage("Saqueas pero " + target->getName() + " te golpea! Recibes " + ts(dmg) + " daño.");
+    } else {
+        // Fracaso: el enemigo te golpea con todo
+        int dmg = std::max(1, target->getAttack() - player_.getDefense());
+        player_.takeDamageRaw(dmg);
+        logMessage("No logras saquear! " + target->getName() + " te golpea por " + ts(dmg) + " daño.");
+    }
+
+    checkCombatOver();
+    if (isOver()) return;
+    if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }
 
 void CombatSystem::cycleTarget() {
@@ -196,11 +231,31 @@ void CombatSystem::logMessage(const std::string& msg) {
     if (log_.size() > 20) log_.erase(log_.begin());
 }
 
+void CombatSystem::handleSlimeSplits() {
+    for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
+        if (!enemies_[i]->isAlive() && enemies_[i]->getSplitsOnDeath()) {
+            int babyXP = std::max(1, enemies_[i]->getXpReward() / 2);
+            int babyHp = std::max(1, enemies_[i]->getMaxHp() / 2);
+            int babyAtk = std::max(1, enemies_[i]->getAttack() / 2);
+            int babyDef = std::max(1, enemies_[i]->getDefense() / 2);
+            logMessage("El Slime se divide en 2!");
+            for (int b = 0; b < 2; b++) {
+                enemies_.push_back(std::make_unique<Enemy>(
+                    "Slime Pequeño", babyHp, babyAtk, babyDef,
+                    babyXP, EnemyType::Slime, 1, false));
+                enemyEffects_.emplace_back();
+            }
+            enemies_[i]->setSplitsOnDeath(false);
+        }
+    }
+}
+
 void CombatSystem::checkCombatOver() {
     if (!player_.isAlive() || fled_) {
         phase_ = CombatPhase::CombatOver;
         return;
     }
+    handleSlimeSplits();
     bool allDead = std::all_of(enemies_.begin(), enemies_.end(),
         [](const std::unique_ptr<Enemy>& e) { return !e->isAlive(); });
     if (allDead) {
@@ -250,13 +305,13 @@ void CombatSystem::processEnemyTurn() {
             if (heavyIt != playerEffects_.end()) {
                 rawDmg = std::max(1, rawDmg * 30 / 100);
                 playerEffects_.erase(heavyIt);
-                logMessage("Escudo Total! Dano reducido 70%.");
+                logMessage("Escudo Total! Daño reducido 70%.");
             } else {
                 bool defending = std::any_of(playerEffects_.begin(), playerEffects_.end(),
                     [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Defending; });
                 if (defending) {
                     rawDmg = std::max(1, rawDmg / 2);
-                    logMessage("Postura defensiva! Dano reducido 50%.");
+                    logMessage("Postura defensiva! Daño reducido 50%.");
                 }
             }
 
@@ -271,7 +326,7 @@ void CombatSystem::processEnemyTurn() {
                 if (!already) {
                     StatusEffect p; p.type = StatusEffect::Type::Poisoned; p.turnsLeft = 3; p.magnitude = 5;
                     playerEffects_.push_back(p);
-                    logMessage("La Arana te envenena!");
+                    logMessage("La Araña te envenena!");
                 }
             }
             // Vampiro: se cura 30% del daño infligido
@@ -282,7 +337,7 @@ void CombatSystem::processEnemyTurn() {
             }
 
             if (!player_.isAlive()) {
-                logMessage(player_.getName() + " ha caido en batalla...");
+                logMessage(player_.getName() + " ha caído en batalla...");
                 phase_ = CombatPhase::CombatOver;
                 return;
             }
@@ -347,7 +402,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::GolpeDemoledor: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.4f) - target->getDefense() / 2);
+            int dmg = std::max(1, static_cast<int>(getEffectiveAttack() * 1.4f) - target->getDefense() / 2);
             target->takeDamageRaw(dmg);
             logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
             if (!target->isAlive()) {
@@ -373,13 +428,13 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             fx.turnsLeft = 1;
             fx.magnitude = 70;
             playerEffects_.push_back(fx);
-            logMessage("Escudo Total! -70% daño en el proximo golpe.");
+            logMessage("Escudo Total! -70% daño en el próximo golpe.");
             break;
         }
 
         case ArtEffect::BolaDeFuego: {
-            int dmg = player_.getMana() / 5 + 8;
-            logMessage("Bola de Fuego! " + ts(dmg) + " daño magico a todos! (MP=" + ts(player_.getMana()) + ")");
+            int dmg = player_.getAttack() + 10;
+            logMessage("Bola de Fuego! " + ts(dmg) + " daño mágico a todos!");
             for (auto& e : enemies_) {
                 if (e->isAlive()) {
                     e->takeDamageRaw(dmg);
@@ -438,7 +493,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             fx.magnitude = player_.getAttack();
             enemyEffects_[currentTarget_].push_back(fx);
             logMessage("Trampa colocada! " + target->getName()
-                       + " recibira " + ts(fx.magnitude) + " daño.");
+                       + " recibirá " + ts(fx.magnitude) + " daño.");
             break;
         }
 
@@ -471,4 +526,14 @@ int CombatSystem::getPlayerAttackBoost() const {
         if (fx.type == StatusEffect::Type::AttackBoosted)
             return fx.magnitude;
     return 0;
+}
+
+int CombatSystem::getEffectiveAttack() const {
+    int atk = player_.getAttack();
+    if (player_.getClass() == PlayerClass::Warrior) {
+        int pct = player_.getMana() * 100 / std::max(1, player_.getMaxMana());
+        int factor = std::max(40, pct);
+        atk = atk * factor / 100;
+    }
+    return atk;
 }

@@ -92,10 +92,12 @@ void GameSerializer::save(Game& g)
         std::string(GetApplicationDirectory()) + "saves");
 
     std::ofstream f(savePath());
-    if (!f || !g.player_ || !g.map_)
+    if (!f || !g.player_ || !g.dungeon_)
         return;
 
-    f << 2 << '\n'; // version 2 includes item.quantity
+    auto acc = g.dungeon_->lock();
+
+    f << 3 << '\n'; // version 3 adds ch.isMimic
 
     // Player
     wstr(f, g.player_->name_);
@@ -121,22 +123,22 @@ void GameSerializer::save(Game& g)
         witem(f, item);
 
     // Map
-    f << g.map_->width() << ' ' << g.map_->height() << '\n';
-    Position pp = g.map_->getPlayerPos();
+    f << acc.map().width() << ' ' << acc.map().height() << '\n';
+    Position pp = acc.playerPos();
     f << pp.x << ' ' << pp.y << '\n';
-    for (int y = 0; y < g.map_->height(); y++) {
-        for (int x = 0; x < g.map_->width(); x++) {
-            const Tile& t = g.map_->at(x, y);
+    for (int y = 0; y < acc.map().height(); y++) {
+        for (int x = 0; x < acc.map().width(); x++) {
+            const Tile& t = acc.map().at(x, y);
             f << static_cast<int>(t.type) << ' '
               << static_cast<int>(t.explored) << ' '
               << static_cast<int>(t.visible);
-            f << (x < g.map_->width() - 1 ? ' ' : '\n');
+            f << (x < acc.map().width() - 1 ? ' ' : '\n');
         }
     }
 
     // World enemies
-    f << g.worldEnemies_.size() << '\n';
-    for (const auto& we : g.worldEnemies_)
+    f << acc.enemies().size() << '\n';
+    for (const auto& we : acc.enemies())
         f << we.pos.x << ' ' << we.pos.y << ' '
           << we.spawnPos.x << ' ' << we.spawnPos.y << ' '
           << static_cast<int>(we.type) << ' '
@@ -144,31 +146,32 @@ void GameSerializer::save(Game& g)
           << static_cast<int>(we.isBoss) << '\n';
 
     // World chests
-    f << g.worldChests_.size() << '\n';
-    for (const auto& ch : g.worldChests_) {
+    f << acc.chests().size() << '\n';
+    for (const auto& ch : acc.chests()) {
         f << ch.pos.x << ' ' << ch.pos.y << ' '
           << static_cast<int>(ch.opened) << ' '
+          << static_cast<int>(ch.isMimic) << ' '
           << static_cast<int>(ch.loot) << ' '
           << ch.coins << ' ';
         witem(f, ch.item);
     }
 
     // Locked door
-    f << static_cast<int>(g.lockedDoorExists_) << ' ';
-    if (g.lockedDoorExists_)
-        f << g.lockedDoorPos_.x << ' ' << g.lockedDoorPos_.y << ' '
-          << static_cast<int>(g.lockedDoorOpen_);
+    f << static_cast<int>(acc.lockedDoorExists()) << ' ';
+    if (acc.lockedDoorExists())
+        f << acc.lockedDoorPos().x << ' ' << acc.lockedDoorPos().y << ' '
+          << static_cast<int>(acc.lockedDoorOpen());
     f << '\n';
 
     // Stairs
-    f << g.stairsPos_.x << ' ' << g.stairsPos_.y << '\n';
+    f << acc.stairsPos().x << ' ' << acc.stairsPos().y << '\n';
 
     // Shop
-    f << static_cast<int>(g.shopExists_) << '\n';
-    if (g.shopExists_)
-        f << g.shopMerchantPos_.x << ' ' << g.shopMerchantPos_.y << ' '
-          << g.shopRoom_.x << ' ' << g.shopRoom_.y << ' '
-          << g.shopRoom_.w << ' ' << g.shopRoom_.h << '\n';
+    f << static_cast<int>(acc.shopExists()) << '\n';
+    if (acc.shopExists())
+        f << acc.shopMerchantPos().x << ' ' << acc.shopMerchantPos().y << ' '
+          << acc.shopRoom().x << ' ' << acc.shopRoom().y << ' '
+          << acc.shopRoom().w << ' ' << acc.shopRoom().h << '\n';
     f << g.shopStock_.size() << '\n';
     for (const auto& s : g.shopStock_) {
         f << static_cast<int>(s.sold) << ' ' << s.price << ' ';
@@ -176,7 +179,7 @@ void GameSerializer::save(Game& g)
     }
 
     // Quests
-    f << g.enemiesKilled_ << ' ' << g.chestsOpened_ << '\n';
+    f << g.dungeon_->enemiesKilled << ' ' << g.dungeon_->chestsOpened << '\n';
     f << g.quests_.size() << '\n';
     for (const auto& q : g.quests_) {
         f << static_cast<int>(q.status) << ' ' << q.objectives.size();
@@ -197,7 +200,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || (version != 1 && version != 2))
+    if (!(f >> version) || (version != 1 && version != 2 && version != 3))
         return false;
 
     // Player
@@ -252,75 +255,108 @@ bool GameSerializer::load(Game& g)
         g.player_->getInventory().addItem(item);
     }
 
+    // Recreate dungeon
+    g.dungeon_ = std::make_unique<Dungeon>();
+
     // Map
     int mapW, mapH, px, py;
     if (!(f >> mapW >> mapH >> px >> py)) return false;
-    g.map_ = std::make_unique<Map>(mapW, mapH);
-    g.map_->setPlayerPos(px, py);
-    for (int y = 0; y < mapH; y++) {
-        for (int x = 0; x < mapW; x++) {
-            int type, explored, visible;
-            if (!(f >> type >> explored >> visible)) return false;
-            Tile& t = g.map_->at(x, y);
-            t.type     = static_cast<TileType>(type);
-            t.glyph    = glyphForTile(t.type);
-            t.explored = explored;
-            t.visible  = visible;
+
+    {
+        auto acc = g.dungeon_->lock();
+        auto& map = acc.map();
+        map = Map(mapW, mapH);
+        acc.setPlayerPos(px, py);
+        for (int y = 0; y < mapH; y++) {
+            for (int x = 0; x < mapW; x++) {
+                int type, explored, visible;
+                if (!(f >> type >> explored >> visible)) return false;
+                Tile& t = map.at(x, y);
+                t.type     = static_cast<TileType>(type);
+                t.glyph    = glyphForTile(t.type);
+                t.explored = explored;
+                t.visible  = visible;
+            }
         }
+        map.updateFov();
     }
-    g.map_->updateFov();
 
     // World enemies
     size_t enemyCount;
     if (!(f >> enemyCount)) return false;
-    g.worldEnemies_.resize(enemyCount);
-    for (auto& we : g.worldEnemies_) {
-        int type, alive, boss;
-        if (!(f >> we.pos.x >> we.pos.y >> we.spawnPos.x >> we.spawnPos.y
-                >> type >> alive >> boss))
-            return false;
-        we.type   = static_cast<EnemyType>(type);
-        we.alive  = alive;
-        we.isBoss = boss;
+    {
+        auto acc = g.dungeon_->lock();
+        auto& enemies = acc.enemies();
+        enemies.resize(enemyCount);
+        for (auto& we : enemies) {
+            int type, alive, boss;
+            if (!(f >> we.pos.x >> we.pos.y >> we.spawnPos.x >> we.spawnPos.y
+                    >> type >> alive >> boss))
+                return false;
+            we.type   = static_cast<EnemyType>(type);
+            we.alive  = alive;
+            we.isBoss = boss;
+        }
     }
 
     // World chests
     size_t chestCount;
     if (!(f >> chestCount)) return false;
-    g.worldChests_.resize(chestCount);
-    for (auto& ch : g.worldChests_) {
-        int opened, loot;
-        if (!(f >> ch.pos.x >> ch.pos.y >> opened >> loot >> ch.coins))
-            return false;
-        ch.opened = opened;
-        ch.loot   = static_cast<ChestLoot>(loot);
-        if (!ritem(f, ch.item, version)) return false;
+    {
+        auto acc = g.dungeon_->lock();
+        auto& chests = acc.chests();
+        chests.resize(chestCount);
+        for (auto& ch : chests) {
+            int opened, loot;
+            if (!(f >> ch.pos.x >> ch.pos.y >> opened))
+                return false;
+            ch.opened = opened;
+            if (version >= 3) {
+                int mimic;
+                if (!(f >> mimic)) return false;
+                ch.isMimic = mimic != 0;
+            }
+            if (!(f >> loot >> ch.coins)) return false;
+            ch.loot   = static_cast<ChestLoot>(loot);
+            if (!ritem(f, ch.item, version)) return false;
+        }
     }
 
     // Locked door
     int ldExists;
     if (!(f >> ldExists)) return false;
-    g.lockedDoorExists_ = ldExists;
-    g.lockedDoorOpen_   = false;
-    if (g.lockedDoorExists_) {
-        int ldOpen;
-        if (!(f >> g.lockedDoorPos_.x >> g.lockedDoorPos_.y >> ldOpen))
-            return false;
-        g.lockedDoorOpen_ = ldOpen;
+    {
+        auto acc = g.dungeon_->lock();
+        acc.self.lockedDoorExists_ = ldExists;
+        acc.self.lockedDoorOpen_   = false;
+        if (acc.lockedDoorExists()) {
+            int ldOpen;
+            if (!(f >> acc.self.lockedDoorPos_.x >> acc.self.lockedDoorPos_.y >> ldOpen))
+                return false;
+            acc.self.lockedDoorOpen_ = ldOpen;
+        }
     }
 
     // Stairs
-    if (!(f >> g.stairsPos_.x >> g.stairsPos_.y)) return false;
+    Position stairsPos;
+    if (!(f >> stairsPos.x >> stairsPos.y)) return false;
+    {
+        auto acc = g.dungeon_->lock();
+        acc.self.stairsPos_ = stairsPos;
+    }
 
     // Shop
     int shopEx;
     if (!(f >> shopEx)) return false;
-    g.shopExists_ = shopEx;
-    if (g.shopExists_)
-        if (!(f >> g.shopMerchantPos_.x >> g.shopMerchantPos_.y
-                >> g.shopRoom_.x >> g.shopRoom_.y
-                >> g.shopRoom_.w >> g.shopRoom_.h))
-            return false;
+    {
+        auto acc = g.dungeon_->lock();
+        acc.self.shopExists_ = shopEx;
+        if (acc.shopExists())
+            if (!(f >> acc.self.shopMerchantPos_.x >> acc.self.shopMerchantPos_.y
+                    >> acc.self.shopRoom_.x >> acc.self.shopRoom_.y
+                    >> acc.self.shopRoom_.w >> acc.self.shopRoom_.h))
+                return false;
+    }
     size_t shopCount;
     if (!(f >> shopCount)) return false;
     g.shopStock_.resize(shopCount);
@@ -332,14 +368,15 @@ bool GameSerializer::load(Game& g)
     }
 
     // Quests
-    if (!(f >> g.enemiesKilled_ >> g.chestsOpened_)) return false;
+    int savedKilled = 0, savedChests = 0;
+    if (!(f >> savedKilled >> savedChests)) return false;
+    g.dungeon_->enemiesKilled = savedKilled;
+    g.dungeon_->chestsOpened  = savedChests;
     size_t questCount;
     if (!(f >> questCount)) return false;
-    // Guardar contadores antes de initQuests() porque este los reinicia a 0
-    int savedKilled = g.enemiesKilled_, savedChests = g.chestsOpened_;
     g.initQuests();
-    g.enemiesKilled_ = savedKilled;
-    g.chestsOpened_  = savedChests;
+    g.dungeon_->enemiesKilled = savedKilled;
+    g.dungeon_->chestsOpened  = savedChests;
     for (size_t i = 0; i < std::min(questCount, g.quests_.size()); i++) {
         int status, objCount;
         if (!(f >> status >> objCount)) return false;
@@ -360,8 +397,8 @@ bool GameSerializer::load(Game& g)
     g.combat_.reset();
     g.combatWorldEnemyIdx_ = -1;
     g.pendingCombatEnemy_  = -1;
-    g.explorationMsg_.clear();
-    g.state_ = GameState::Exploration;
+    g.dungeon_->message.clear();
+    g.state_.store(GameState::Exploration);
 
     return true;
 }

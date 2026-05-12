@@ -25,7 +25,7 @@ struct Position {
 // colorPair usa los mismos índices que colorFromPair() en Renderer.cpp (1=blanco, 2=amarillo, etc.)
 struct MapEntity {
     Position pos;
-    char     glyph;
+    int      glyph;
     int      colorPair;
     bool     bold = true;
 };
