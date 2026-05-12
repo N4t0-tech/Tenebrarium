@@ -1264,6 +1264,8 @@ void Game::setState(GameState newState)
                 bool boss = acc.enemies()[combatWorldEnemyIdx_].isBoss;
                 enemies.push_back(DungeonPopulator::makeEnemy(
                     acc.enemies()[combatWorldEnemyIdx_].type, fl, boss));
+                if (!boss && enemies.back()->getType() == EnemyType::Spider && (std::rand() % 100) < 1)
+                    enemies.back()->setName("Ariatña");
             }
         }
         else
