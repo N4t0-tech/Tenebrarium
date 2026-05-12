@@ -67,6 +67,9 @@ private:
     bool shaderEnabled_{true};
     bool victory_{false};
 
+    double screenshotMsgEndTime_{0.0};
+    int screenshotCounter_{0};
+
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
 

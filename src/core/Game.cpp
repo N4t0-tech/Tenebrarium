@@ -64,6 +64,15 @@ void Game::run()
     // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
     assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
 
+    // Limpiar capturas viejas de Raylib que hayan quedado de ejecuciones anteriores
+    for (int i = 0; i < 1000; i++) {
+        char p[64];
+        snprintf(p, sizeof(p), "screenshot%03i.png", i);
+        if (!std::filesystem::exists(p)) break;
+        std::filesystem::remove(p);
+    }
+    screenshotCounter_ = 0;
+
     // Icono de ventana
     Image icon = LoadImage((assetsDir() + "icon.png").c_str());
     if (icon.data)
@@ -479,6 +488,20 @@ void Game::run()
             DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
         }
 
+        // Mensaje de feedback: captura de pantalla
+        if (GetTime() < screenshotMsgEndTime_)
+        {
+            std::string msg = " Captura guardada ";
+            int msgPixelW = (int)MeasureTextEx(font, msg.c_str(), (float)kBaseFontSize, 0).x;
+            int msgPixelH = cellH;
+            int pixelX = (screenW - msgPixelW) / 2;
+            int pixelY = screenH - cellH * 2 - msgPixelH;
+            Color yellowBg = {255, 230, 60, 255};
+            DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
+            Color blackFg = {0, 0, 0, 255};
+            DrawTextEx(font, msg.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
+        }
+
         EndDrawing();
     }
 
@@ -523,6 +546,17 @@ void Game::processInput()
     // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
     if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
     if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
+
+    // Detectar F12 por el archivo screenshot que crea Raylib automaticamente
+    {
+        char path[64];
+        snprintf(path, sizeof(path), "screenshot%03i.png", screenshotCounter_);
+        if (std::filesystem::exists(path))
+        {
+            screenshotMsgEndTime_ = GetTime() + 5.0;
+            screenshotCounter_++;
+        }
+    }
 
     for (auto &m : mapping)
     {
