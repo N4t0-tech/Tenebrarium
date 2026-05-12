@@ -38,8 +38,7 @@ public:
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);
-    static void drawInventory(TerminalScreen& scr, const Player& player, int selection,
-                              int tab = 0, const std::string& msg = "");
+    static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
     static void drawGameOver(TerminalScreen& scr, bool victory = false);
     static void drawQuitDialog(TerminalScreen& scr, int selection);

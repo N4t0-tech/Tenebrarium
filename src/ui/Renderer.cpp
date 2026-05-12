@@ -287,7 +287,10 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     const char** opts = hasSave ? opts4 : opts3;
     for (int i = 0; i < n; i++) {
         std::string label = std::string("  ") + opts[i] + "  ";
-        int x = cx - static_cast<int>(label.size()) / 2;
+        int labelWidth = 0;
+        for (unsigned char c : label)
+            if ((c & 0xC0) != 0x80) labelWidth++;
+        int x = cx - labelWidth / 2;
         bool sel = (i == selection);
         Color c = sel ? COL_YELLOW : COL_WHITE;
         uint8_t fl = sel ? CELL_BOLD : 0;
@@ -768,8 +771,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
 // ─── drawInventory ────────────────────────────────────────────────────────────
 
-void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection,
-                             int tab, const std::string& msg) {
+void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
     int cx = scr.cols() / 2;
     int w  = 60, sc2 = cx - w / 2, r = 2;
     drawBorder(scr, sc2, 1, w, scr.rows() - 2);
