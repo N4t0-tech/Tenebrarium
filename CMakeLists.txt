@@ -28,6 +28,7 @@ endif()
 
 target_include_directories(tenebrarium PRIVATE
     src
+    src/vendor
 )
 
 target_link_libraries(tenebrarium PRIVATE

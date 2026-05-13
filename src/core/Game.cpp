@@ -3,6 +3,7 @@
 #include "core/Assets.hpp"
 #include "ai/EnemyAI.hpp"
 #include "ui/Renderer.hpp"
+#include "ui/RayguiGUI.hpp"
 #include "entities/Enemy.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
@@ -260,6 +261,8 @@ void Game::run()
     Font font2x = loadFont(kBaseFontSize * 2);
     Font font3x = loadFont(kBaseFontSize * 3);
 
+    RayguiGUI::init(font, kBaseFontSize);
+
     // Celda = ancho de 'M' × (alto de glifo + 2px de margen entre líneas).
     // Se usa 'M' porque es el carácter más ancho en fuentes monoespaciadas.
     Vector2 gs = MeasureTextEx(font, "M", kBaseFontSize, 0);
@@ -500,6 +503,20 @@ void Game::run()
             DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
             Color blackFg = {0, 0, 0, 255};
             DrawTextEx(font, msg.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
+        }
+
+        // 5) Raygui UI overlay (post-CRT, sin shader)
+        {
+            RayguiGUI::begin();
+            auto st = state_.load();
+            if (st == GameState::GameOver) {
+                RayguiGUI::drawGameOver(victory_);
+            } else if (st == GameState::QuitDialog) {
+                RayguiGUI::drawQuitDialog(menuSelection_);
+            } else if (st == GameState::MainMenu && menuPhase_ == MenuPhase::Settings) {
+                RayguiGUI::drawSettings(settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            }
+            RayguiGUI::end();
         }
 
         EndDrawing();
@@ -1153,7 +1170,7 @@ void Game::render(TerminalScreen &scr)
             Renderer::drawHudSelect(scr, hudSelection_);
             break;
         case MenuPhase::Settings:
-            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            // Raygui handles Settings post-CRT
             break;
         }
         break;
@@ -1208,10 +1225,10 @@ void Game::render(TerminalScreen &scr)
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
         break;
     case GameState::GameOver:
-        Renderer::drawGameOver(scr, victory_);
+        // Raygui handles GameOver post-CRT
         break;
     case GameState::QuitDialog:
-        Renderer::drawQuitDialog(scr, menuSelection_);
+        // Raygui handles QuitDialog post-CRT
         break;
     }
 }
