@@ -513,8 +513,30 @@ void Game::run()
                 RayguiGUI::drawGameOver(victory_);
             } else if (st == GameState::QuitDialog) {
                 RayguiGUI::drawQuitDialog(menuSelection_);
-            } else if (st == GameState::MainMenu && menuPhase_ == MenuPhase::Settings) {
-                RayguiGUI::drawSettings(settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            } else if (st == GameState::MainMenu) {
+                switch (menuPhase_) {
+                case MenuPhase::Title:
+                    RayguiGUI::drawTitle(menuSelection_, hasSave(),
+                                         std::fmod(GetTime(), 1.0) < 0.5);
+                    break;
+                case MenuPhase::Credits:
+                    RayguiGUI::drawCredits();
+                    break;
+                case MenuPhase::NameInput:
+                    RayguiGUI::drawNameInput(playerName_,
+                                             std::fmod(GetTime(), 0.8) < 0.4);
+                    break;
+                case MenuPhase::ClassSelect:
+                    RayguiGUI::drawClassSelect(classSelection_);
+                    break;
+                case MenuPhase::HudSelect:
+                    RayguiGUI::drawHudSelect(hudSelection_);
+                    break;
+                case MenuPhase::Settings:
+                    RayguiGUI::drawSettings(settingsSelection_, hudLayout_,
+                                            mapZoom_, shaderEnabled_);
+                    break;
+                }
             }
             RayguiGUI::end();
         }
@@ -1153,24 +1175,12 @@ void Game::render(TerminalScreen &scr)
         switch (menuPhase_)
         {
         case MenuPhase::Title:
-            Renderer::drawTitle(scr, menuSelection_, hasSave(),
-                                std::fmod(GetTime(), 1.0) < 0.5);
-            break;
         case MenuPhase::Credits:
-            Renderer::drawCredits(scr);
-            break;
         case MenuPhase::NameInput:
-            Renderer::drawNameInput(scr, playerName_,
-                                    std::fmod(GetTime(), 0.8) < 0.4);
-            break;
         case MenuPhase::ClassSelect:
-            Renderer::drawClassSelect(scr, classSelection_);
-            break;
         case MenuPhase::HudSelect:
-            Renderer::drawHudSelect(scr, hudSelection_);
-            break;
         case MenuPhase::Settings:
-            // Raygui handles Settings post-CRT
+            // Raygui handles all menu phases post-CRT
             break;
         }
         break;
