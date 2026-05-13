@@ -19,13 +19,13 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - Zoom del mapa ajustable en tiempo real (`+` / `-`), se guarda entre sesiones
 - Guardado automático al bajar de piso — continúa desde el menú principal
 
-| | |
-| --- | --- |
-| ![Mago](Tenebrarium-photos/2wizard.webp) | ![Guerrero](Tenebrarium-photos/3warrior.webp) |
-
 | | | |
 | --- | --- | --- |
-| ![Gameplay 1](Tenebrarium-photos/gameplay1.webp) | ![Gameplay 2](Tenebrarium-photos/gameplay2.webp) | ![Gameplay 3](Tenebrarium-photos/gameplay3.webp) |
+| ![Mago](Tenebrarium-photos/2wizard.webp) | ![Guerrero](Tenebrarium-photos/3warrior.webp) | ![Ranger](Tenebrarium-photos/4ranger.webp) |
+
+| | |
+| --- | --- |
+| ![Gameplay 1](Tenebrarium-photos/gameplay1.webp) | ![Gameplay 2](Tenebrarium-photos/gameplay2.webp) |
 
 ## Descarga
 
