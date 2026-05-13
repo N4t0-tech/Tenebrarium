@@ -2,6 +2,8 @@
 
 RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativa. Escrito en C++17 con Raylib.
 
+[![Jugar en itch.io](https://img.shields.io/badge/itch.io-Jugar-fa5c5c?style=for-the-badge&logo=itch.io&logoColor=white)](https://halleynato.itch.io/tenebrarium)
+
 ![Menú principal](Tenebrarium-photos/1Menu.webp)
 
 ## Características
