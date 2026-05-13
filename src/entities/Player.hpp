@@ -49,6 +49,8 @@ public:
     void unequipArmor();                  // devuelve la armadura equipada a la mochila
     int  useConsumable();                 // usa la primera poción del inventario; retorna HP curado (0 si no hay)
     int  countConsumables() const;
+    int  countHpPotions() const;
+    int  countManaPotions() const;
 
 private:
     PlayerClass class_;

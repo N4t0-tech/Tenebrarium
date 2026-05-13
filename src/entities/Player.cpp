@@ -138,6 +138,22 @@ int Player::countConsumables() const {
     return count;
 }
 
+int Player::countHpPotions() const {
+    int count = 0;
+    for (const auto& item : inventory_.items())
+        if (item.type == ItemType::Consumable && item.statBonus > 0)
+            count += item.quantity;
+    return count;
+}
+
+int Player::countManaPotions() const {
+    int count = 0;
+    for (const auto& item : inventory_.items())
+        if (item.type == ItemType::Consumable && item.statBonus == 0)
+            count += item.quantity;
+    return count;
+}
+
 bool Player::useMana(int amount) {
     if (mana_ < amount) return false;
     mana_ -= amount;

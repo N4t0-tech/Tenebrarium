@@ -13,6 +13,7 @@
 static constexpr Color COL_WHITE   = WHITE;
 static constexpr Color COL_YELLOW  = { 255, 230,  60, 255 };
 static constexpr Color COL_CYAN    = {  60, 230, 240, 255 };
+static constexpr Color COL_BLUE    = {  80, 150, 255, 255 };
 static constexpr Color COL_GREEN   = {  60, 230, 110, 255 };
 static constexpr Color COL_RED     = { 255,  80,  80, 255 };
 static constexpr Color COL_GRAY    = { 200, 200, 200, 255 };
@@ -202,7 +203,8 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, 20);
      put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
-     put("+ " + std::to_string(player.countConsumables()) + " poción(es)", COL_GREEN);
+     put("+ " + std::to_string(player.countHpPotions()) + " poción(es)", COL_GREEN);
+     put("M " + std::to_string(player.countManaPotions()) + " maná", COL_BLUE);
      put("C " + std::to_string(player.getInventory().getItemCount("Cerveza")) + " cerveza(s)", COL_CYAN);
      put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
      int fl = player.getDungeonFloor();
@@ -251,7 +253,8 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
     b(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
     b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
-    b(" P:" + std::to_string(player.countConsumables()), COL_GREEN);
+    b(" P:" + std::to_string(player.countHpPotions()), COL_GREEN);
+    b(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
     b(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
     b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
 
@@ -734,7 +737,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(cols / 3,     br, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
         scr.putStr(2 * cols / 3, br++, "[3] Habilidades", COL_WHITE);
         scr.putStr(1,            br, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 3,     br, "[5] Poción (" + std::to_string(player.countConsumables()) + ")  1PA", player.countConsumables() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
+        scr.putStr(cols / 3,     br, "[5] Poción (" + std::to_string(player.countHpPotions()) + ")  1PA", player.countHpPotions() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
         scr.putStr(2 * cols / 3, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
         scr.putStr(1,            br, "[7] Saquear     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
@@ -806,12 +809,18 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
         for (int i = 0; i < static_cast<int>(items.size()); i++) {
             const auto& item = items[i];
             std::string tag; Color ic = COL_WHITE;
-            switch (item.type) {
-                case ItemType::Weapon:     tag = "[ARMA]   "; ic = COL_YELLOW; break;
-                case ItemType::Armor:      tag = "[ARMADURA]"; ic = COL_GREEN; break;
-                case ItemType::Consumable: tag = "[POCIÓN] "; ic = COL_CYAN;  break;
-                case ItemType::Bomb:       tag = "[BOMBA]  "; ic = COL_ORANGE; break;
-                default:                  tag = "[MISC]   "; break;
+            if (item.type == ItemType::Weapon) {
+                tag = "[ARMA]   "; ic = COL_YELLOW;
+            } else if (item.type == ItemType::Armor) {
+                tag = "[ARMADURA]"; ic = COL_GREEN;
+            } else if (item.type == ItemType::Consumable && item.statBonus > 0) {
+                tag = "[POCIÓN] "; ic = COL_CYAN;
+            } else if (item.type == ItemType::Consumable) {
+                tag = "[MANA]   "; ic = COL_BLUE;
+            } else if (item.type == ItemType::Bomb) {
+                tag = "[BOMBA]  "; ic = COL_ORANGE;
+            } else {
+                tag = "[MISC]   ";
             }
             std::string line = tag + " " + item.name;
             if (item.quantity > 1)
@@ -819,8 +828,10 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
             if (item.type != ItemType::Consumable && item.type != ItemType::Bomb)
                 line += "  +" + std::to_string(item.statBonus)
                       + (item.type == ItemType::Weapon ? " ATK" : " DEF");
-            else if (item.type == ItemType::Consumable)
+            else if (item.type == ItemType::Consumable && item.statBonus > 0)
                 line += "  +" + std::to_string(item.statBonus) + " HP";
+            else if (item.type == ItemType::Consumable)
+                line += "  +50% MP";
             uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
             scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
         }
@@ -981,7 +992,7 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
                          const std::string& message) {
     int cx = scr.cols() / 2;
-    int w = 62, sc2 = cx - w / 2, r = 2;
+    int w = 66, sc2 = cx - w / 2, r = 2;
     int boxH = static_cast<int>(stock.size()) + 8;
     drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
     scr.putStr(sc2 + 2, r++, "=== TIENDA DEL PISO ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
