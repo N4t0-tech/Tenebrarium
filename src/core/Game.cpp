@@ -1350,12 +1350,12 @@ void Game::openChest(WorldChest& chest)
     case ChestLoot::Item:
         if (chest.item.type == ItemType::Consumable)
         {
-            player_->getInventory().addItem(chest.item);
+            player_->pickupItem(chest.item);
             dungeon_->message = "Cofre: encontraste " + chest.item.name + "!";
         }
         else
         {
-            player_->getInventory().addItem(chest.item);
+            player_->pickupItem(chest.item);
             dungeon_->message = "Cofre: encontraste " + chest.item.name + "!  (+" +
                 std::to_string(chest.item.statBonus) +
                 (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
