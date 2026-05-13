@@ -44,7 +44,8 @@ public:
     static void drawQuitDialog(TerminalScreen& scr, int selection);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
-                         const std::string& message);
+                         const std::string& message,
+                         bool sellMode = false, int sellSelection = 0);
 
 private:
     // ── Primitivas de layout ─────────────────────────────────────────────────

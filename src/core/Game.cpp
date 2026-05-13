@@ -1197,7 +1197,8 @@ void Game::render(TerminalScreen &scr)
     case GameState::Shop:
         if (player_)
             Renderer::drawShop(scr, shopStock_, shopSelection_,
-                               *player_, dungeon_ ? dungeon_->message : "");
+                               *player_, dungeon_ ? dungeon_->message : "",
+                               shopSellMode_, shopSellSelection_);
         break;
     case GameState::Inventory:
         if (player_)
@@ -1457,6 +1458,69 @@ void Game::inputShop(int key)
         state_ = GameState::Exploration;
         return;
     }
+
+    if (shopSellMode_)
+    {
+        switch (key)
+        {
+        case 'w':
+        case 's':
+        {
+            auto& inv = player_->getInventory().items();
+            int dir = (key == 'w') ? -1 : 1;
+            int cur = shopSellSelection_;
+            int steps = 0;
+            while (steps < static_cast<int>(inv.size()))
+            {
+                cur += dir;
+                if (cur < 0) cur = static_cast<int>(inv.size()) - 1;
+                if (cur >= static_cast<int>(inv.size())) cur = 0;
+                if (inv[cur].type == ItemType::Weapon || inv[cur].type == ItemType::Armor)
+                {
+                    shopSellSelection_ = cur;
+                    break;
+                }
+                steps++;
+            }
+            break;
+        }
+        case '\n':
+        {
+            auto& inv = player_->getInventory().items();
+            int idx = shopSellSelection_;
+            if (idx >= 0 && idx < static_cast<int>(inv.size()))
+            {
+                auto& item = inv[idx];
+                if (item.type == ItemType::Weapon || item.type == ItemType::Armor)
+                {
+                    int sellPrice = item.value / 2;
+                    player_->addCoins(sellPrice);
+                    player_->getInventory().removeItem(item.name);
+                    if (dungeon_) {
+                        dungeon_->message = "Vendiste " + item.name + " por " +
+                                            std::to_string(sellPrice) + " monedas!";
+                        dungeon_->messageEndTime = GetTime() + 2.0;
+                    }
+                    if (shopSellSelection_ >= static_cast<int>(inv.size()))
+                        shopSellSelection_ = std::max(0, static_cast<int>(inv.size()) - 1);
+                }
+            }
+            break;
+        }
+        case 'v':
+        case 'V':
+            shopSellMode_ = false;
+            break;
+        case 27:
+        case 'q':
+        case 'Q':
+            shopSellMode_ = false;
+            state_ = GameState::Exploration;
+            break;
+        }
+        return;
+    }
+
     switch (key)
     {
     case 'w':
@@ -1491,11 +1555,27 @@ void Game::inputShop(int key)
         }
         break;
     }
+    case 'v':
+    case 'V':
+        shopSellMode_ = true;
+        shopSellSelection_ = 0;
+        // Ajustar al primer item vendible
+        {
+            auto& inv = player_->getInventory().items();
+            for (int i = 0; i < static_cast<int>(inv.size()); i++)
+            {
+                if (inv[i].type == ItemType::Weapon || inv[i].type == ItemType::Armor)
+                {
+                    shopSellSelection_ = i;
+                    break;
+                }
+            }
+        }
+        break;
     case 27:
     case 'q':
     case 'Q':
         state_ = GameState::Exploration;
-        // No limpiar mensaje, se oculta solo tras 2 segundos
         break;
     }
 }

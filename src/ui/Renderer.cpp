@@ -990,8 +990,46 @@ void Renderer::drawQuitDialog(TerminalScreen& scr, int selection) {
 
 void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
-                         const std::string& message) {
+                         const std::string& message,
+                         bool sellMode, int sellSelection) {
     int cx = scr.cols() / 2;
+
+    if (sellMode) {
+        int w = 66, sc2 = cx - w / 2, r = 2;
+        auto& inv = player.getInventory().items();
+        int boxH = static_cast<int>(inv.size()) + 8;
+        drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
+        scr.putStr(sc2 + 2, r++, "=== VENDER ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
+        scr.putStr(sc2 + 2, r++,
+                   "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
+                   COL_ORANGE);
+        drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+        bool any = false;
+        for (int i = 0; i < static_cast<int>(inv.size()); i++) {
+            const auto& item = inv[i];
+            if (item.type != ItemType::Weapon && item.type != ItemType::Armor)
+                continue;
+            any = true;
+            bool sel = (i == sellSelection);
+            int sellPrice = item.value / 2;
+            std::string tag = (item.type == ItemType::Weapon) ? "[ARMA] " : "[ARMADURA]";
+            std::string line = tag + " " + item.name + "  -  " +
+                               std::to_string(sellPrice) + " $";
+            Color lc = sel ? COL_ORANGE : COL_WHITE;
+            uint8_t lf = sel ? CELL_INVERTED : 0;
+            scr.putStr(sc2 + 2, r++, line, lc, COL_BLACK, lf);
+        }
+        if (!any)
+            scr.putStr(sc2 + 2, r++, "(nada que vender)", COL_GRAY, COL_BLACK, CELL_DIM);
+        drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+        if (!message.empty())
+            scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
+        scr.putStr(sc2 + 2, r,
+                   "W/S navegar  |  ENTER vender  |  V comprar  |  ESC salir",
+                   COL_GRAY, COL_BLACK, CELL_DIM);
+        return;
+    }
+
     int w = 66, sc2 = cx - w / 2, r = 2;
     int boxH = static_cast<int>(stock.size()) + 8;
     drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
@@ -1014,6 +1052,6 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     if (!message.empty())
         scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
     scr.putStr(sc2 + 2, r,
-               "W/S navegar  |  ENTER comprar  |  ESC salir",
+               "W/S navegar  |  ENTER comprar  |  V vender  |  ESC salir",
                COL_GRAY, COL_BLACK, CELL_DIM);
 }

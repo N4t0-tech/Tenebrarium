@@ -72,6 +72,8 @@ private:
 
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
+    bool                    shopSellMode_{false};
+    int                     shopSellSelection_{0};
 
     std::vector<Quest> quests_;
     int                questLogSelection_{0};
