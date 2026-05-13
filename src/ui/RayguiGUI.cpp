@@ -1,6 +1,8 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #include "RayguiGUI.hpp"
+#include "ui/XpLoader.hpp"
+#include "core/Assets.hpp"
 #include <string>
 #include <fstream>
 
@@ -17,13 +19,12 @@ static Rectangle rec(int x, int y, int w, int h) {
     return {(float)x, (float)y, (float)w, (float)h};
 }
 
-static std::string assetsDir() {
-    return std::string(GetApplicationDirectory()) + "assets/";
-}
-
 // ─── Init ────────────────────────────────────────────────────────────────────
 
+static int gBaseFontSize = 18;
+
 void RayguiGUI::init(Font font, int fontSize) {
+    gBaseFontSize = fontSize;
     GuiSetFont(font);
 
     GuiSetStyle(DEFAULT, TEXT_SIZE, fontSize);
@@ -54,7 +55,12 @@ void RayguiGUI::begin() {
 }
 
 void RayguiGUI::end() {
-    // no-op por ahora
+    GuiSetStyle(DEFAULT, TEXT_SIZE, gBaseFontSize);
+    GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+    GuiSetStyle(DEFAULT, BORDER_WIDTH, 1);
+    GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_BLACK));
+    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
+    GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, ColorToInt(COL_GRAY));
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -70,10 +76,11 @@ void RayguiGUI::drawSettings(int selection, HudLayout hud, int mapZoom, bool sha
 
     // Title
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    GuiSetStyle(DEFAULT, TEXT_SIZE, 24);
-    GuiLabel(rec(cx - 100, cy - 120, 200, 30), "T E N E B R A R I U M");
-    GuiSetStyle(DEFAULT, TEXT_SIZE, 18);
-    GuiLabel(rec(cx - 100, cy - 90, 200, 25), "Configuracion");
+    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_CYAN));
+    GuiLabel(rec(cx - 150, cy - 130, 300, 25), "T E N E B R A R I U M");
+
+    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
+    GuiLabel(rec(cx - 100, cy - 95, 200, 25), "Configuracion");
 
     const char* items[] = {
         "Estilo HUD",
@@ -89,33 +96,31 @@ void RayguiGUI::drawSettings(int selection, HudLayout hud, int mapZoom, bool sha
         "",
     };
 
-    GuiSetStyle(DEFAULT, TEXT_SIZE, 14);
-    for (int i = 0; i < 4; i++) {
-        int y = cy - 50 + i * 35;
+    int rowH = 36;
+    int startY = cy - 50;
 
-        if (selection == i) {
-            GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_YELLOW));
-            GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_BLACK));
-        } else {
-            GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_BLACK));
-            GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
+    for (int i = 0; i < 4; i++) {
+        int y = startY + i * rowH;
+        bool sel = (i == selection);
+
+        if (sel) {
+            DrawRectangle(cx - 160, y, 410, rowH, {255, 230, 60, 25});
         }
 
+        GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(sel ? COL_YELLOW : COL_WHITE));
         GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_LEFT);
-        GuiLabel(rec(cx - 80, y, 160, 25), items[i]);
+        GuiLabel(rec(cx - 150, y, 260, rowH), items[i]);
 
         if (vals[i][0] != '\0') {
+            GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(sel ? COL_CYAN : COL_GRAY));
             GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_RIGHT);
-            GuiLabel(rec(cx + 20, y, 60, 25), vals[i]);
+            GuiLabel(rec(cx + 115, y, 135, rowH), vals[i]);
         }
     }
 
-    // Reset style
-    GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_BLACK));
-    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
+    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    GuiSetStyle(DEFAULT, TEXT_SIZE, 14);
-    GuiLabel(rec(cx - 120, cy + 100, 240, 20),
+    GuiLabel(rec(cx - 250, startY + 4 * rowH + 12, 500, 25),
              "W/S navegar  |  ENTER cambiar  |  ESC volver");
 }
 
@@ -128,19 +133,18 @@ void RayguiGUI::drawGameOver(bool victory) {
 
     DrawRectangle(0, 0, sw, sh, COL_BLACK);
 
-    std::string filename = assetsDir() + (victory ? "victoryTitle.txt" : "gameOverTitle.txt");
-    std::ifstream f(filename);
-    std::string line;
     Font font = GuiGetFont();
     int fontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
-    int ty = sh / 2 - 100;
+    Color artColor = victory ? COL_YELLOW : COL_RED;
 
-    GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+    std::ifstream f(assetsDir() + (victory ? "victoryTitle.txt" : "gameOverTitle.txt"));
+    std::string line;
+    int ty = sh / 2 - 80;
 
     while (std::getline(f, line)) {
         if (line.empty()) { ty += fontSize; continue; }
         Vector2 sz = MeasureTextEx(font, line.c_str(), (float)fontSize, 0);
-        GuiLabel(rec(cx - sz.x / 2, (float)ty, sz.x, sz.y + 2), line.c_str());
+        DrawTextEx(font, line.c_str(), {(float)(cx - sz.x / 2), (float)ty}, (float)fontSize, 0, artColor);
         ty += (int)sz.y + 2;
     }
 
@@ -155,7 +159,7 @@ void RayguiGUI::drawGameOver(bool victory) {
     }
 
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
-    GuiLabel(rec(cx - 150, sh - 60, 300, 20), "ENTER para volver al menu");
+    GuiLabel(rec(cx - 250, sh - 60, 500, 20), "ENTER para volver al menu");
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
 }
 
@@ -213,6 +217,25 @@ void RayguiGUI::drawQuitDialog(int selection) {
 
 // ─── Title ───────────────────────────────────────────────────────────────────
 
+// Returns Y position after the last line of ASCII art
+static int drawAsciiTitle() {
+    int sw = GetScreenWidth();
+    int cx = sw / 2;
+    Font font = GuiGetFont();
+    int fontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
+    std::ifstream f(assetsDir() + "title.txt");
+    std::string line;
+    int ty = GetScreenHeight() / 2 - 120;
+
+    while (std::getline(f, line)) {
+        if (line.empty()) { ty += fontSize; continue; }
+        Vector2 sz = MeasureTextEx(font, line.c_str(), (float)fontSize, 0);
+        DrawTextEx(font, line.c_str(), {(float)(cx - sz.x / 2), (float)ty}, (float)fontSize, 0, COL_GRAY);
+        ty += (int)sz.y + 2;
+    }
+    return ty;
+}
+
 void RayguiGUI::drawTitle(int selection, bool hasSave, bool blink) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -220,22 +243,9 @@ void RayguiGUI::drawTitle(int selection, bool hasSave, bool blink) {
 
     DrawRectangle(0, 0, sw, sh, COL_BLACK);
 
-    Font font = GuiGetFont();
-    int fontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
-    std::ifstream f(assetsDir() + "title.txt");
-    std::string line;
-    int ty = sh / 2 - 120;
+    int ty = drawAsciiTitle();
+    ty += GuiGetStyle(DEFAULT, TEXT_SIZE);
 
-    GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-
-    while (std::getline(f, line)) {
-        if (line.empty()) { ty += fontSize; continue; }
-        Vector2 sz = MeasureTextEx(font, line.c_str(), (float)fontSize, 0);
-        GuiLabel(rec(cx - sz.x / 2, (float)ty, sz.x, sz.y + 2), line.c_str());
-        ty += (int)sz.y + 2;
-    }
-
-    ty += fontSize;
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
     GuiLabel(rec(cx - 150, ty, 300, 20), "~ Un RPG de mazmorra y sombras ~");
     ty += 30;
@@ -260,7 +270,7 @@ void RayguiGUI::drawTitle(int selection, bool hasSave, bool blink) {
 
     GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_BLACK));
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
-    GuiLabel(rec(cx - 150, ty + 10, 300, 20), "W/S navegar  |  ENTER para confirmar");
+    GuiLabel(rec(cx - 250, ty + 10, 500, 20), "W/S navegar  |  ENTER para confirmar");
 }
 
 // ─── Credits ─────────────────────────────────────────────────────────────────
@@ -272,21 +282,9 @@ void RayguiGUI::drawCredits() {
 
     DrawRectangle(0, 0, sw, sh, COL_BLACK);
 
-    Font font = GuiGetFont();
-    int fontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
-    std::ifstream f(assetsDir() + "title.txt");
-    std::string line;
-    int ty = sh / 2 - 120;
+    int ty = drawAsciiTitle();
+    ty += GuiGetStyle(DEFAULT, TEXT_SIZE);
 
-    GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    while (std::getline(f, line)) {
-        if (line.empty()) { ty += fontSize; continue; }
-        Vector2 sz = MeasureTextEx(font, line.c_str(), (float)fontSize, 0);
-        GuiLabel(rec(cx - sz.x / 2, (float)ty, sz.x, sz.y + 2), line.c_str());
-        ty += (int)sz.y + 2;
-    }
-
-    ty += fontSize;
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
     GuiLabel(rec(cx - 100, ty, 200, 20), "~ Creditos ~");
     ty += 25;
@@ -305,21 +303,9 @@ void RayguiGUI::drawNameInput(const std::string& name, bool blink) {
 
     DrawRectangle(0, 0, sw, sh, COL_BLACK);
 
-    Font font = GuiGetFont();
-    int fontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
-    std::ifstream f(assetsDir() + "title.txt");
-    std::string line;
-    int ty = sh / 2 - 120;
+    int ty = drawAsciiTitle();
+    ty += GuiGetStyle(DEFAULT, TEXT_SIZE);
 
-    GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    while (std::getline(f, line)) {
-        if (line.empty()) { ty += fontSize; continue; }
-        Vector2 sz = MeasureTextEx(font, line.c_str(), (float)fontSize, 0);
-        GuiLabel(rec(cx - sz.x / 2, (float)ty, sz.x, sz.y + 2), line.c_str());
-        ty += (int)sz.y + 2;
-    }
-
-    ty += fontSize;
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_WHITE));
     GuiLabel(rec(cx - 150, ty, 300, 20), "~ Un RPG de mazmorra y sombras ~");
     ty += 30;
@@ -329,11 +315,11 @@ void RayguiGUI::drawNameInput(const std::string& name, bool blink) {
     std::string display = "> " + name + (blink ? "_" : " ");
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_YELLOW));
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    GuiLabel(rec(cx - 120, ty, 240, 25), display.c_str());
+    GuiLabel(rec(cx - 200, ty, 400, 25), display.c_str());
 
     ty += 40;
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
-    GuiLabel(rec(cx - 150, ty, 300, 20), "ENTER para continuar  |  ESC para volver");
+    GuiLabel(rec(cx - 250, ty, 500, 20), "ENTER para continuar  |  ESC para volver");
 }
 
 // ─── Class Select ────────────────────────────────────────────────────────────
@@ -416,12 +402,31 @@ void RayguiGUI::drawClassSelect(int selection) {
         }
     }
 
+    // Retrato de la clase seleccionada (al lado derecho de los paneles)
+    {
+        const char* portraitFiles[3] = { "warrior.xp", "mago.xp", "ranger.xp" };
+        int px = cx + boxW / 2 + 30;
+        int py = boxY + boxH / 2;
+        try {
+            XpFile xp = loadXp(assetsDir() + "art/" + portraitFiles[selection]);
+            if (!xp.layers.empty()) {
+                float cellW = 4.0f;
+                float cellH = 8.0f;
+                int ph = (xp.layers[0].height / 2) * cellH;
+                xpDrawHalfBlockRl(px, py - ph / 2, xp.layers[0], cellW, cellH);
+            }
+        } catch (...) {
+            GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
+            GuiLabel(rec(px, py - 10, 100, 20), "[retrato N/A]");
+        }
+    }
+
     GuiSetStyle(DEFAULT, BORDER_WIDTH, 1);
     GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL, ColorToInt(COL_BLACK));
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
     GuiSetStyle(DEFAULT, TEXT_SIZE, 14);
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    GuiLabel(rec(cx - 200, boxY + 3 * (boxH + spacing) + 5, 400, 20),
+    GuiLabel(rec(cx - 250, boxY + 3 * (boxH + spacing) + 5, 500, 20),
              "W/S navegar  |  ENTER confirmar  |  ESC volver");
 }
 
@@ -434,6 +439,9 @@ void RayguiGUI::drawHudSelect(int selection) {
     int cy = sh / 2;
 
     DrawRectangle(0, 0, sw, sh, COL_BLACK);
+
+    Font hudFont = GuiGetFont();
+    int hudFontSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
 
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
     GuiSetStyle(DEFAULT, TEXT_SIZE, 22);
@@ -464,11 +472,9 @@ void RayguiGUI::drawHudSelect(int selection) {
 
         GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_LEFT);
         GuiSetStyle(DEFAULT, TEXT_SIZE, 10);
-        GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
-        std::string miniMap;
         for (int r = 0; r < 7; r++) {
-            miniMap = (r == 3) ? ". . . .@. . . ." : ". . . . . . . . .";
-            GuiLabel(rec(px + 8, py + 8 + r * 11, 120, 11), miniMap.c_str());
+            std::string mm = (r == 3) ? ". . . .@. . . ." : ". . . . . . . . .";
+            DrawTextEx(hudFont, mm.c_str(), {(float)(px + 8), (float)(py + 8 + r * 11)}, (float)hudFontSize, 0, COL_GRAY);
         }
 
         GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, ColorToInt(bc));
@@ -502,11 +508,9 @@ void RayguiGUI::drawHudSelect(int selection) {
 
         GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_LEFT);
         GuiSetStyle(DEFAULT, TEXT_SIZE, 10);
-        GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
-        std::string miniMap;
         for (int r = 0; r < 6; r++) {
-            miniMap = (r == 2) ? ". . . . .@. . . ." : ". . . . . . . . .";
-            GuiLabel(rec(px + 8, py + 5 + r * 11, 130, 11), miniMap.c_str());
+            std::string mm = (r == 2) ? ". . . . .@. . . ." : ". . . . . . . . .";
+            DrawTextEx(hudFont, mm.c_str(), {(float)(px + 8), (float)(py + 5 + r * 11)}, (float)hudFontSize, 0, COL_GRAY);
         }
 
         GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL, ColorToInt(bc));
@@ -527,6 +531,6 @@ void RayguiGUI::drawHudSelect(int selection) {
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL, ColorToInt(COL_GRAY));
     GuiSetStyle(DEFAULT, TEXT_SIZE, 14);
     GuiSetStyle(DEFAULT, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-    GuiLabel(rec(cx - 200, previewY + previewH + 30, 400, 20),
+    GuiLabel(rec(cx - 250, previewY + previewH + 30, 500, 20),
              "A/D navegar  |  ENTER confirmar  |  ESC volver");
 }

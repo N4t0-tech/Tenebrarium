@@ -128,6 +128,24 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
     }
 }
 
+// Renderiza capa .xp con half-blocks usando Raylib directo (sin TerminalScreen).
+// cellW/cellH: píxeles por celda de la capa (cada celda produce 2 filas de píxeles).
+void xpDrawHalfBlockRl(int x, int y, const XpLayer& layer, float cellW, float cellH) {
+    int rows = layer.height / 2 * 2;  // pares
+    for (int dy = 0; dy < rows; dy += 2) {
+        for (int dx = 0; dx < layer.width; dx++) {
+            int sy0 = std::min(dy, layer.height - 1);
+            int sy1 = std::min(dy + 1, layer.height - 1);
+            Color topCol = effectiveRl(layer.cells[sy0 * layer.width + dx]);
+            Color botCol = effectiveRl(layer.cells[sy1 * layer.width + dx]);
+            float px = x + dx * cellW;
+            float py = y + (dy / 2) * cellH;
+            DrawRectangle(px, py, cellW, cellH * 0.5f, topCol);
+            DrawRectangle(px, py + cellH * 0.5f, cellW, cellH * 0.5f, botCol);
+        }
+    }
+}
+
 // Renderiza capa .xp con glyphs CP437 reales (conserva detalles/texturas)
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
     int dstW = static_cast<int>(layer.width  * scale);

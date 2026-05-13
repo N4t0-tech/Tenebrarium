@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <raylib.h>
 
 struct XpCell {
     char32_t glyph;
@@ -28,3 +29,7 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
 
 // Vuelca una capa XP usando los glyphs CP437 reales (conserva texturas/detalles)
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);
+
+// Renderiza una capa XP con rectángulos Raylib directos (sin TerminalScreen)
+// cellW/cellH: tamaño en píxeles de cada celda de la capa (antes de half-block)
+void xpDrawHalfBlockRl(int x, int y, const XpLayer& layer, float cellW, float cellH);
