@@ -8,6 +8,7 @@
 
 #include "ui/TerminalScreen.hpp"
 #include "world/Map.hpp"
+#include "world/DungeonTheme.hpp"
 #include "entities/Player.hpp"
 #include "combat/CombatSystem.hpp"
 #include "ui/HudLayout.hpp"
@@ -25,16 +26,18 @@ public:
     static void drawClassSelect(TerminalScreen& scr, int selection);
     static void drawHudSelect(TerminalScreen& scr, int selection);
     static void drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                             int mapZoom, bool shaderOn);
+                             int mapZoom, bool shaderOn, int dungeonTheme);
 
     // ── Pantallas de juego ───────────────────────────────────────────────────
     static void drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
+                                const DungeonTheme& theme,
                                 const std::string& message = "",
                                 int mapZoom = 1);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
-                        const Map& map, const std::vector<MapEntity>& entities);
+                        const Map& map, const std::vector<MapEntity>& entities,
+                        const DungeonTheme& theme);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);

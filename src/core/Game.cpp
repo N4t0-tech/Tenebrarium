@@ -207,6 +207,10 @@ void Game::run()
         0x00BA,
         0x00BF,
         0x00A1,
+        0x00C1, // Á
+        0x00CD, // Í
+        0x00D3, // Ó
+        0x00DA, // Ú
         // doble línea CP437
         0x2550,
         0x2551,
@@ -377,7 +381,8 @@ void Game::run()
                     zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
                 Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
-                                   acc.map(), zEntities);
+                                   acc.map(), zEntities,
+                                   kThemes[dungeonTheme_]);
             }
 
              mapScr.render(offX, offY);
@@ -916,7 +921,7 @@ void Game::inputCredits(int key)
 
 void Game::inputSettings(int key)
 {
-    static constexpr int n = 4;
+    static constexpr int n = 5;
     switch (key)
     {
     case 'w':
@@ -937,6 +942,9 @@ void Game::inputSettings(int key)
             saveSettings();
         } else if (settingsSelection_ == 2) {
             shaderEnabled_ = !shaderEnabled_;
+            saveSettings();
+        } else if (settingsSelection_ == 3) {
+            dungeonTheme_ = (dungeonTheme_ + 1) % kNumThemes;
             saveSettings();
         } else {
             menuSelection_ = 0;
@@ -1151,7 +1159,7 @@ void Game::render(TerminalScreen &scr)
             Renderer::drawHudSelect(scr, hudSelection_);
             break;
         case MenuPhase::Settings:
-            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_, dungeonTheme_);
             break;
         }
         break;
@@ -1174,7 +1182,8 @@ void Game::render(TerminalScreen &scr)
                 if (acc.shopExists())
                     entities.push_back({acc.shopMerchantPos(), '$', 4, true});
                 Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,
-                                           entities, "", mapZoom_);
+                                           entities, kThemes[dungeonTheme_],
+                                           "", mapZoom_);
              }
          }
         break;
@@ -1715,6 +1724,7 @@ void Game::saveSettings() const {
         f << "mapZoom=" << mapZoom_ << "\n";
         f << "hudLayout=" << static_cast<int>(hudLayout_) << "\n";
         f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
+        f << "dungeonTheme=" << dungeonTheme_ << "\n";
     }
 }
 
@@ -1730,6 +1740,9 @@ void Game::loadSettings() {
             catch (...) {}
         } else if (line.rfind("shaderEnabled=", 0) == 0) {
             try { shaderEnabled_ = std::stoi(line.substr(14)) != 0; }
+            catch (...) {}
+        } else if (line.rfind("dungeonTheme=", 0) == 0) {
+            try { dungeonTheme_ = std::clamp(std::stoi(line.substr(13)), 0, kNumThemes - 1); }
             catch (...) {}
         }
     }

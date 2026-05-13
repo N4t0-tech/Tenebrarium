@@ -95,7 +95,8 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
 
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
-                       const Map& map, const std::vector<MapEntity>& entities) {
+                       const Map& map, const std::vector<MapEntity>& entities,
+                       const DungeonTheme& theme) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -138,15 +139,17 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 if (drew) continue;
 
                 if (tile.type == TileType::SecretWall) {
-                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, factor), COL_BLACK, CELL_DIM);
+                    scr.put(dc, dr, '#', applyFactor(theme.secretFg, factor), COL_BLACK, CELL_DIM);
                     continue;
                 }
-                scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
+                {
+                    Color tileFg = (tile.type == TileType::Wall) ? theme.wallFg : theme.floorFg;
+                    scr.put(dc, dr, tile.glyph, applyFactor(tileFg, factor), COL_BLACK, 0);
+                }
             } else {
-                static const Color COL_DARK = { 80, 80, 80, 255 };
                 // La pared secreta usa '#' (como pared normal) para no parpadear al salir del FOV
                 char32_t g = (tile.type == TileType::SecretWall) ? '#' : tile.glyph;
-                scr.put(dc, dr, g, COL_DARK, COL_BLACK, 0);
+                scr.put(dc, dr, g, theme.exploredFg, COL_BLACK, 0);
             }
         }
     }
@@ -503,7 +506,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
 // ─── drawSettings ──────────────────────────────────────────────────────────────
 
 void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                            int mapZoom, bool shaderOn) {
+                            int mapZoom, bool shaderOn, int dungeonTheme) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
     drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
@@ -517,15 +520,18 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     const char* hudVal = (hud == HudLayout::Sidebar) ? "Panel lateral" : "Barra inferior";
     const char* zoomVal = (mapZoom == 1) ? "1x" : (mapZoom == 2) ? "2x" : "3x";
     const char* shaderVal = shaderOn ? "On" : "Off";
+    const char* themeVal = (dungeonTheme >= 0 && dungeonTheme < kNumThemes)
+                           ? kThemes[dungeonTheme].name : "?";
 
     Setting items[] = {
         {"Estilo HUD",   hudVal},
         {"Zoom Mapa",    zoomVal},
         {"Shader CRT",   shaderVal},
+        {"Tema Mapa",    themeVal},
         {"Volver",       ""},
     };
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         int y = cy - 1 + i * 2;
         bool sel = (i == selection);
         Color c = sel ? COL_YELLOW : COL_WHITE;
@@ -546,11 +552,12 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
 void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
+                                const DungeonTheme& theme,
                                 const std::string& message, int mapZoom) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 22;
         int mapW   = scr.cols() - panelW - 1;
-        drawMap(scr, 0, 0, mapW, scr.rows(), map, entities);
+        drawMap(scr, 0, 0, mapW, scr.rows(), map, entities, theme);
         drawVSep(scr, mapW, 0, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
         if (!message.empty())
@@ -559,7 +566,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     } else {
         int hudH = 3;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 0,0, scr.cols(), mapH, map, entities);
+        drawMap(scr, 0,0, scr.cols(), mapH, map, entities, theme);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),

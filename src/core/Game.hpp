@@ -12,6 +12,7 @@
 #include "entities/Enemy.hpp"
 #include "combat/CombatSystem.hpp"
 #include "world/Dungeon.hpp"
+#include "world/DungeonTheme.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -65,6 +66,7 @@ private:
 
     int  mapZoom_{1};
     bool shaderEnabled_{true};
+    int  dungeonTheme_{0};
     bool victory_{false};
 
     double screenshotMsgEndTime_{0.0};
