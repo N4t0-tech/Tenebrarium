@@ -49,7 +49,7 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
     case EnemyType::Goblin:
         name = "Goblin";   hp = sc(125); atk = sc(17); def = sc(4);  xp = sc(60);  pa = 1; break;
     case EnemyType::Skeleton:
-        name = "Esqueleto"; hp = sc(120); atk = sc(16); def = sc(8);  xp = sc(60);  pa = 1; break;
+        name = "Esqueleto"; hp = sc(120); atk = sc(16); def = sc(4);  xp = sc(60);  pa = 1; break;
     case EnemyType::Orc:
         name = "Orco";     hp = sc(140); atk = sc(20); def = sc(10); xp = sc(120); pa = 2; break;
     case EnemyType::Spider:

@@ -132,7 +132,10 @@ void CombatSystem::doUseItem() {
     if (!hasEnoughAp(1)) { logMessage("PA insuficientes."); return; }
     int healed = player_.useConsumable();
     if (healed == 0) {
-        logMessage("No tienes pociones.");
+        if (player_.countConsumables() > 0)
+            logMessage("Ya tienes la vida al máximo.");
+        else
+            logMessage("No tienes pociones.");
         return;
     }
     logMessage(player_.getName() + " usa una poción y recupera " +

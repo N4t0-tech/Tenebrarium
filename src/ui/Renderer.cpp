@@ -365,7 +365,7 @@ struct ClassInfo {
 };
 static constexpr ClassInfo kClasses[3] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
-     "warrior.xp", 120,15,8,20},
+     "warrior.xp", 120,20,8,100},
     {"MAGO","Arcano","Domina las artes mágicas. Poder devastador.",
      "mago.xp", 70,8,3,100},
     {"RANGER","Explorador","Ágil y versátil. Experto en trampas y arco.",

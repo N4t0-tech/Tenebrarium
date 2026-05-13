@@ -50,7 +50,7 @@ int Player::baseHp(PlayerClass c) {
 
 int Player::baseAttack(PlayerClass c) {
     switch (c) {
-        case PlayerClass::Warrior: return 15;
+        case PlayerClass::Warrior: return 20;
         case PlayerClass::Mage:    return 10;
         case PlayerClass::Ranger:  return 12;
     }
@@ -122,6 +122,7 @@ int Player::useConsumable() {
         // statBonus > 0 filtra cerveza/poción de mana (restauran mana, no HP)
         if (item.type == ItemType::Consumable && item.statBonus > 0) {
             int healed = std::min(item.statBonus, maxHp_ - hp_);
+            if (healed <= 0) return 0;
             hp_ += healed;
             inventory_.removeItem(item.name);
             return healed;
@@ -173,7 +174,7 @@ std::vector<Art> Player::getAvailableArts() const {
 
 int Player::baseMana(PlayerClass c) {
     switch (c) {
-        case PlayerClass::Warrior: return 20;
+        case PlayerClass::Warrior: return 100;
         case PlayerClass::Mage:    return 100;
         case PlayerClass::Ranger:  return 50;
     }

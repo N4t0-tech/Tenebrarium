@@ -621,6 +621,8 @@ void Game::dispatchInput(int key)
             int healed = player_->useConsumable();
             if (healed > 0)
                 dungeon_->message = "Usas una poción: +" + std::to_string(healed) + " HP!";
+            else if (player_->countConsumables() > 0)
+                dungeon_->message = "Ya tienes la vida al máximo!";
             else
                 dungeon_->message = "No tienes pociones.";
             dungeon_->messageEndTime = GetTime() + 2.0;
@@ -1410,11 +1412,13 @@ void Game::inputInventory(int key)
             if (item.type == ItemType::Consumable && item.statBonus > 0)
             {
                 int healed = std::min(item.statBonus, player_->getMaxHp() - player_->getHp());
-                player_->heal(healed);
-                player_->getInventory().removeItem(item.name);
-                if (dungeon_) {
-                    dungeon_->message = "Usas " + item.name + ": +" + std::to_string(healed) + " HP!";
-                    dungeon_->messageEndTime = GetTime() + 2.0;
+                if (healed > 0) {
+                    player_->heal(healed);
+                    player_->getInventory().removeItem(item.name);
+                    if (dungeon_) {
+                        dungeon_->message = "Usas " + item.name + ": +" + std::to_string(healed) + " HP!";
+                        dungeon_->messageEndTime = GetTime() + 2.0;
+                    }
                 }
             }
         }
