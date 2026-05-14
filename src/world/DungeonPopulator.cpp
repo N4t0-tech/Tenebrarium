@@ -139,25 +139,54 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
         {"Arco Encantado", "Flechas mágicas.",          ItemType::Weapon, 80, 2, 7, 1},
         {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
     };
-    const auto& pool = (cls == PlayerClass::Warrior) ? warrior
-                     : (cls == PlayerClass::Mage)    ? mage
-                                                     : ranger;
-    Item item = pool[std::rand() % pool.size()];
+    const std::vector<Item>* pool = nullptr;
+    if (cls == PlayerClass::Warrior)      pool = &warrior;
+    else if (cls == PlayerClass::Mage)    pool = &mage;
+    else if (cls == PlayerClass::Ranger)  pool = &ranger;
+    else if (cls == PlayerClass::Halley) {
+        static const std::vector<Item> halley = {
+            {"Filo del Equilibrio", "Cortes justos y precisos.",     ItemType::Weapon, 50, 1, 4, 1},
+            {"Daga Temporal",      "Ataja en el momento exacto.",    ItemType::Weapon, 50, 1, 4, 1},
+            {"Espada Eterna",      "El tiempo no la desgasta.",      ItemType::Weapon, 80, 2, 7, 1},
+            {"Guadaña del Juicio", "Decide el destino.",             ItemType::Weapon, 80, 2, 8, 1},
+        };
+        pool = &halley;
+    } else {
+        static const std::vector<Item> nato = {
+            {"Cetro Estelar",     "Brilla con luz propia.",         ItemType::Weapon, 50, 1, 5, 1},
+            {"Lanza Celestial",   "Forjada en el cosmos.",          ItemType::Weapon, 50, 1, 5, 1},
+            {"Espada del Creador","Fragmento de voluntad divina.",  ItemType::Weapon, 80, 2, 8, 1},
+            {"Báculo de Estrellas","Gobierna el firmamento.",       ItemType::Weapon, 80, 2, 9, 1},
+        };
+        pool = &nato;
+    }
+    Item item = (*pool)[std::rand() % pool->size()];
     item.statBonus += (floor - 1) / 2;
     return item;
 }
 
 Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
 {
-    static const Item a[3][2] = {
+    static const Item a[5][2] = {
         {{"Cota de Malla",      "Protección media.",   ItemType::Armor, 40, 1, 3, 1},
          {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
-         {{"Túnica Arcana",      "Ligera y mágica.",    ItemType::Armor, 30, 1, 1, 1},
+        {{"Túnica Arcana",      "Ligera y mágica.",    ItemType::Armor, 30, 1, 1, 1},
          {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3, 1}},
         {{"Cuero Reforzado",    "Ágil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
          {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
+        {{"Manto del Equilibrio","Pesa lo que debe pesar.",      ItemType::Armor, 40, 1, 3, 1},
+         {"Armadura Eterna",    "El tiempo la consagra.",        ItemType::Armor, 70, 2, 6, 1}},
+        {{"Túnica Estelar",     "Tejida con luz de estrellas.", ItemType::Armor, 40, 1, 4, 1},
+         {"Armadura Divina",    "Voluntad hecha materia.",       ItemType::Armor, 70, 2, 7, 1}},
     };
-    int ci = (cls == PlayerClass::Warrior) ? 0 : (cls == PlayerClass::Mage) ? 1 : 2;
+    int ci = 0;
+    switch (cls) {
+        case PlayerClass::Warrior: ci = 0; break;
+        case PlayerClass::Mage:    ci = 1; break;
+        case PlayerClass::Ranger:  ci = 2; break;
+        case PlayerClass::Halley:  ci = 3; break;
+        case PlayerClass::Nato:    ci = 4; break;
+    }
     Item item = a[ci][std::rand() % 2];
     item.statBonus += (floor - 1) / 2;
     return item;

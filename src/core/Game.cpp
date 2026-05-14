@@ -984,6 +984,8 @@ void Game::inputNameInput(int key)
     {
         if (!playerName_.empty())
         {
+            secretEasterEgg_ = (playerName_ == "halley" || playerName_ == "nato"
+                                || playerName_ == "halley&nato");
             classSelection_ = 0;
             menuPhase_ = MenuPhase::ClassSelect;
         }
@@ -1006,19 +1008,32 @@ void Game::inputNameInput(int key)
 
 void Game::inputClassSelect(int key)
 {
-    switch (key)
-    {
-    case 'w':
-    case 's':
-        navV(key, classSelection_, 3);
-        break;
-    case 27:
-        menuPhase_ = MenuPhase::NameInput;
-        break;
-    case '\n':
-        hudSelection_ = 0;
-        menuPhase_ = MenuPhase::HudSelect;
-        break;
+    if (secretEasterEgg_) {
+        switch (key) {
+        case 'a': classSelection_ = 0; break;
+        case 'd': classSelection_ = 1; break;
+        case 27:
+            secretEasterEgg_ = false;
+            menuPhase_ = MenuPhase::NameInput;
+            return;
+        case '\n':
+            hudSelection_ = 0;
+            menuPhase_ = MenuPhase::HudSelect;
+            return;
+        }
+    } else {
+        switch (key) {
+        case 'w': case 's':
+            navV(key, classSelection_, 3);
+            break;
+        case 27:
+            menuPhase_ = MenuPhase::NameInput;
+            break;
+        case '\n':
+            hudSelection_ = 0;
+            menuPhase_ = MenuPhase::HudSelect;
+            break;
+        }
     }
 }
 
@@ -1037,17 +1052,15 @@ void Game::inputHudSelect(int key)
     {
         hudLayout_ = (hudSelection_ == 0) ? HudLayout::Sidebar : HudLayout::Bottom;
         PlayerClass cls;
-        switch (classSelection_)
-        {
-        case 0:
-            cls = PlayerClass::Warrior;
-            break;
-        case 1:
-            cls = PlayerClass::Mage;
-            break;
-        default:
-            cls = PlayerClass::Ranger;
-            break;
+        if (secretEasterEgg_) {
+            cls = (classSelection_ == 0) ? PlayerClass::Halley : PlayerClass::Nato;
+        } else {
+            switch (classSelection_)
+            {
+            case 0:  cls = PlayerClass::Warrior; break;
+            case 1:  cls = PlayerClass::Mage;    break;
+            default: cls = PlayerClass::Ranger;  break;
+            }
         }
         player_ = std::make_unique<Player>(playerName_, cls);
         // Dar 2 bombas iniciales (como 1 item con quantity=2)
@@ -1147,7 +1160,7 @@ void Game::render(TerminalScreen &scr)
                                     std::fmod(GetTime(), 0.8) < 0.4);
             break;
         case MenuPhase::ClassSelect:
-            Renderer::drawClassSelect(scr, classSelection_);
+            Renderer::drawClassSelect(scr, classSelection_, secretEasterEgg_);
             break;
         case MenuPhase::HudSelect:
             Renderer::drawHudSelect(scr, hudSelection_);
@@ -1275,6 +1288,7 @@ void Game::setState(GameState newState)
         victory_ = false;
         menuPhase_ = MenuPhase::Title;
         menuSelection_ = 0;
+        secretEasterEgg_ = false;
         classSelection_ = 0;
         hudSelection_ = 0;
         playerName_.clear();

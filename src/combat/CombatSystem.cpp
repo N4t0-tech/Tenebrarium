@@ -511,11 +511,88 @@ void CombatSystem::resolveArt(ArtEffect effect) {
                        + ts(fx.magnitude) + " daño/turno por 3 turnos.");
             break;
         }
+
+        // ─── Halley arts ─────────────────────────────────────────────────────
+        case ArtEffect::LluviaEstelar: {
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.5f));
+            logMessage("Juicio Estelar! " + ts(dmg) + " daño divino a todos!");
+            for (auto& e : enemies_) {
+                if (e->isAlive()) {
+                    e->takeDamageRaw(dmg);
+                    if (!e->isAlive())
+                        logMessage("  " + e->getName() + " derrotado!");
+                }
+            }
+            advanceTarget();
+            break;
+        }
+
+        case ArtEffect::Creacion: {
+            int heal = player_.getMaxHp() / 2;
+            player_.heal(heal);
+            logMessage("Creación! Recuperas " + ts(heal) + " HP.");
+            break;
+        }
+
+        case ArtEffect::PresenciaDivina: {
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::AttackBoosted;
+            fx.turnsLeft = 3;
+            fx.magnitude = player_.getAttack() / 2 + 5;
+            playerEffects_.push_back(fx);
+            logMessage("Presencia Divina! ATK +" + ts(fx.magnitude) + " por 3 turnos.");
+            break;
+        }
+
+        // ─── Nato arts ───────────────────────────────────────────────────────
+        case ArtEffect::DistorsionTemporal: {
+            if (!target->isAlive()) break;
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::Frozen;
+            fx.turnsLeft = 1;
+            fx.magnitude = 10; // suficiente para cubrir cualquier PA
+            enemyEffects_[currentTarget_].push_back(fx);
+            logMessage("Distorsión Temporal! " + target->getName()
+                       + " pierde todos sus PA.");
+            break;
+        }
+
+        case ArtEffect::VinculoEterno: {
+            if (!target->isAlive()) break;
+            int dmg = std::max(1, player_.getAttack() - target->getDefense());
+            target->takeDamageRaw(dmg);
+            int heal = static_cast<int>(dmg * 1.5f);
+            player_.heal(heal);
+            logMessage("Vínculo Eterno! " + ts(dmg) + " daño, recuperas " + ts(heal) + " HP.");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
+
+        case ArtEffect::JuicioFinal: {
+            if (!target->isAlive()) break;
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 2.0f));
+            target->takeDamageRaw(dmg);
+            logMessage("Juicio Final! " + ts(dmg) + " daño imparable.");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
     }
 }
 
 bool CombatSystem::rollCritical() const {
-    int chance = (player_.getClass() == PlayerClass::Ranger) ? 20 : 15;
+    int chance = 15;
+    switch (player_.getClass()) {
+        case PlayerClass::Ranger: chance = 20; break;
+        case PlayerClass::Halley: chance = 18; break;
+        case PlayerClass::Nato:   chance = 20; break;
+        default: break;
+    }
     return (std::rand() % 100) < chance;
 }
 

@@ -22,7 +22,7 @@ public:
     static void drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink);
     static void drawCredits(TerminalScreen& scr);
     static void drawNameInput(TerminalScreen& scr, const std::string& name, bool blink);
-    static void drawClassSelect(TerminalScreen& scr, int selection);
+    static void drawClassSelect(TerminalScreen& scr, int selection, bool secretUnlocked = false);
     static void drawHudSelect(TerminalScreen& scr, int selection);
     static void drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
                              int mapZoom, bool shaderOn);

@@ -66,6 +66,7 @@ private:
     int  mapZoom_{1};
     bool shaderEnabled_{true};
     bool victory_{false};
+    bool secretEasterEgg_{false};
 
     double screenshotMsgEndTime_{0.0};
     int screenshotCounter_{0};

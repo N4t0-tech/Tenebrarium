@@ -30,6 +30,8 @@ const char* Renderer::className(const Player& p) {
         case PlayerClass::Warrior: return "Guerrero";
         case PlayerClass::Mage:    return "Mago";
         case PlayerClass::Ranger:  return "Ranger";
+        case PlayerClass::Halley:  return "Halley";
+        case PlayerClass::Nato:    return "Nato";
     }
     return "";
 }
@@ -366,70 +368,130 @@ struct ClassInfo {
     const char* portrait;
     int hp, atk, def, mana;
 };
-static constexpr ClassInfo kClasses[3] = {
+static constexpr ClassInfo kClasses[5] = {
     {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
      "warrior.xp", 120,20,8,100},
     {"MAGO","Arcano","Domina las artes mágicas. Poder devastador.",
      "mago.xp", 70,8,3,100},
     {"RANGER","Explorador","Ágil y versátil. Experto en trampas y arco.",
      "ranger.xp", 90,12,5,50},
+    {"HALLEY","Equilibrio","La balanza que todo lo iguala.",
+     "halley.xp", 130,18,7,170},
+    {"NATO","Creador","Forjó el Tenebrarium con sus manos.",
+     "nato.xp", 140,22,8,130},
 };
 
-void Renderer::drawClassSelect(TerminalScreen& scr, int selection) {
+void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUnlocked) {
     drawCentered(scr, 1, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
     drawCentered(scr, 2, 0, scr.cols(), "Elige tu clase:", COL_WHITE);
 
-    // Calcular boxW según el contenido más ancho de cualquier clase
-    int maxContent = 0;
-    for (int i = 0; i < 3; i++) {
-        const auto& c = kClasses[i];
+    if (secretUnlocked) {
+        // ─── Modo clases secretas: retratos lado a lado arriba, ficha abajo ──
+        static constexpr float kPortScale = 1.0f;
+        static constexpr int kSrcSize = 60;
+        int portW = kSrcSize;           // 60 celdas
+        int portH = kSrcSize / 2;       // 30 celdas (half-block)
+
+        int gap = 4;
+        int totalW = portW * 2 + gap;
+        int startX = (scr.cols() - totalW) / 2;
+        int portY = 4;
+
+        // Halley (izquierda)
+        bool selH = (selection == 0);
+        Color hc = selH ? COL_YELLOW : COL_MAGENTA;
+        drawBorder(scr, startX - 1, portY - 1, portW + 2, portH + 2, hc);
+        drawPortrait(scr, startX, portY, kClasses[3].portrait, kPortScale);
+        drawCentered(scr, portY + portH, startX - 1, portW + 2,
+                     "HALLEY", hc, selH ? CELL_BOLD : 0);
+
+        // Nato (derecha)
+        int nx = startX + portW + gap;
+        bool selN = (selection == 1);
+        Color nc = selN ? COL_YELLOW : COL_MAGENTA;
+        drawBorder(scr, nx - 1, portY - 1, portW + 2, portH + 2, nc);
+        drawPortrait(scr, nx, portY, kClasses[4].portrait, kPortScale);
+        drawCentered(scr, portY + portH, nx - 1, portW + 2,
+                     "NATO", nc, selN ? CELL_BOLD : 0);
+
+        // Ficha de información debajo de los retratos
+        int cardY = portY + portH + 3;
+        const auto& c = kClasses[3 + selection];
         std::string stats = "HP:" + std::to_string(c.hp) +
                             " ATK:" + std::to_string(c.atk) +
                             " DEF:" + std::to_string(c.def) +
                             " MP:" + std::to_string(c.mana);
-        std::string role  = std::string("[ ") + c.role + " ]";
-        int w = std::max({ (int)std::string(c.name).size(),
-                           (int)role.size(),
-                           (int)stats.size(),
-                           (int)std::string(c.desc).size() });
-        maxContent = std::max(maxContent, w);
-    }
-    int boxW = maxContent + 4;  // 2 padding + 2 borde
-    int boxH = 8, listCol = 2;
+        std::string nameRole = std::string(c.name) + "  [ " + c.role + " ]";
+        int cardW = std::max({ (int)nameRole.size(), (int)stats.size(),
+                               (int)std::string(c.desc).size(),
+                               20 }) + 4;
+        int cardX = (scr.cols() - cardW) / 2;
+        int cardH = 7;
 
-    for (int i = 0; i < 3; i++) {
-        const auto& c = kClasses[i];
-        bool sel = (i == selection);
-        Color tc = sel ? COL_YELLOW : COL_GRAY;
-        uint8_t tf = sel ? CELL_BOLD : CELL_DIM;
-        int br = 4 + i * (boxH + 1);
-        drawBorder(scr, listCol, br, boxW, boxH, tc);
-        scr.putStr(listCol + 2, br + 1, c.name, tc, COL_BLACK, tf);
-        scr.putStr(listCol + 2, br + 2,
-                   std::string("[ ") + c.role + " ]", tc, COL_BLACK, tf);
-        drawHSep(scr, listCol + 1, br + 3, boxW - 2, tc);
-        std::string manaLabel = (i == 0) ? " AG:" : " MP:";
-        scr.putStr(listCol + 2, br + 4,
-            "HP:" + std::to_string(c.hp) +
-            " ATK:" + std::to_string(c.atk) +
-            " DEF:" + std::to_string(c.def) +
-            manaLabel + std::to_string(c.mana), COL_GREEN, COL_BLACK, tf);
-        scr.putStr(listCol + 2, br + 5, c.desc, tc, COL_BLACK, CELL_DIM);
-    }
+        drawBorder(scr, cardX, cardY, cardW, cardH, COL_YELLOW);
+        scr.putStr(cardX + 2, cardY + 1, nameRole, COL_YELLOW, COL_BLACK, CELL_BOLD);
+        drawHSep(scr, cardX + 1, cardY + 2, cardW - 2, COL_YELLOW);
+        scr.putStr(cardX + 2, cardY + 3, stats, COL_GREEN);
+        scr.putStr(cardX + 2, cardY + 4, c.desc, COL_GRAY, COL_BLACK, CELL_DIM);
+        scr.putStr(cardX + 2, cardY + 5, "~~ CLASE SECRETA ~~", COL_MAGENTA, COL_BLACK, CELL_DIM);
 
-    // Centrar el retrato escalado en el espacio entre la lista y el borde derecho
-    static constexpr float kPortScale = 1.0f;
-    static constexpr int kSrcSize = 60;
-    int portW = kSrcSize;
-    int portH = kSrcSize / 2;  // half-block divide alto entre 2
-    int spaceStart = listCol + boxW + 2;
-    int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
-    if (portCol < spaceStart) portCol = spaceStart;
-    drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
-    drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
+    } else {
+        // ─── Modo clases normales: lista vertical + retrato a la derecha ────
+        int nClasses = 3;
+        int startIdx = 0;
+
+        int maxContent = 0;
+        for (int i = 0; i < nClasses; i++) {
+            const auto& c = kClasses[startIdx + i];
+            std::string stats = "HP:" + std::to_string(c.hp) +
+                                " ATK:" + std::to_string(c.atk) +
+                                " DEF:" + std::to_string(c.def) +
+                                " MP:" + std::to_string(c.mana);
+            std::string role  = std::string("[ ") + c.role + " ]";
+            int w = std::max({ (int)std::string(c.name).size(),
+                               (int)role.size(),
+                               (int)stats.size(),
+                               (int)std::string(c.desc).size() });
+            maxContent = std::max(maxContent, w);
+        }
+        int boxW = maxContent + 4;
+        int boxH = 7, listCol = 2;
+
+        for (int i = 0; i < nClasses; i++) {
+            const auto& c = kClasses[startIdx + i];
+            bool sel = (i == selection);
+            Color tc = sel ? COL_YELLOW : COL_GRAY;
+            uint8_t tf = sel ? CELL_BOLD : CELL_DIM;
+            int br = 4 + i * (boxH + 1);
+            drawBorder(scr, listCol, br, boxW, boxH, tc);
+            scr.putStr(listCol + 2, br + 1, c.name, tc, COL_BLACK, tf);
+            scr.putStr(listCol + 2, br + 2,
+                       std::string("[ ") + c.role + " ]", tc, COL_BLACK, tf);
+            drawHSep(scr, listCol + 1, br + 3, boxW - 2, tc);
+            std::string manaLabel = (i == 0) ? " AG:" : " MP:";
+            scr.putStr(listCol + 2, br + 4,
+                "HP:" + std::to_string(c.hp) +
+                " ATK:" + std::to_string(c.atk) +
+                " DEF:" + std::to_string(c.def) +
+                manaLabel + std::to_string(c.mana), COL_GREEN, COL_BLACK, tf);
+            scr.putStr(listCol + 2, br + 5, c.desc, tc, COL_BLACK, CELL_DIM);
+        }
+
+        static constexpr float kPortScale = 1.0f;
+        static constexpr int kSrcSize = 60;
+        int portW = kSrcSize;
+        int portH = kSrcSize / 2;
+        int spaceStart = listCol + boxW + 2;
+        int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
+        if (portCol < spaceStart) portCol = spaceStart;
+        drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
+        drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
+    }
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
-                 "W/S navegar  |  ENTER confirmar  |  ESC volver",
+                 secretUnlocked
+                     ? "A/D navegar  |  ENTER confirmar  |  ESC volver"
+                     : "W/S navegar  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 

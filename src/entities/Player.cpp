@@ -44,6 +44,8 @@ int Player::baseHp(PlayerClass c) {
         case PlayerClass::Warrior: return 120;
         case PlayerClass::Mage:    return 100;
         case PlayerClass::Ranger:  return 90;
+        case PlayerClass::Halley:  return 130;
+        case PlayerClass::Nato:    return 140;
     }
     return 100;
 }
@@ -53,6 +55,8 @@ int Player::baseAttack(PlayerClass c) {
         case PlayerClass::Warrior: return 20;
         case PlayerClass::Mage:    return 10;
         case PlayerClass::Ranger:  return 12;
+        case PlayerClass::Halley:  return 18;
+        case PlayerClass::Nato:    return 22;
     }
     return 10;
 }
@@ -62,6 +66,8 @@ int Player::baseDefense(PlayerClass c) {
         case PlayerClass::Warrior: return 8;
         case PlayerClass::Mage:    return 3;
         case PlayerClass::Ranger:  return 5;
+        case PlayerClass::Halley:  return 7;
+        case PlayerClass::Nato:    return 8;
     }
     return 5;
 }
@@ -184,6 +190,18 @@ std::vector<Art> Player::getAvailableArts() const {
                 { "Trampa",        1, 0, ArtEffect::Trampa,       "Daño retardado turno siguiente" },
                 { "Veneno",        1, 0, ArtEffect::Veneno,       "DoT 3 turnos" },
             };
+        case PlayerClass::Halley:
+            return {
+                { "Distorsión Temporal", 2, 20, ArtEffect::DistorsionTemporal, "Enemigo pierde TODOS sus PA" },
+                { "Vínculo Eterno",      1, 10, ArtEffect::VinculoEterno,      "Daño ATK + cura 150% del daño" },
+                { "Juicio Final",        3, 30, ArtEffect::JuicioFinal,        "ATK*2.0 ignora DEF" },
+            };
+        case PlayerClass::Nato:
+            return {
+                { "Juicio Estelar",   3, 25, ArtEffect::LluviaEstelar,   "ATK*1.5 a TODOS los enemigos" },
+                { "Creación",         1, 20, ArtEffect::Creacion,        "Recupera 50% HP máximo" },
+                { "Presencia Divina", 2, 25, ArtEffect::PresenciaDivina, "+ATK/2+5 por 3 turnos" },
+            };
     }
     return {};
 }
@@ -193,6 +211,8 @@ int Player::baseMana(PlayerClass c) {
         case PlayerClass::Warrior: return 100;
         case PlayerClass::Mage:    return 100;
         case PlayerClass::Ranger:  return 50;
+        case PlayerClass::Halley:  return 170;
+        case PlayerClass::Nato:    return 130;
     }
     return 30;
 }

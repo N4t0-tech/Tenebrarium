@@ -16,6 +16,12 @@ enum class ArtEffect {
     DisparoDoble,    // Ranger: 2 ataques normales seguidos al objetivo
     Trampa,          // Ranger: daño retardado (se aplica al inicio del siguiente turno enemigo)
     Veneno,          // Ranger: DoT 3 turnos (magnitud = ATK/3)
+    LluviaEstelar,   // Halley: ATK*1.5 raw dmg a TODOS los enemigos
+    Creacion,        // Halley: recupera 50% HP máximo
+    PresenciaDivina, // Halley: +ATK/2+5 por 3 turnos
+    DistorsionTemporal, // Nato: enemigo pierde TODOS sus PA este turno
+    VinculoEterno,   // Nato: daño ATK + cura 150% del daño infligido
+    JuicioFinal,     // Nato: ATK*2.0 raw dmg ignora DEF
 };
 
 struct Art {

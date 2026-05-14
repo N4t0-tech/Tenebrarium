@@ -14,6 +14,8 @@ enum class PlayerClass {
     Warrior,  // alta vida y defensa, artes de cuerpo a cuerpo
     Mage,     // baja vida, mucho mana, artes de área y control
     Ranger,   // equilibrado, artes de DoT y múltiples golpes
+    Halley,   // clase secreta — Creador del Tenebrarium
+    Nato,     // clase secreta — Equilibrio del Tenebrarium
 };
 
 class Player : public Entity {
