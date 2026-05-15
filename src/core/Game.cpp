@@ -12,6 +12,7 @@
 #include <cmath>
 #include <fstream>
 #include <filesystem>
+#include <unordered_map>
 
 // Keycode interno del juego (evita conflicto con KeyboardKey de Raylib)
 static constexpr int GKEY_BACKSPACE = 0x1005;
@@ -244,27 +245,33 @@ void Game::run()
     for (int cp : extras)
         codepoints.push_back(cp);
 
-    static constexpr int kBaseFontSize = 18;
+    static constexpr int kRefFontSize = 18;
+    static constexpr int kTargetCols  = 130;
+    static constexpr int kTargetRows  = 48;
 
-    // Precargamos las tres variantes de tamaño para el zoom del mapa (1×, 2×, 3×).
-    // Raylib requiere que los codepoints se declaren al cargar la fuente; de lo
-    // contrario los glífos no estarán en la textura y aparecerán como □.
-    // TEXTURE_FILTER_POINT evita suavizado que hace borrosos los glífos pixelados.
     auto loadFont = [&](int size) {
         Font f = LoadFontEx((assetsDir() + "fonts/mono.ttf").c_str(), size,
                             codepoints.data(), static_cast<int>(codepoints.size()));
         SetTextureFilter(f.texture, TEXTURE_FILTER_POINT);
         return f;
     };
-    Font font   = loadFont(kBaseFontSize);
-    Font font2x = loadFont(kBaseFontSize * 2);
-    Font font3x = loadFont(kBaseFontSize * 3);
 
-    // Celda = ancho de 'M' × (alto de glifo + 2px de margen entre líneas).
-    // Se usa 'M' porque es el carácter más ancho en fuentes monoespaciadas.
-    Vector2 gs = MeasureTextEx(font, "M", kBaseFontSize, 0);
-    int cellW = static_cast<int>(gs.x);
-    int cellH = static_cast<int>(gs.y) + 2;
+    Font refFont = loadFont(kRefFontSize);
+    Vector2 refGs = MeasureTextEx(refFont, "M", (float)kRefFontSize, 0);
+    float refCellW       = refGs.x;
+    float refCellH       = (float)(static_cast<int>(refGs.y) + 2);
+    float cellWperFontPt = refCellW / (float)kRefFontSize;
+    float cellHperFontPt = refCellH / (float)kRefFontSize;
+
+    std::unordered_map<int, Font> fontCache;
+    fontCache[kRefFontSize] = refFont;
+    auto getFont = [&](int size) -> Font& {
+        auto it = fontCache.find(size);
+        if (it != fontCache.end()) return it->second;
+        Font f = loadFont(size);
+        fontCache[size] = f;
+        return fontCache[size];
+    };
 
     static constexpr int kPadX = 1;
     static constexpr int kPadY = 1;
@@ -282,6 +289,20 @@ void Game::run()
         // Recalcular grid si la ventana cambió de tamaño
         int screenW = GetScreenWidth();
         int screenH = GetScreenHeight();
+
+        // Escalar fontSize para mantener ~kTargetCols × kTargetRows
+        float cellWideal = (float)screenW / (kTargetCols + 2 * kPadX);
+        float cellHideal = (float)screenH / (kTargetRows + 2 * kPadY);
+        int fontSizeFromW = (int)(cellWideal / cellWperFontPt);
+        int fontSizeFromH = (int)(cellHideal / cellHperFontPt);
+        int fontSize = std::clamp(std::min(fontSizeFromW, fontSizeFromH), 10, kRefFontSize);
+        Font& font   = getFont(fontSize);
+        Font& font2x = getFont(fontSize * 2);
+        Font& font3x = getFont(fontSize * 3);
+
+        Vector2 gs = MeasureTextEx(font, "M", (float)fontSize, 0);
+        int cellW = static_cast<int>(gs.x);
+        int cellH = static_cast<int>(gs.y) + 2;
 
         int offX = kPadX * cellW;
         int offY = kPadY * cellH;
@@ -324,7 +345,7 @@ void Game::run()
         processInput();
         update();
 
-        TerminalScreen scr(cols, rows, cellW, cellH, font, kBaseFontSize);
+        TerminalScreen scr(cols, rows, cellW, cellH, font, fontSize);
         scr.clear();
         render(scr);
 
@@ -355,7 +376,7 @@ void Game::run()
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
             Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
-            int  zFontH = kBaseFontSize * mapZoom_;
+            int  zFontH = fontSize * mapZoom_;
             TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
                                   zCellW, zCellH, zFont, zFontH);
             mapScr.clear();
@@ -450,12 +471,12 @@ void Game::run()
             // Dibujar glifos animados
             const char glyphs[] = {'*', '+', '~', '#', '^', 'X'};
             int frame = (int)(GetTime() * 20) % 6;
-            int glyphPixelW = (int)MeasureTextEx(font, "X", (float)kBaseFontSize, 0).x;
+            int glyphPixelW = (int)MeasureTextEx(font, "X", (float)fontSize, 0).x;
             int glyphPixelH = drawCellH;
             int glyphX = pixelX + (drawCellW - glyphPixelW) / 2;
             int glyphY = pixelY + (drawCellH - glyphPixelH) / 2;
             DrawTextEx(font, std::string(1, glyphs[frame]).c_str(),
-                      {(float)glyphX, (float)glyphY}, (float)kBaseFontSize, 0, BLACK);
+                      {(float)glyphX, (float)glyphY}, (float)fontSize, 0, BLACK);
         } else if (dungeon_) {
             dungeon_->explosionActive = false;
         }
@@ -463,7 +484,7 @@ void Game::run()
         // 4) Dibujar mensaje con Raylib directo (encima de todo, sin shader)
         if (dungeon_ && !dungeon_->message.empty() && GetTime() < dungeon_->messageEndTime) {
             std::string msgText = " " + dungeon_->message + " ";
-            int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)kBaseFontSize, 0).x;
+            int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)fontSize, 0).x;
             int msgPixelH = cellH;
 
             // Calcular área del mapa según layout
@@ -485,21 +506,21 @@ void Game::run()
             DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
 
             Color blackFg = {0, 0, 0, 255};
-            DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
+            DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
         }
 
         // Mensaje de feedback: captura de pantalla
         if (GetTime() < screenshotMsgEndTime_)
         {
             std::string msg = " Captura guardada ";
-            int msgPixelW = (int)MeasureTextEx(font, msg.c_str(), (float)kBaseFontSize, 0).x;
+            int msgPixelW = (int)MeasureTextEx(font, msg.c_str(), (float)fontSize, 0).x;
             int msgPixelH = cellH;
             int pixelX = (screenW - msgPixelW) / 2;
             int pixelY = screenH - cellH * 2 - msgPixelH;
             Color yellowBg = {255, 230, 60, 255};
             DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
             Color blackFg = {0, 0, 0, 255};
-            DrawTextEx(font, msg.c_str(), {(float)pixelX, (float)pixelY}, (float)kBaseFontSize, 0, blackFg);
+            DrawTextEx(font, msg.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
         }
 
         EndDrawing();
@@ -507,9 +528,8 @@ void Game::run()
 
     UnloadRenderTexture(renderTarget);
     UnloadShader(crtShader);
-    UnloadFont(font);
-    UnloadFont(font2x);
-    UnloadFont(font3x);
+    for (auto& [size, f] : fontCache)
+        UnloadFont(f);
     CloseWindow();
 }
 

@@ -23,8 +23,12 @@ struct XpFile {
 // Carga un archivo .xp REXPaint (gzip + binario)
 XpFile loadXp(const std::string& path);
 
+// Carga con caché estática — la misma path siempre devuelve la misma XpFile
+XpFile& loadXpCached(const std::string& path);
+void clearXpCache();
+
 // Vuelca una capa XP en el TerminalScreen en (col, row) con half-block (▀)
-void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);
+void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f, Color tint = WHITE);
 
 // Vuelca una capa XP usando los glyphs CP437 reales (conserva texturas/detalles)
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);

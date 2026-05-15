@@ -158,15 +158,15 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 // ─── drawPortrait ─────────────────────────────────────────────────────────────
 
 void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
-                              const char* filename, float scale) {
+                              const char* filename, float scale, Color tint) {
     if (!filename) {
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
     }
     try {
-        XpFile xp = loadXp(assetsDir() + "art/" + filename);
+        XpFile& xp = loadXpCached(assetsDir() + "art/" + filename);
         if (xp.layers.empty()) throw std::runtime_error("vacío");
-        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale);
+        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale, tint);
     } catch (...) {
         scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
     }
@@ -389,30 +389,25 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
         // ─── Modo clases secretas: retratos lado a lado arriba, ficha abajo ──
         static constexpr float kPortScale = 1.0f;
         static constexpr int kSrcSize = 60;
-        int portW = kSrcSize;           // 60 celdas
-        int portH = kSrcSize / 2;       // 30 celdas (half-block)
+        int portW = kSrcSize;
+        int portH = kSrcSize / 2;
 
         int gap = 4;
         int totalW = portW * 2 + gap;
         int startX = (scr.cols() - totalW) / 2;
         int portY = 4;
 
-        // Halley (izquierda)
-        bool selH = (selection == 0);
-        Color hc = selH ? COL_YELLOW : COL_MAGENTA;
-        drawBorder(scr, startX - 1, portY - 1, portW + 2, portH + 2, hc);
-        drawPortrait(scr, startX, portY, kClasses[3].portrait, kPortScale);
-        drawCentered(scr, portY + portH, startX - 1, portW + 2,
-                     "HALLEY", hc, selH ? CELL_BOLD : 0);
-
-        // Nato (derecha)
-        int nx = startX + portW + gap;
-        bool selN = (selection == 1);
-        Color nc = selN ? COL_YELLOW : COL_MAGENTA;
-        drawBorder(scr, nx - 1, portY - 1, portW + 2, portH + 2, nc);
-        drawPortrait(scr, nx, portY, kClasses[4].portrait, kPortScale);
-        drawCentered(scr, portY + portH, nx - 1, portW + 2,
-                     "NATO", nc, selN ? CELL_BOLD : 0);
+        auto drawSecretClass = [&](int classIdx, int x, const char* label) {
+            bool sel = (selection == classIdx - 3);
+            Color c = sel ? COL_YELLOW : COL_MAGENTA;
+            drawBorder(scr, x - 1, portY - 1, portW + 2, portH + 2, c);
+            Color tint = sel ? WHITE : Color{100, 100, 100, 255};
+            drawPortrait(scr, x, portY, kClasses[classIdx].portrait, kPortScale, tint);
+            drawCentered(scr, portY + portH, x - 1, portW + 2,
+                         label, c, sel ? CELL_BOLD : 0);
+        };
+        drawSecretClass(3, startX,           "HALLEY");
+        drawSecretClass(4, startX + portW + gap, "NATO");
 
         // Ficha de información debajo de los retratos
         int cardY = portY + portH + 3;
@@ -426,6 +421,7 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
                                (int)std::string(c.desc).size(),
                                20 }) + 4;
         int cardX = (scr.cols() - cardW) / 2;
+        if (cardX < 1) cardX = 1;
         int cardH = 7;
 
         drawBorder(scr, cardX, cardY, cardW, cardH, COL_YELLOW);

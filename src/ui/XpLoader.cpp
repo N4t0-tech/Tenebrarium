@@ -12,6 +12,7 @@
 #include "XpLoader.hpp"
 #include <fstream>
 #include <vector>
+#include <unordered_map>
 #include <stdexcept>
 #include <zlib.h>
 #include <cstring>
@@ -102,6 +103,17 @@ XpFile loadXp(const std::string& path) {
     return xp;
 }
 
+static std::unordered_map<std::string, XpFile> s_xpCache;
+
+XpFile& loadXpCached(const std::string& path) {
+    auto it = s_xpCache.find(path);
+    if (it != s_xpCache.end()) return it->second;
+    s_xpCache[path] = loadXp(path);
+    return s_xpCache[path];
+}
+
+void clearXpCache() { s_xpCache.clear(); }
+
 // Color efectivo: si la celda está vacía usa bg, si tiene glyph usa fg
 static Color effectiveRl(const XpCell& c) {
     if (c.glyph == 0 || c.glyph == U' ')
@@ -111,7 +123,8 @@ static Color effectiveRl(const XpCell& c) {
 
 // Renderiza capa .xp con half-blocks (▀ = 2px verticales)
 // Solo usa colores (ignora glyphs) → ideal para pixel art/imágenes
-void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
+// tint: ColorTint multiplica cada canal RGBA por tint (WHITE = identidad)
+void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale, Color tint) {
     static constexpr int UPPER_HALF = 0x2580;
     int dstW = static_cast<int>(layer.width  * scale);
     int dstH = static_cast<int>(layer.height * scale);
@@ -121,8 +134,8 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
             int sx  = std::min(static_cast<int>(dx / scale), layer.width  - 1);
             int sy0 = std::min(static_cast<int>(dy / scale), layer.height - 1);
             int sy1 = std::min(sy0 + 1,                      layer.height - 1);
-            Color topCol = effectiveRl(layer.cells[sy0 * layer.width + sx]);
-            Color botCol = effectiveRl(layer.cells[sy1 * layer.width + sx]);
+            Color topCol = ColorTint(effectiveRl(layer.cells[sy0 * layer.width + sx]), tint);
+            Color botCol = ColorTint(effectiveRl(layer.cells[sy1 * layer.width + sx]), tint);
             scr.put(col + dx, row + dy / 2, UPPER_HALF, topCol, botCol);
         }
     }
