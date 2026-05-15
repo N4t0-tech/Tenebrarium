@@ -94,11 +94,23 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
         scr.put(col + i, row, i < fill ? 0x2588 : 0x2591, c);
 }
 
+Color Renderer::colorForPlayerClass(PlayerClass pc) {
+    switch (pc) {
+        case PlayerClass::Warrior: return COL_YELLOW;
+        case PlayerClass::Mage:    return COL_CYAN;
+        case PlayerClass::Ranger:  return COL_GREEN;
+        case PlayerClass::Halley:  return COL_MAGENTA;
+        case PlayerClass::Nato:    return COL_RED;
+    }
+    return COL_YELLOW;
+}
+
 // ─── drawMap ─────────────────────────────────────────────────────────────────
 
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
-                       const Map& map, const std::vector<MapEntity>& entities) {
+                       const Map& map, const std::vector<MapEntity>& entities,
+                       Color playerColor) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -119,7 +131,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             if (!tile.explored) continue;
 
             if (mx == pp.x && my == pp.y) {
-                scr.put(dc, dr, '@', COL_YELLOW, COL_BLACK, CELL_BOLD);
+                scr.put(dc, dr, '@', playerColor, COL_BLACK, CELL_BOLD);
                 continue;
             }
 
@@ -611,7 +623,8 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     if (layout == HudLayout::Sidebar) {
         int panelW = 22;
         int mapW   = scr.cols() - panelW - 1;
-        drawMap(scr, 0, 0, mapW, scr.rows(), map, entities);
+        drawMap(scr, 0, 0, mapW, scr.rows(), map, entities,
+                colorForPlayerClass(player.getClass()));
         drawVSep(scr, mapW, 0, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
         if (!message.empty())
@@ -620,7 +633,8 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     } else {
         int hudH = 3;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 0,0, scr.cols(), mapH, map, entities);
+        drawMap(scr, 0,0, scr.cols(), mapH, map, entities,
+                colorForPlayerClass(player.getClass()));
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),

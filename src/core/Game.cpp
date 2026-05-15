@@ -58,6 +58,7 @@ void Game::run()
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(SCREEN_W, SCREEN_H, "Tenebrarium");
+    SetWindowMinSize(900, 500);
     SetTargetFPS(60);
     SetExitKey(0); // desactivar cierre con ESC (lo manejamos nosotros)
     loadSettings();
@@ -398,7 +399,8 @@ void Game::run()
                     zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
                 Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
-                                   acc.map(), zEntities);
+                                   acc.map(), zEntities,
+                                   Renderer::colorForPlayerClass(player_->getClass()));
             }
 
              mapScr.render(offX, offY);

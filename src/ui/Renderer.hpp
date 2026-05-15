@@ -33,8 +33,10 @@ public:
                                 const std::vector<MapEntity>& entities,
                                 const std::string& message = "",
                                 int mapZoom = 1);
+    static Color colorForPlayerClass(PlayerClass pc);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
-                        const Map& map, const std::vector<MapEntity>& entities);
+                        const Map& map, const std::vector<MapEntity>& entities,
+                        Color playerColor);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);
