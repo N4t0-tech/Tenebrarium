@@ -312,6 +312,8 @@ void Game::run()
         int rows = screenH / cellH - 2 * kPadY;
         // HudBar: margen extra inferior para que la barra no quede pegada al borde
         if (hudLayout_ == HudLayout::Bottom) rows -= 1;
+        constexpr int kSidebarW = 30;
+        constexpr int kHudBarH  = 6;
         if (cols < 1) cols = 1;
         if (rows < 1) rows = 1;
 
@@ -359,8 +361,6 @@ void Game::run()
         scr.render(offX, offY);
 
         if (mapZoom_ > 1 && state_.load() == GameState::Exploration && dungeon_ && player_) {
-            static constexpr int kSidebarW = 22;
-            static constexpr int kHudBarH  = 3;
 
             int mapPixW, mapPixH;
             if (hudLayout_ == HudLayout::Sidebar) {
@@ -430,11 +430,11 @@ void Game::run()
                 int zCellH = cellH * mapZoom_;
                 int mapPixW, mapPixH;
                 if (hudLayout_ == HudLayout::Sidebar) {
-                    mapPixW = (cols - 22 - 1) * cellW;
+                    mapPixW = (cols - kSidebarW - 1) * cellW;
                     mapPixH = rows * cellH;
                 } else {
                     mapPixW = cols * cellW;
-                    mapPixH = (rows - 3) * cellH;
+                    mapPixH = (rows - kHudBarH) * cellH;
                 }
                 int camX = pp.x - mapPixW / zCellW / 2;
                 int camY = pp.y - mapPixH / zCellH / 2;
@@ -442,8 +442,8 @@ void Game::run()
                 pixelY = offY + (dungeon_->explosionY - camY) * zCellH;
             } else {
                 // Sin zoom: usar cálculo normal
-                int viewW = (hudLayout_ == HudLayout::Sidebar) ? (cols - 22 - 1) : cols;
-                int viewH = (hudLayout_ == HudLayout::Bottom) ? (rows - 3) : rows;
+                int viewW = (hudLayout_ == HudLayout::Sidebar) ? (cols - kSidebarW - 1) : cols;
+                int viewH = (hudLayout_ == HudLayout::Bottom) ? (rows - kHudBarH) : rows;
                 int camX = pp.x - viewW / 2;
                 int camY = pp.y - viewH / 2;
                 pixelX = offX + (dungeon_->explosionX - camX) * cellW;
@@ -492,11 +492,11 @@ void Game::run()
             // Calcular área del mapa según layout
             int mapPixelW, mapPixelH;
             if (hudLayout_ == HudLayout::Sidebar) {
-                mapPixelW = (cols - 22 - 1) * cellW;
+                mapPixelW = (cols - kSidebarW - 1) * cellW;
                 mapPixelH = rows * cellH;
             } else {
                 mapPixelW = cols * cellW;
-                mapPixelH = (rows - 3) * cellH;
+                mapPixelH = (rows - kHudBarH) * cellH;
             }
 
             // Centrado horizontalmente respecto al área del mapa

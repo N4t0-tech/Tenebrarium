@@ -105,6 +105,17 @@ Color Renderer::colorForPlayerClass(PlayerClass pc) {
     return COL_YELLOW;
 }
 
+static const char* portraitForClass(PlayerClass pc) {
+    switch (pc) {
+        case PlayerClass::Warrior: return "mini-warrior.xp";
+        case PlayerClass::Mage:    return "mini-wizard.xp";
+        case PlayerClass::Ranger:  return "mini-ranger.xp";
+        case PlayerClass::Halley:  return "mini-halley.xp";
+        case PlayerClass::Nato:    return "mini-nato.xp";
+    }
+    return "mini-warrior.xp";
+}
+
 // ─── drawMap ─────────────────────────────────────────────────────────────────
 
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
@@ -192,20 +203,25 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     auto put = [&](const std::string& s, Color c, uint8_t f = 0) {
         scr.putStr(col + 1, r++, s, c, COL_BLACK, f);
     };
-    put(player.getName().substr(0, 14), COL_CYAN, CELL_BOLD);
-    put(std::string("[") + className(player) + "]", COL_WHITE);
-    put("Nivel " + std::to_string(player.getLevel()), COL_WHITE);
-    drawHSep(scr, col, r++, 20);
+    int sepW = 28;
+
+    const char* pf = portraitForClass(player.getClass());
+    if (pf) drawPortrait(scr, col + 1, r, pf, 0.60f);
+    r += 6;
+
+    put(player.getName().substr(0, 14) + " [" + className(player)
+        + "] Nv." + std::to_string(player.getLevel()), COL_CYAN, CELL_BOLD);
+    drawHSep(scr, col, r++, sepW);
     put("HP " + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
     drawStatBar(scr, col + 1, r++, player.getHp(), player.getMaxHp(), 14, COL_GREEN);
     std::string mpLabel = player.getClass() == PlayerClass::Warrior ? "AG " : "MP ";
     put(mpLabel + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
     drawStatBar(scr, col + 1, r++, player.getMana(), player.getMaxMana(), 14, COL_CYAN);
     put("XP " + std::to_string(player.getXp()), COL_YELLOW);
-    drawHSep(scr, col, r++, 20);
+    drawHSep(scr, col, r++, sepW);
     put("ATK " + std::to_string(player.getAttack()), COL_WHITE);
     put("DEF " + std::to_string(player.getDefense()), COL_WHITE);
-    drawHSep(scr, col, r++, 20);
+    drawHSep(scr, col, r++, sepW);
     put("EQUIPO", COL_WHITE, CELL_BOLD);
     put("Arma    : " + (player.getEquippedWeapon()
         ? player.getEquippedWeapon()->name.substr(0, 10) : std::string("-")),
@@ -215,7 +231,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
         ? player.getEquippedArmor()->name.substr(0, 10) : std::string("-")),
         player.getEquippedArmor() ? COL_GREEN : COL_GRAY,
         player.getEquippedArmor() ? 0 : CELL_DIM);
-    drawHSep(scr, col, r++, 20);
+    drawHSep(scr, col, r++, sepW);
      put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
      put("+ " + std::to_string(player.countHpPotions()) + " poción(es)", COL_GREEN);
      put("M " + std::to_string(player.countManaPotions()) + " maná", COL_BLUE);
@@ -225,7 +241,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
     put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
-    drawHSep(scr, col, r++, 20);
+    drawHSep(scr, col, r++, sepW);
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
       put("  P   poción",   COL_GRAY, CELL_DIM);
@@ -236,49 +252,68 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
-// HUD inferior: línea 1 = jugador/hp/mp (con barras visuales), línea 2 = stats/recursos/piso/controles
+// HUD inferior: 6 filas (separador + retrato 9×4 + contenido compacto + controles)
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
     drawHSep(scr, 0, row, scr.cols());
-    int c = 1;
-    auto a = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c += scr.putStr(c, row + 1, s, col, COL_BLACK, f);
-    };
-    a(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
-    a(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
 
-    // Barra HP visual (8 celdas)
-    a(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()) + " ", COL_GREEN);
+    const char* pf = portraitForClass(player.getClass());
+    if (pf) drawPortrait(scr, 0, row + 1, pf, 0.45f);
+    int pr = 10;
+
+    // Fila 1: nombre + clase + nivel
+    int c1 = pr;
+    auto a1 = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c1 += scr.putStr(c1, row + 1, s, col, COL_BLACK, f);
+    };
+    a1(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
+    a1(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
+
+    // Fila 2: barras HP + MP
+    int c2 = pr;
+    auto a2 = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c2 += scr.putStr(c2, row + 2, s, col, COL_BLACK, f);
+    };
+    a2(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()) + " ", COL_GREEN);
     float hpPct = (float)player.getHp() / player.getMaxHp();
     for (int i = 0; i < 8; i++)
-        scr.put(c++, row + 1, i < hpPct * 8 ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
-    a(" ", COL_GREEN);
-
-    // Barra MP/AG visual (8 celdas)
+        scr.put(c2++, row + 2, i < hpPct * 8 ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
+    a2(" ", COL_GREEN);
     std::string mpLbl = player.getClass() == PlayerClass::Warrior ? " AG:" : " MP:";
-    a(mpLbl + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
+    a2(mpLbl + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
     float mpPct = (float)player.getMana() / player.getMaxMana();
     for (int i = 0; i < 8; i++)
-        scr.put(c++, row + 1, i < mpPct * 8 ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
+        scr.put(c2++, row + 2, i < mpPct * 8 ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
 
-    c = 1;
-    auto b = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c += scr.putStr(c, row + 2, s, col, COL_BLACK, f);
+    // Fila 3: stats + recursos
+    int c3 = pr;
+    auto a3 = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c3 += scr.putStr(c3, row + 3, s, col, COL_BLACK, f);
     };
-    b("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
-    b(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
-    b(" $" + std::to_string(player.getCoins()), COL_YELLOW);
-    b(" P:" + std::to_string(player.countHpPotions()), COL_GREEN);
-    b(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
-    b(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
-    b(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
+    a3("Atk:" + std::to_string(player.getAttack()), COL_GRAY, CELL_DIM);
+    a3(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
+    a3(" $" + std::to_string(player.getCoins()), COL_YELLOW);
+    a3(" P:" + std::to_string(player.countHpPotions()), COL_GREEN);
+    a3(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
+    a3(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
+    a3(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
 
-    // Piso + dificultad (con color como en sidebar)
+    // Fila 4: piso + zoom
+    int c4 = pr;
+    auto a4 = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c4 += scr.putStr(c4, row + 4, s, col, COL_BLACK, f);
+    };
     int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
-    b("  " + std::to_string(fl) + "[" + diff + "]", dc, CELL_DIM);
+    a4("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
+    a4("  [+/-]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 
-    b(" [WASD]Mover [E]Bomba [R]Tomar [P]Poc [I]Inv [M]Mis [Esc]Sal  [-/+]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
+    // Fila 5: controles (ancho completo, no se solapa con retrato)
+    int c5 = 1;
+    auto a5 = [&](const std::string& s, Color col, uint8_t f = 0) {
+        c5 += scr.putStr(c5, row + 5, s, col, COL_BLACK, f);
+    };
+    a5("[WASD]Mover [E]Bomba [R]Tomar [P]Poc [I]Inv [M]Mis [Esc]Sal", COL_GRAY, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -621,7 +656,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const std::vector<MapEntity>& entities,
                                 const std::string& message, int mapZoom) {
     if (layout == HudLayout::Sidebar) {
-        int panelW = 22;
+        int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 0, 0, mapW, scr.rows(), map, entities,
                 colorForPlayerClass(player.getClass()));
@@ -631,7 +666,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
             drawCentered(scr, scr.rows() / 2, 0, mapW,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
     } else {
-        int hudH = 3;
+        int hudH = 6;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 0,0, scr.cols(), mapH, map, entities,
                 colorForPlayerClass(player.getClass()));
