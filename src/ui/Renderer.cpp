@@ -263,38 +263,47 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
 
 // HUD inferior: 6 filas (separador + retrato 20×10 half-block + contenido compacto + controles)
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
-    drawHSep(scr, 0, row, scr.cols());
+    int cols = scr.cols();
+    drawHSep(scr, 0, row, cols);
 
+    constexpr int kPortBorderW = 22;
+    constexpr int kPortBorderH = 12;
+
+    // Left: portrait box
     const char* pf = portraitForClass(player.getClass());
-    if (pf) drawPortrait(scr, 0, row + 1, pf, 0.45f);
-    int pr = 10;
+    if (pf) {
+        drawBorder(scr, 0, row + 1, kPortBorderW, kPortBorderH);
+        drawPortrait(scr, 1, row + 2, pf, 1.0f);
+    }
 
-    // Fila 1: nombre + clase + nivel
-    int c1 = pr;
-    auto a1 = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c1 += scr.putStr(c1, row + 1, s, col, COL_BLACK, f);
-    };
-    a1(player.getName().substr(0, 12), COL_CYAN, CELL_BOLD);
-    a1(" [" + std::string(className(player)) + "] Nv." + std::to_string(player.getLevel()), COL_WHITE);
+    // Right: stats + controls box
+    int rpX = kPortBorderW;
+    int rpW = cols - rpX - 1;
+    drawBorder(scr, rpX, row + 1, rpW, kPortBorderH);
+    int rpC = rpX + 1;  // content column inside right panel
 
-    // Fila 2: barras HP + MP
-    int c2 = pr;
+    // row 1: name + class + level
+    scr.putStr(rpC, row + 1, player.getName().substr(0, 12) + " [" + className(player)
+               + "] Nv." + std::to_string(player.getLevel()), COL_CYAN, COL_BLACK, CELL_BOLD);
+
+    // row 2: HP + MP bars
+    int c2 = rpC;
     auto a2 = [&](const std::string& s, Color col, uint8_t f = 0) {
         c2 += scr.putStr(c2, row + 2, s, col, COL_BLACK, f);
     };
-    a2(" HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()) + " ", COL_GREEN);
+    a2("HP:" + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()) + " ", COL_GREEN);
     float hpPct = (float)player.getHp() / player.getMaxHp();
     for (int i = 0; i < 8; i++)
         scr.put(c2++, row + 2, i < hpPct * 8 ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
     a2(" ", COL_GREEN);
-    std::string mpLbl = player.getClass() == PlayerClass::Warrior ? " AG:" : " MP:";
-    a2(mpLbl + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
+    std::string mpLbl = player.getClass() == PlayerClass::Warrior ? "AG:" : "MP:";
+    a2(" " + mpLbl + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()) + " ", COL_CYAN);
     float mpPct = (float)player.getMana() / player.getMaxMana();
     for (int i = 0; i < 8; i++)
         scr.put(c2++, row + 2, i < mpPct * 8 ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
 
-    // Fila 3: stats + recursos
-    int c3 = pr;
+    // row 3: stats + resources
+    int c3 = rpC;
     auto a3 = [&](const std::string& s, Color col, uint8_t f = 0) {
         c3 += scr.putStr(c3, row + 3, s, col, COL_BLACK, f);
     };
@@ -306,8 +315,8 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     a3(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
     a3(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
 
-    // Fila 4: piso + zoom
-    int c4 = pr;
+    // row 4: floor + zoom
+    int c4 = rpC;
     auto a4 = [&](const std::string& s, Color col, uint8_t f = 0) {
         c4 += scr.putStr(c4, row + 4, s, col, COL_BLACK, f);
     };
@@ -317,12 +326,14 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     a4("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
     a4("  [+/-]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 
-    // Fila 5: controles (ancho completo, no se solapa con retrato)
-    int c5 = 1;
-    auto a5 = [&](const std::string& s, Color col, uint8_t f = 0) {
-        c5 += scr.putStr(c5, row + 5, s, col, COL_BLACK, f);
-    };
-    a5("[WASD]Mover [E]Bomba [R]Tomar [P]Poc [I]Inv [M]Mis [Esc]Sal", COL_GRAY, CELL_DIM);
+    // row 5: separator
+    drawHSep(scr, rpX + 1, row + 5, rpW - 2, COL_GRAY);
+
+    // row 6-7: controls
+    scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
+               COL_GRAY, COL_BLACK, CELL_DIM);
+    scr.putStr(rpC, row + 7, "[M]Mis  [Esc]Salir  [+/-]Zoom",
+               COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
@@ -675,7 +686,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
             drawCentered(scr, scr.rows() / 2, 0, mapW,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
     } else {
-        int hudH = 6;
+        int hudH = 13;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 0,0, scr.cols(), mapH, map, entities,
                 colorForPlayerClass(player.getClass()));

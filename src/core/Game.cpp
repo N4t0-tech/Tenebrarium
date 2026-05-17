@@ -314,7 +314,7 @@ void Game::run()
         // HudBar: margen extra inferior para que la barra no quede pegada al borde
         if (hudLayout_ == HudLayout::Bottom) rows -= 1;
         constexpr int kSidebarW = 30;
-        constexpr int kHudBarH  = 6;
+        constexpr int kHudBarH  = 13;
         if (cols < 1) cols = 1;
         if (rows < 1) rows = 1;
 
