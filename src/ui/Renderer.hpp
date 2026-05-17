@@ -70,6 +70,6 @@ private:
                              const Player& player, int mapZoom = 1);
     static void  drawPortrait(TerminalScreen& scr, int col, int row,
                                const char* filename, float scale = 1.0f,
-                               Color tint = WHITE);
+                               Color tint = WHITE, bool useGlyphs = false);
     static const char* className(const Player& p);
 };

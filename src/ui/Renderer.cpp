@@ -181,7 +181,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 // ─── drawPortrait ─────────────────────────────────────────────────────────────
 
 void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
-                              const char* filename, float scale, Color tint) {
+                              const char* filename, float scale, Color tint, bool useGlyphs) {
     if (!filename) {
         scr.putStr(col + 1, row + 1, "[sin retrato]", COL_GRAY, COL_BLACK, CELL_DIM);
         return;
@@ -189,7 +189,10 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
     try {
         XpFile& xp = loadXpCached(assetsDir() + "art/" + filename);
         if (xp.layers.empty()) throw std::runtime_error("vacío");
-        xpDrawHalfBlock(scr, xp.layers[0], col, row, scale, tint);
+        if (useGlyphs)
+            xpDrawGlyphs(scr, xp.layers[0], col, row, scale);
+        else
+            xpDrawHalfBlock(scr, xp.layers[0], col, row, scale, tint);
     } catch (...) {
         scr.putStr(col + 1, row + 1, "[retrato N/A]", COL_GRAY, COL_BLACK, CELL_DIM);
     }
@@ -206,8 +209,14 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     int sepW = 28;
 
     const char* pf = portraitForClass(player.getClass());
-    if (pf) drawPortrait(scr, col + 1, r, pf, 0.60f);
-    r += 6;
+    if (pf) {
+        static constexpr int kPortBorderW = 22;
+        static constexpr int kPortBorderH = 12;
+        int bx = col + (sepW - kPortBorderW) / 2;
+        drawBorder(scr, bx, r, kPortBorderW, kPortBorderH);
+        drawPortrait(scr, bx + 1, r + 1, pf, 1.0f);
+    }
+    r += 12;
 
     put(player.getName().substr(0, 14) + " [" + className(player)
         + "] Nv." + std::to_string(player.getLevel()), COL_CYAN, CELL_BOLD);
@@ -252,7 +261,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
-// HUD inferior: 6 filas (separador + retrato 9×4 + contenido compacto + controles)
+// HUD inferior: 6 filas (separador + retrato 20×10 half-block + contenido compacto + controles)
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
     drawHSep(scr, 0, row, scr.cols());
 

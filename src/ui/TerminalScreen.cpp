@@ -70,8 +70,11 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
             if (c.flags & CELL_INVERTED) std::swap(fg, bg);
             if (c.flags & CELL_DIM)      fg = dimColor(fg);
 
-            // Siempre rellenar el fondo, incluso para espacios, para cubrir frames anteriores
-            DrawRectangle(px, py, cellW_, cellH_, bg);
+            // +1px de solape con la siguiente celda (no en la última) para
+            // evitar líneas negras entre texels escalados sin salirse del grid
+            int bw = (col < cols_ - 1) ? cellW_ + 1 : cellW_;
+            int bh = (row < rows_ - 1) ? cellH_ + 1 : cellH_;
+            DrawRectangle(px, py, bw, bh, bg);
 
             // Solo dibujar glifo para codepoints visibles (espacio = 32 no necesita draw)
             if (c.codepoint > 32) {

@@ -283,6 +283,7 @@ void Game::run()
 
     // Render texture offscreen
     RenderTexture2D renderTarget = LoadRenderTexture(SCREEN_W, SCREEN_H);
+    SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
     int rtW = SCREEN_W, rtH = SCREEN_H;
 
     while (!WindowShouldClose() && !quitRequested_)
@@ -322,6 +323,7 @@ void Game::run()
         {
             UnloadRenderTexture(renderTarget);
             renderTarget = LoadRenderTexture(screenW, screenH);
+            SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
             rtW = screenW;
             rtH = screenH;
         }
