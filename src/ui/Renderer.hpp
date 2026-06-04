@@ -35,8 +35,8 @@ public:
                                 int mapZoom = 1);
     static Color colorForPlayerClass(PlayerClass pc);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
-                        const Map& map, const std::vector<MapEntity>& entities,
-                        Color playerColor);
+                         const Map& map, const std::vector<MapEntity>& entities,
+                         Color playerColor, int floor = 1);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);

@@ -23,6 +23,21 @@ static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
 
 static constexpr Color COL_BLACK   = BLACK;
+
+static constexpr Color FG_GREEN = { 22, 38, 24, 255 };
+static constexpr Color WG_GREEN = { 40, 36, 18, 255 };
+static constexpr Color DG_GREEN = { 14, 22, 16, 255 };
+static constexpr Color FG_MONO  = { 28, 28, 32, 255 };
+static constexpr Color WG_MONO  = { 42, 42, 46, 255 };
+static constexpr Color DG_MONO  = { 16, 16, 20, 255 };
+
+static constexpr Color TILE_GREEN = { 180, 210, 170, 255 };
+static constexpr Color DIM_GREEN  = {  55,  75,  55, 255 };
+static constexpr Color TILE_MONO  = { 220, 220, 220, 255 };
+static constexpr Color DIM_MONO   = {  80,  80,  80, 255 };
+
+static constexpr Color COL_COLD_BG = { 8, 10, 16, 255 };  // negro frío sutil
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const char* Renderer::className(const Player& p) {
@@ -121,7 +136,7 @@ static const char* portraitForClass(PlayerClass pc) {
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
-                       Color playerColor) {
+                       Color playerColor, int floor) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -131,7 +146,24 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                  (uint8_t)(c.b * f), c.a };
     };
 
+    float t = std::min(1.0f, (floor - 1) / 19.0f);
+    auto lerp = [](Color a, Color b, float t) {
+        return Color{ uint8_t(a.r + (b.r - a.r) * t),
+                      uint8_t(a.g + (b.g - a.g) * t),
+                      uint8_t(a.b + (b.b - a.b) * t), 255 };
+    };
+    Color colFloor   = lerp(FG_GREEN, FG_MONO, t);
+    Color colWall    = lerp(WG_GREEN, WG_MONO, t);
+    Color colDim     = lerp(DG_GREEN, DG_MONO, t);
+    Color colTile    = lerp(TILE_GREEN, TILE_MONO, t);
+    Color colDimGlyph = lerp(DIM_GREEN, DIM_MONO, t);
+
     static constexpr float FOV_RADIUS = 8.0f;
+
+    // Rellenar todo el viewport con negro frío
+    for (int sy = 0; sy < viewH; sy++)
+        for (int sx = 0; sx < viewW; sx++)
+            scr.put(col + sx, row + sy, ' ', COL_BLACK, COL_COLD_BG, 0);
 
     for (int sy = 0; sy < viewH; sy++) {
         for (int sx = 0; sx < viewW; sx++) {
@@ -142,7 +174,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             if (!tile.explored) continue;
 
             if (mx == pp.x && my == pp.y) {
-                scr.put(dc, dr, '@', playerColor, COL_BLACK, CELL_BOLD);
+                scr.put(dc, dr, '@', playerColor, colFloor, CELL_BOLD);
                 continue;
             }
 
@@ -155,7 +187,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 for (const auto& ent : entities) {
                     if (ent.pos.x == mx && ent.pos.y == my) {
                         Color ec = applyFactor(colorFromPair(ent.colorPair), factor);
-                        scr.put(dc, dr, ent.glyph, ec, COL_BLACK,
+                        scr.put(dc, dr, ent.glyph, ec, colFloor,
                                 ent.bold ? CELL_BOLD : 0);
                         drew = true;
                         break;
@@ -164,15 +196,15 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 if (drew) continue;
 
                 if (tile.type == TileType::SecretWall) {
-                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, factor), COL_BLACK, CELL_DIM);
+                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, factor), colWall, CELL_DIM);
                     continue;
                 }
-                scr.put(dc, dr, tile.glyph, applyFactor(COL_WHITE, factor), COL_BLACK, 0);
+                Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
+                scr.put(dc, dr, tile.glyph, applyFactor(colTile, factor), tileBg, 0);
             } else {
-                static const Color COL_DARK = { 80, 80, 80, 255 };
                 // La pared secreta usa '#' (como pared normal) para no parpadear al salir del FOV
                 char32_t g = (tile.type == TileType::SecretWall) ? '#' : tile.glyph;
-                scr.put(dc, dr, g, COL_DARK, COL_BLACK, 0);
+                scr.put(dc, dr, g, colDimGlyph, colDim, 0);
             }
         }
     }
@@ -679,7 +711,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 0, 0, mapW, scr.rows(), map, entities,
-                colorForPlayerClass(player.getClass()));
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor());
         drawVSep(scr, mapW, 0, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
         if (!message.empty())
@@ -689,7 +721,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int hudH = 13;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 0,0, scr.cols(), mapH, map, entities,
-                colorForPlayerClass(player.getClass()));
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor());
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 0, scr.cols(),

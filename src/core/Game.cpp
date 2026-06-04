@@ -402,7 +402,8 @@ void Game::run()
 
                 Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
                                    acc.map(), zEntities,
-                                   Renderer::colorForPlayerClass(player_->getClass()));
+                                   Renderer::colorForPlayerClass(player_->getClass()),
+                                   player_->getDungeonFloor());
             }
 
              mapScr.render(offX, offY);
