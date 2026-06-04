@@ -8,21 +8,24 @@
 // Zombies desde piso 2, Sombras desde piso 4, Demonios desde piso 6.
 EnemyType DungeonPopulator::pickEnemyType(int floor)
 {
-    if (floor == 1) return EnemyType::Slime;
-
+    bool spiderAvail  = (floor >= 2);
     bool zombieAvail  = (floor >= 2);
+    bool vampireAvail = (floor >= 4);
     bool shadowAvail  = (floor >= 4);
     bool demonAvail   = (floor >= 6);
+    int sliW = std::max(0, 20 - (floor - 1) * 3);
     int gobW = std::max(5, 55 - (floor - 1) * 8);
     int skeW = 15;
     int orcW = std::min(30, (floor - 1) * 5);
-    int spiW = std::min(30, (floor - 2) * 7);
-    int vapW = std::min(20, (floor - 4) * 5);
+    int spiW = spiderAvail  ? std::min(30, (floor - 2) * 7) : 0;
+    int vapW = vampireAvail ? std::min(20, (floor - 4) * 5) : 0;
     int zomW = zombieAvail  ? std::min(25, (floor - 2) * 6) : 0;
     int shaW = shadowAvail  ? std::min(20, (floor - 4) * 5) : 0;
     int demW = demonAvail   ? std::min(20, (floor - 6) * 5) : 0;
-    int total = gobW + skeW + orcW + spiW + vapW + zomW + shaW + demW;
+    int total = sliW + gobW + skeW + orcW + spiW + vapW + zomW + shaW + demW;
     int r = std::rand() % total;
+    if (r < sliW) return EnemyType::Slime;
+    r -= sliW;
     if (r < gobW) return EnemyType::Goblin;
     r -= gobW;
     if (r < skeW) return EnemyType::Skeleton;
@@ -70,9 +73,9 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
     if (isBoss) {
-        hp  = static_cast<int>(hp  * 2.5f);
-        atk = static_cast<int>(atk * 2.5f);
-        def = static_cast<int>(def * 2.5f);
+        hp  = static_cast<int>(hp  * 2.0f);
+        atk = static_cast<int>(atk * 2.0f);
+        def = static_cast<int>(def * 2.0f);
         switch (t) {
         case EnemyType::Goblin:   name = "Rey Goblin";      break;
         case EnemyType::Skeleton: name = "Señor Liche";     break;

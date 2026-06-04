@@ -612,7 +612,7 @@ int CombatSystem::getEffectiveAttack() const {
     int atk = player_.getAttack();
     if (player_.getClass() == PlayerClass::Warrior) {
         int pct = player_.getMana() * 100 / std::max(1, player_.getMaxMana());
-        int factor = std::max(40, pct);
+        int factor = std::max(70, pct);
         atk = atk * factor / 100;
     }
     return atk;

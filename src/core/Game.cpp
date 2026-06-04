@@ -1725,18 +1725,10 @@ void Game::inputCombat(int key)
             // Regeneración post-combate
             int hpRegen = std::max(1, player_->getMaxHp() * 15 / 100);
             player_->heal(hpRegen);
-            if (player_->getClass() != PlayerClass::Warrior)
-            {
-                int mpRegen = std::max(1, player_->getMaxMana() * 10 / 100);
-                player_->restoreMana(mpRegen);
+            int mpRegen = std::max(1, player_->getMaxMana() * (player_->getClass() == PlayerClass::Warrior ? 5 : 10) / 100);
+            player_->restoreMana(mpRegen);
             if (dungeon_->message.empty())
                 dungeon_->message = "Recuperas " + std::to_string(hpRegen) + " HP y " + std::to_string(mpRegen) + " MP.";
-        }
-        else
-        {
-            if (dungeon_->message.empty())
-                dungeon_->message = "Recuperas " + std::to_string(hpRegen) + " HP.";
-        }
         dungeon_->messageEndTime = GetTime() + 2.0;
             returnToExploration();
         }

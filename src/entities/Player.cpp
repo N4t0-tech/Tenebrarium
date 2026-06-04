@@ -35,15 +35,14 @@ void Player::levelUp() {
     attack_  = baseAttack_  + (equippedWeapon_ ? equippedWeapon_->statBonus : 0);
     defense_ = baseDefense_ + (equippedArmor_  ? equippedArmor_->statBonus  : 0);
     maxMana_ += 5;
-    if (class_ != PlayerClass::Warrior)
-        mana_ = maxMana_;  // Guerrero no recupera aguante al subir nivel
+    mana_ = maxMana_;
 }
 
 int Player::baseHp(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior: return 120;
         case PlayerClass::Mage:    return 100;
-        case PlayerClass::Ranger:  return 90;
+        case PlayerClass::Ranger:  return 100;
         case PlayerClass::Halley:  return 130;
         case PlayerClass::Nato:    return 140;
     }
