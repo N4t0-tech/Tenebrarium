@@ -203,6 +203,10 @@ void Game::run()
         0x00ED,
         0x00F3,
         0x00FA,
+        0x00C1, // Á
+        0x00CD, // Í
+        0x00D3, // Ó
+        0x00DA, // Ú
         0x00F1,
         0x00D1,
         0x00AA,
