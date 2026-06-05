@@ -677,7 +677,8 @@ void Game::dispatchInput(int key)
                 }
             }
             if (!used)
-                dungeon_->message = "No tienes cerveza/poción de mana.";
+                dungeon_->message = player_->getClass() == PlayerClass::Warrior
+                    ? "No tienes cerveza." : "No tienes poción de mana.";
             dungeon_->messageEndTime = GetTime() + 2.0;
             break;
         }
@@ -1635,12 +1636,15 @@ void Game::generateShopStock()
     Item p2 = DungeonPopulator::pickPotion(shopFloor);
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
-    Item beer = DungeonPopulator::pickBeer();
-    beer.quantity = 3;
-    shopStock_.push_back({beer, 5, false});
-    Item manaPot = DungeonPopulator::pickManaPotion();
-    manaPot.quantity = 3;
-    shopStock_.push_back({manaPot, 8, false});
+    if (cls == PlayerClass::Warrior) {
+        Item beer = DungeonPopulator::pickBeer();
+        beer.quantity = 3;
+        shopStock_.push_back({beer, 5, false});
+    } else {
+        Item manaPot = DungeonPopulator::pickManaPotion();
+        manaPot.quantity = 3;
+        shopStock_.push_back({manaPot, 8, false});
+    }
     Item bomb = DungeonPopulator::pickBomb(shopFloor);
     bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});

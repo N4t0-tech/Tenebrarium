@@ -275,8 +275,10 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     drawHSep(scr, col, r++, sepW);
      put("$ " + std::to_string(player.getCoins()) + " monedas", COL_YELLOW, CELL_BOLD);
      put("+ " + std::to_string(player.countHpPotions()) + " poción(es)", COL_GREEN);
-     put("M " + std::to_string(player.countManaPotions()) + " maná", COL_BLUE);
-     put("C " + std::to_string(player.getInventory().getItemCount("Cerveza")) + " cerveza(s)", COL_CYAN);
+     if (player.getClass() == PlayerClass::Warrior)
+         put("C " + std::to_string(player.getInventory().getItemCount("Cerveza")) + " cerveza(s)", COL_CYAN);
+     else
+         put("M " + std::to_string(player.countManaPotions()) + " maná", COL_BLUE);
      put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
      int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
@@ -343,8 +345,10 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     a3(" Def:" + std::to_string(player.getDefense()), COL_GRAY, CELL_DIM);
     a3(" $" + std::to_string(player.getCoins()), COL_YELLOW);
     a3(" P:" + std::to_string(player.countHpPotions()), COL_GREEN);
-    a3(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
-    a3(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
+    if (player.getClass() == PlayerClass::Warrior)
+        a3(" C:" + std::to_string(player.getInventory().getItemCount("Cerveza")), COL_CYAN);
+    else
+        a3(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
     a3(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
 
     // row 4: floor + zoom
@@ -990,7 +994,7 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
             else if (item.type == ItemType::Consumable && item.statBonus > 0)
                 line += "  +" + std::to_string(item.statBonus) + " HP";
             else if (item.type == ItemType::Consumable)
-                line += "  +50% MP";
+                line += "  +50% " + std::string(player.getClass() == PlayerClass::Warrior ? "AG" : "MP");
             uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
             scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
         }
