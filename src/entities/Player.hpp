@@ -27,6 +27,7 @@ public:
     PlayerClass getClass() const { return class_; }
     int getLevel() const { return level_; }
     int getXp() const { return xp_; }
+    int getXpToNextLevel() const { return xpToNextLevel_; }
     int getMana()         const { return mana_; }
     int getMaxMana()      const { return maxMana_; }
     int getCoins()        const { return coins_; }

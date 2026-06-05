@@ -69,6 +69,63 @@ Color Renderer::colorFromPair(int pair) {
 
 // ─── primitivas de layout ────────────────────────────────────────────────────
 
+static int utf8Len(const std::string& s) {
+    int len = 0;
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(s.c_str());
+    while (*p) {
+        len++;
+        if      (*p < 0x80) p += 1;
+        else if (*p < 0xE0) p += 2;
+        else if (*p < 0xF0) p += 3;
+        else                p += 4;
+    }
+    return len;
+}
+
+static std::string utf8Substr(const std::string& s, int startCp, int countCp) {
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(s.c_str());
+    int idx = 0;
+    while (*p && idx < startCp) {
+        if      (*p < 0x80) p += 1;
+        else if (*p < 0xE0) p += 2;
+        else if (*p < 0xF0) p += 3;
+        else                p += 4;
+        idx++;
+    }
+    const unsigned char* begin = p;
+    int taken = 0;
+    while (*p && taken < countCp) {
+        int len;
+        if      (*p < 0x80) len = 1;
+        else if (*p < 0xE0) len = 2;
+        else if (*p < 0xF0) len = 3;
+        else                len = 4;
+        p += len;
+        taken++;
+    }
+    return std::string(reinterpret_cast<const char*>(begin), p - begin);
+}
+
+static std::string scrollText(const std::string& text, int maxWidth, int tick, int speed = 5) {
+    int nameLen = utf8Len(text);
+    if (nameLen <= maxWidth) return text;
+    int gap = 3;
+    int cycle = nameLen + gap + maxWidth;
+    int pos = (tick / speed) % cycle;
+
+    if (pos < nameLen) {
+        int visible = std::min(nameLen - pos, maxWidth);
+        std::string result = utf8Substr(text, pos, visible);
+        result.append(maxWidth - visible, ' ');
+        return result;
+    }
+    pos -= nameLen;
+    if (pos < gap)
+        return std::string(maxWidth, ' ');
+    pos -= gap;
+    return std::string(maxWidth - pos, ' ') + utf8Substr(text, 0, pos);
+}
+
 void Renderer::drawBorder(TerminalScreen& scr, int col, int row, int w, int h, Color c) {
     scr.put(col,         row,         0x2554, c);
     scr.put(col + w - 1, row,         0x2557, c);
@@ -233,7 +290,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
 // ─── HUD helpers ─────────────────────────────────────────────────────────────
 
 void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
-                             const Player& player, int mapZoom) {
+                             const Player& player, int mapZoom, int scrollTick) {
     int r = row;
     auto put = [&](const std::string& s, Color c, uint8_t f = 0) {
         scr.putStr(col + 1, r++, s, c, COL_BLACK, f);
@@ -250,26 +307,49 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     }
     r += 12;
 
-    put(player.getName().substr(0, 14) + " [" + className(player)
-        + "] Nv." + std::to_string(player.getLevel()), COL_CYAN, CELL_BOLD);
+    {
+        scr.putStr(col + 1, r, player.getName().substr(0, 14)
+            + " [" + className(player) + "] Nv." + std::to_string(player.getLevel()),
+            COL_CYAN, COL_BLACK, CELL_BOLD);
+        r++;
+
+        std::string xpText = std::to_string(player.getXp()) + "/"
+            + std::to_string(player.getXpToNextLevel());
+        int xpTextLen = static_cast<int>(xpText.size());
+        int barW = sepW - 1 - xpTextLen;
+        if (barW >= 2) {
+            int xp = player.getXp();
+            int xpMax = player.getXpToNextLevel();
+            int fill = (xpMax > 0) ? (xp * barW / xpMax) : 0;
+            fill = std::max(0, std::min(fill, barW));
+            for (int i = 0; i < barW; i++)
+                scr.put(col + 1 + i, r, 0x2500,
+                        i < fill ? COL_YELLOW : COL_GRAY, COL_BLACK,
+                        i < fill ? 0 : CELL_DIM);
+            scr.putStr(col + 1 + barW, r, xpText, COL_YELLOW, COL_BLACK, 0);
+        } else {
+            scr.putStr(col + 1, r, xpText, COL_YELLOW, COL_BLACK, 0);
+        }
+        r++;
+    }
     drawHSep(scr, col, r++, sepW);
     put("HP " + std::to_string(player.getHp()) + "/" + std::to_string(player.getMaxHp()), COL_GREEN);
     drawStatBar(scr, col + 1, r++, player.getHp(), player.getMaxHp(), 14, COL_GREEN);
     std::string mpLabel = player.getClass() == PlayerClass::Warrior ? "AG " : "MP ";
     put(mpLabel + std::to_string(player.getMana()) + "/" + std::to_string(player.getMaxMana()), COL_CYAN);
     drawStatBar(scr, col + 1, r++, player.getMana(), player.getMaxMana(), 14, COL_CYAN);
-    put("XP " + std::to_string(player.getXp()), COL_YELLOW);
     drawHSep(scr, col, r++, sepW);
     put("ATK " + std::to_string(player.getAttack()), COL_WHITE);
     put("DEF " + std::to_string(player.getDefense()), COL_WHITE);
     drawHSep(scr, col, r++, sepW);
     put("EQUIPO", COL_WHITE, CELL_BOLD);
+    int eqW = 17;
     put("Arma    : " + (player.getEquippedWeapon()
-        ? player.getEquippedWeapon()->name.substr(0, 10) : std::string("-")),
+        ? scrollText(player.getEquippedWeapon()->name, eqW, scrollTick) : std::string(eqW, '-')),
         player.getEquippedWeapon() ? COL_YELLOW : COL_GRAY,
         player.getEquippedWeapon() ? 0 : CELL_DIM);
     put("Armadura: " + (player.getEquippedArmor()
-        ? player.getEquippedArmor()->name.substr(0, 10) : std::string("-")),
+        ? scrollText(player.getEquippedArmor()->name, eqW, scrollTick) : std::string(eqW, '-')),
         player.getEquippedArmor() ? COL_GREEN : COL_GRAY,
         player.getEquippedArmor() ? 0 : CELL_DIM);
     drawHSep(scr, col, r++, sepW);
@@ -709,14 +789,15 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
 void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
-                                const std::string& message, int mapZoom) {
+                                const std::string& message, int mapZoom,
+                                int scrollTick) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor());
         drawBorder(scr, 0, 0, mapW, scr.rows());
-        drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
+        drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
         if (!message.empty())
             drawCentered(scr, scr.rows() / 2, 1, mapW - 2,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);

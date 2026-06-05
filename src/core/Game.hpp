@@ -64,6 +64,7 @@ private:
     std::atomic<int>  pendingCombatEnemy_{-1};
 
     int  mapZoom_{1};
+    int  scrollTick_{0};
     bool shaderEnabled_{true};
     bool victory_{false};
     bool secretEasterEgg_{false};

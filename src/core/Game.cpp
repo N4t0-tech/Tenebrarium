@@ -1223,7 +1223,8 @@ void Game::render(TerminalScreen &scr)
                 if (acc.shopExists())
                     entities.push_back({acc.shopMerchantPos(), '$', 4, true});
                 Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,
-                                           entities, "", mapZoom_);
+                                           entities, "", mapZoom_, scrollTick_);
+                scrollTick_++;
              }
          }
         break;

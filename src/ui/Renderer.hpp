@@ -36,7 +36,7 @@ public:
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
                                 const std::string& message = "",
-                                int mapZoom = 1);
+                                int mapZoom = 1, int scrollTick = 0);
     static Color colorForPlayerClass(PlayerClass pc);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
                          const Map& map, const std::vector<MapEntity>& entities,
@@ -66,7 +66,8 @@ private:
 
     static Color colorFromPair(int pair);
     static void  drawHudPanel(TerminalScreen& scr, int col, int row,
-                              const Player& player, int mapZoom = 1);
+                               const Player& player, int mapZoom = 1,
+                               int scrollTick = 0);
     static void  drawHudBar(TerminalScreen& scr, int row,
                              const Player& player, int mapZoom = 1);
     static void  drawPortrait(TerminalScreen& scr, int col, int row,
