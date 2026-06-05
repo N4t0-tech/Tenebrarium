@@ -216,6 +216,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
     Color colDimGlyph = lerp(DIM_GREEN, DIM_MONO, t);
 
     static constexpr float FOV_RADIUS = 8.0f;
+    float cellAspect = (float)scr.cellH() / scr.cellW();
 
     // Rellenar todo el viewport con negro frío
     for (int sy = 0; sy < viewH; sy++)
@@ -237,8 +238,8 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 
             if (tile.visible) {
                 float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
-                float dist  = std::sqrt(dx*dx + dy*dy);
-                float factor = std::max(0.45f, 1.0f - (dist / FOV_RADIUS) * 0.55f);
+                float pixelDist = std::sqrt(dx*dx + dy*dy * cellAspect * cellAspect);
+                float factor = std::max(0.45f, 1.0f - (pixelDist / FOV_RADIUS) * 0.55f);
 
                 bool drew = false;
                 for (const auto& ent : entities) {
