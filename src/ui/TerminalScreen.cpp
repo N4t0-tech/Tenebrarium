@@ -59,28 +59,42 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
     // padY centra el glifo verticalmente cuando fontH < cellH (ocurre en zoom x2/x3)
     int   padY  = (cellH_ - fontH_) / 2;
 
+    // Dos pasadas: primero todos los backgrounds, luego todos los glifos.
+    // Así el +1px de solape del background nunca recorta el anti-aliasing
+    // de los glifos, eliminando gaps en bordes con caracteres de dibujo de caja.
+
+    // Pasada 1: backgrounds
     for (int row = 0; row < rows_; row++) {
         for (int col = 0; col < cols_; col++) {
             const Cell& c = buf_[idx(col, row)];
             int px = offsetX + col * cellW_;
             int py = offsetY + row * cellH_;
 
-            Color fg = c.fg;
-            Color bg = c.bg;
-            if (c.flags & CELL_INVERTED) std::swap(fg, bg);
-            if (c.flags & CELL_DIM)      fg = dimColor(fg);
+            Color bg = (c.flags & CELL_INVERTED) ? c.fg : c.bg;
 
             // +1px de solape con la siguiente celda (no en la última) para
             // evitar líneas negras entre texels escalados sin salirse del grid
             int bw = (col < cols_ - 1) ? cellW_ + 1 : cellW_;
             int bh = (row < rows_ - 1) ? cellH_ + 1 : cellH_;
             DrawRectangle(px, py, bw, bh, bg);
+        }
+    }
 
-            // Solo dibujar glifo para codepoints visibles (espacio = 32 no necesita draw)
-            if (c.codepoint > 32) {
-                DrawTextCodepoint(font_, c.codepoint,
-                                  { (float)px, (float)(py + padY) }, fs, fg);
-            }
+    // Pasada 2: glifos
+    for (int row = 0; row < rows_; row++) {
+        for (int col = 0; col < cols_; col++) {
+            const Cell& c = buf_[idx(col, row)];
+            if (c.codepoint <= 32) continue;
+
+            int px = offsetX + col * cellW_;
+            int py = offsetY + row * cellH_;
+
+            Color fg = c.fg;
+            if (c.flags & CELL_INVERTED) fg = c.bg;
+            if (c.flags & CELL_DIM)      fg = dimColor(fg);
+
+            DrawTextCodepoint(font_, c.codepoint,
+                              { (float)px, (float)(py + padY) }, fs, fg);
         }
     }
 }

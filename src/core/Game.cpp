@@ -264,7 +264,7 @@ void Game::run()
     Font refFont = loadFont(kRefFontSize);
     Vector2 refGs = MeasureTextEx(refFont, "M", (float)kRefFontSize, 0);
     float refCellW       = refGs.x;
-    float refCellH       = (float)(static_cast<int>(refGs.y) + 2);
+    float refCellH       = refGs.y;
     float cellWperFontPt = refCellW / (float)kRefFontSize;
     float cellHperFontPt = refCellH / (float)kRefFontSize;
 
@@ -308,7 +308,7 @@ void Game::run()
 
         Vector2 gs = MeasureTextEx(font, "M", (float)fontSize, 0);
         int cellW = static_cast<int>(gs.x);
-        int cellH = static_cast<int>(gs.y) + 2;
+        int cellH = static_cast<int>(gs.y);
 
         int offX = kPadX * cellW;
         int offY = kPadY * cellH;
