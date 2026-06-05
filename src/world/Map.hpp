@@ -28,6 +28,7 @@ struct MapEntity {
     int      glyph;
     int      colorPair;
     bool     bold = true;
+    bool     alwaysVisible = false;
 };
 
 // Represents a dungeon floor or overworld map as a 2D tile grid.

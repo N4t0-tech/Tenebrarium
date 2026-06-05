@@ -403,7 +403,7 @@ void Game::run()
                 if (acc.lockedDoorExists() && !acc.lockedDoorOpen())
                     zEntities.push_back({acc.lockedDoorPos(), '+', 1, false});
                 if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
-                    zEntities.push_back({acc.stairsPos(), '>', 3, true});
+                    zEntities.push_back({acc.stairsPos(), '>', 3, true, true});
                 if (acc.shopExists())
                     zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
@@ -447,10 +447,12 @@ void Game::run()
                     mapPixW = cols * cellW;
                     mapPixH = (rows - kHudBarH) * cellH;
                 }
-                int camX = pp.x - mapPixW / zCellW / 2;
-                int camY = pp.y - mapPixH / zCellH / 2;
-                pixelX = offX + (dungeon_->explosionX - camX) * zCellW;
-                pixelY = offY + (dungeon_->explosionY - camY) * zCellH;
+                int zoomCols = (mapPixW - 2 * cellW) / zCellW;
+                int zoomRows = (mapPixH - 2 * cellH) / zCellH;
+                int camX = pp.x - zoomCols / 2;
+                int camY = pp.y - zoomRows / 2;
+                pixelX = offX + cellW + (dungeon_->explosionX - camX) * zCellW;
+                pixelY = offY + cellH + (dungeon_->explosionY - camY) * zCellH;
             } else {
                 // Sin zoom: usar cálculo normal
                 int viewW = (hudLayout_ == HudLayout::Sidebar) ? (cols - kSidebarW - 1) : cols;
@@ -1219,7 +1221,7 @@ void Game::render(TerminalScreen &scr)
                 if (acc.lockedDoorExists() && !acc.lockedDoorOpen())
                     entities.push_back({acc.lockedDoorPos(), '+', 1, false});
                 if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
-                    entities.push_back({acc.stairsPos(), '>', 3, true});
+                    entities.push_back({acc.stairsPos(), '>', 3, true, true});
                 if (acc.shopExists())
                     entities.push_back({acc.shopMerchantPos(), '$', 4, true});
                 Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,

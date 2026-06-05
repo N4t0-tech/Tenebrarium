@@ -259,7 +259,17 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
                 scr.put(dc, dr, tile.glyph, applyFactor(colTile, factor), tileBg, 0);
             } else {
-                // La pared secreta usa '#' (como pared normal) para no parpadear al salir del FOV
+                bool drewAlwaysVisible = false;
+                for (const auto& ent : entities) {
+                    if (ent.alwaysVisible && ent.pos.x == mx && ent.pos.y == my) {
+                        Color ec = colorFromPair(ent.colorPair);
+                        ec = { (uint8_t)(ec.r / 2), (uint8_t)(ec.g / 2), (uint8_t)(ec.b / 2), ec.a };
+                        scr.put(dc, dr, ent.glyph, ec, colDim, ent.bold ? CELL_BOLD : 0);
+                        drewAlwaysVisible = true;
+                        break;
+                    }
+                }
+                if (drewAlwaysVisible) continue;
                 char32_t g = (tile.type == TileType::SecretWall) ? '#' : tile.glyph;
                 scr.put(dc, dr, g, colDimGlyph, colDim, 0);
             }
