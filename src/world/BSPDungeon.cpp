@@ -27,6 +27,7 @@ void BSPDungeon::generate(Map& map, unsigned int seed) {
 
     auto root = buildTree(1, 1, map.width() - 2, map.height() - 2, 0);
     carveNode(*root, map);
+    thinCorridors(map);
 }
 
 // ─── Tree construction ───────────────────────────────────────────────────────
@@ -72,19 +73,32 @@ std::unique_ptr<BSPDungeon::Node> BSPDungeon::buildTree(int x, int y, int w, int
 
 BSPDungeon::Point BSPDungeon::carveNode(Node& node, Map& map) {
     if (node.isLeaf()) {
-        // Place a room randomly within this partition (with 1-tile padding)
         int maxW = std::min(node.w - 2, minRoomSize_ * 2);
         int maxH = std::min(node.h - 2, minRoomSize_ * 2);
-        int rw = randInt(minRoomSize_, std::max(minRoomSize_, maxW));
-        int rh = randInt(minRoomSize_, std::max(minRoomSize_, maxH));
-        int rx = node.x + randInt(1, std::max(1, node.w - rw - 1));
-        int ry = node.y + randInt(1, std::max(1, node.h - rh - 1));
+        if (maxW < 1 || maxH < 1)
+            return { node.x + node.w / 2, node.y + node.h / 2 };
+
+        int rw = randInt(std::min(minRoomSize_, maxW), maxW);
+        int rh = randInt(std::min(minRoomSize_, maxH), maxH);
+
+        // Use 2-tile padding when possible, else fall back to 1
+        int padX = (node.w - rw >= 4) ? 2 : 1;
+        int padY = (node.h - rh >= 4) ? 2 : 1;
+        int rx = node.x + randInt(padX, std::max(padX, node.w - rw - padX));
+        int ry = node.y + randInt(padY, std::max(padY, node.h - rh - padY));
 
         Room room{ rx, ry, rw, rh };
         carveRoom(room, map);
         rooms_.push_back(room);
 
-        return { room.centerX(), room.centerY() };
+        // Return a point on the room edge facing the sibling
+        int edge = randInt(0, 3);
+        switch (edge) {
+            case 0: return { room.x + randInt(1, room.w - 2), room.y };
+            case 1: return { room.x + randInt(1, room.w - 2), room.y + room.h - 1 };
+            case 2: return { room.x, room.y + randInt(1, room.h - 2) };
+            default: return { room.x + room.w - 1, room.y + randInt(1, room.h - 2) };
+        }
     }
 
     Point leftPt  = carveNode(*node.left,  map);
@@ -122,6 +136,69 @@ void BSPDungeon::carveCorridor(int x1, int y1, int x2, int y2, Map& map) {
         for (int y = y1; y != y2; y += stepY) carveFloor(x1, y);
         int stepX = (x2 > x1) ? 1 : -1;
         for (int x = x1; x != x2 + stepX; x += stepX) carveFloor(x, y2);
+    }
+}
+
+// ─── Corridor thinning ────────────────────────────────────────────────────────
+
+static int floorNeighbors(Map& map, int x, int y) {
+    int n = 0;
+    if (map.at(x - 1, y).type == TileType::Floor) n++;
+    if (map.at(x + 1, y).type == TileType::Floor) n++;
+    if (map.at(x, y - 1).type == TileType::Floor) n++;
+    if (map.at(x, y + 1).type == TileType::Floor) n++;
+    return n;
+}
+
+void BSPDungeon::thinCorridors(Map& map) {
+    int w = map.width();
+    int h = map.height();
+    std::vector<bool> isRoom(w * h, false);
+    for (auto& r : rooms_)
+        for (int y = r.y; y < r.y + r.h; y++)
+            for (int x = r.x; x < r.x + r.w; x++)
+                isRoom[y * w + x] = true;
+
+    // Walls adjacent to corridor ends often miss a tile — fill them in
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            if (map.at(x, y).type != TileType::Floor) continue;
+            if (isRoom[y * w + x]) continue;
+            int nf = floorNeighbors(map, x, y);
+            // Dead-end corridor tile with only 1 floor neighbor →
+            // fill in walls to make the dead end feel tighter
+            if (nf == 1) {
+                for (auto [dx, dy] : {std::pair{-1,0},{1,0},{0,-1},{0,1}}) {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h &&
+                        map.at(nx, ny).type == TileType::Wall)
+                        map.at(nx, ny).glyph = '#';
+                }
+            }
+        }
+    }
+
+    // Horizontal corridor thinning: collapse 2-tile-high sections to 1 tile
+    for (int y = 1; y < h - 2; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            if (isRoom[y * w + x] || isRoom[(y + 1) * w + x]) continue;
+            if (map.at(x, y).type != TileType::Floor) continue;
+            if (map.at(x, y + 1).type != TileType::Floor) continue;
+            if (map.at(x, y - 1).type == TileType::Wall &&
+                map.at(x, y + 2).type == TileType::Wall)
+                map.at(x, y + 1) = { TileType::Wall, '#', false, false };
+        }
+    }
+    // Vertical corridor thinning: collapse 2-tile-wide sections to 1 tile
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 2; x++) {
+            if (isRoom[y * w + x] || isRoom[y * w + x + 1]) continue;
+            if (map.at(x, y).type != TileType::Floor) continue;
+            if (map.at(x + 1, y).type != TileType::Floor) continue;
+            if (map.at(x - 1, y).type == TileType::Wall &&
+                map.at(x + 2, y).type == TileType::Wall)
+                map.at(x + 1, y) = { TileType::Wall, '#', false, false };
+        }
     }
 }
 

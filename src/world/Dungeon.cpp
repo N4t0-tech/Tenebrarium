@@ -15,7 +15,7 @@ void Dungeon::generate(int floor, PlayerClass cls) {
     map_.setPlayerPos(start.x, start.y);
     map_.updateFov();
 
-    auto pop = DungeonPopulator::populate(map_, gen.getRooms(), floor, cls);
+    auto pop = DungeonPopulator::populate(map_, gen.getRooms(), floor, cls, gen.rng());
     enemies_         = std::move(pop.enemies);
     chests_          = std::move(pop.chests);
     stairsPos_       = pop.stairsPos;

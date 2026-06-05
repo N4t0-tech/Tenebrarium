@@ -5,6 +5,9 @@
 #include "../entities/Player.hpp"
 #include <vector>
 #include <memory>
+#include <random>
+
+struct SecretCand { int wallX, wallY, dx, dy; };
 
 class DungeonPopulator {
 public:
@@ -20,7 +23,7 @@ public:
     };
 
     static Result populate(Map& map, const std::vector<BSPDungeon::Room>& rooms,
-                           int floor, PlayerClass cls);
+                           int floor, PlayerClass cls, std::mt19937& rng);
 
     static Item             pickWeapon(PlayerClass cls, int floor);
     static Item             pickArmor(PlayerClass cls, int floor);
@@ -28,12 +31,14 @@ public:
     static Item             pickBeer();
     static Item             pickManaPotion();
     static Item             pickBomb(int floor);
-    static EnemyType        pickEnemyType(int floor);
+    static EnemyType        pickEnemyType(int floor, std::mt19937& rng);
     static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor, bool isBoss = false);
     static int              xpForEnemy(EnemyType t, int floor);
 
 private:
-    static Position pickPos(const BSPDungeon::Room& r, std::vector<Position>& taken);
+    static Position pickPos(const BSPDungeon::Room& r, std::vector<Position>& taken,
+                            std::mt19937& rng);
     static void tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& chests,
-                                   std::vector<Position>& taken, PlayerClass cls, int floor);
+                                   std::vector<Position>& taken, PlayerClass cls, int floor,
+                                   std::vector<SecretCand>& cands, std::mt19937& rng);
 };

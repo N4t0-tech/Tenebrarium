@@ -22,6 +22,9 @@ public:
 
     const std::vector<Room>& getRooms() const { return rooms_; }
 
+    // Expose RNG for use by DungeonPopulator (RNG unification)
+    std::mt19937& rng() { return rng_; }
+
     // First room placed — use as player spawn.
     Room startRoom() const { return rooms_.front(); }
 
@@ -45,6 +48,7 @@ private:
     Point carveNode(Node& node, Map& map);
     void carveRoom(const Room& room, Map& map);
     void carveCorridor(int x1, int y1, int x2, int y2, Map& map);
+    void thinCorridors(Map& map);
 
     int randInt(int lo, int hi); // inclusive
 };

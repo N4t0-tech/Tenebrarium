@@ -1,12 +1,17 @@
 #include "DungeonPopulator.hpp"
 #include <algorithm>
-#include <cstdlib>
+#include <random>
+
+// ─── RNG helper ───────────────────────────────────────────────────────────────
+
+static int rngInt(std::mt19937& rng, int lo, int hi) {
+    if (lo >= hi) return lo;
+    return std::uniform_int_distribution<int>(lo, hi)(rng);
+}
 
 // ─── Enemy tables ─────────────────────────────────────────────────────────────
 
-// pickEnemyType — selección aleatoria ponderada de tipo de enemigo según el piso.
-// Zombies desde piso 2, Sombras desde piso 4, Demonios desde piso 6.
-EnemyType DungeonPopulator::pickEnemyType(int floor)
+EnemyType DungeonPopulator::pickEnemyType(int floor, std::mt19937& rng)
 {
     bool spiderAvail  = (floor >= 2);
     bool zombieAvail  = (floor >= 2);
@@ -23,7 +28,7 @@ EnemyType DungeonPopulator::pickEnemyType(int floor)
     int shaW = shadowAvail  ? std::min(20, (floor - 4) * 5) : 0;
     int demW = demonAvail   ? std::min(20, (floor - 6) * 5) : 0;
     int total = sliW + gobW + skeW + orcW + spiW + vapW + zomW + shaW + demW;
-    int r = std::rand() % total;
+    int r = rngInt(rng, 0, total - 1);
     if (r < sliW) return EnemyType::Slime;
     r -= sliW;
     if (r < gobW) return EnemyType::Goblin;
@@ -222,13 +227,14 @@ Item DungeonPopulator::pickBomb(int floor)
 
 // ─── Position helper ──────────────────────────────────────────────────────────
 
-Position DungeonPopulator::pickPos(const BSPDungeon::Room& r, std::vector<Position>& taken)
+Position DungeonPopulator::pickPos(const BSPDungeon::Room& r, std::vector<Position>& taken,
+                                   std::mt19937& rng)
 {
     int iw = std::max(1, r.w - 2);
     int ih = std::max(1, r.h - 2);
     for (int attempt = 0; attempt < 30; attempt++) {
-        Position p = {r.x + 1 + std::rand() % iw,
-                      r.y + 1 + std::rand() % ih};
+        Position p = {r.x + 1 + rngInt(rng, 0, iw - 1),
+                      r.y + 1 + rngInt(rng, 0, ih - 1)};
         bool ok = true;
         for (const auto& t : taken)
             if (t.x == p.x && t.y == p.y) { ok = false; break; }
@@ -241,33 +247,45 @@ Position DungeonPopulator::pickPos(const BSPDungeon::Room& r, std::vector<Positi
 
 // ─── Secret rooms ─────────────────────────────────────────────────────────────
 
-void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& chests,
-                                          std::vector<Position>& taken,
-                                          PlayerClass cls, int floor)
+static void collectSecretCandidates(Map& map,
+                                    const std::vector<BSPDungeon::Room>& rooms,
+                                    std::vector<SecretCand>& out)
 {
     static const int DIRS[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-    static const int INNER = 3;
+    int w = map.width(), h = map.height();
 
-    struct Candidate { int wallX, wallY, dx, dy; };
-    std::vector<Candidate> cands;
+    // Build room mask to skip interior tiles
+    std::vector<bool> isRoom(w * h, false);
+    for (auto& r : rooms)
+        for (int y = r.y; y < r.y + r.h; y++)
+            for (int x = r.x; x < r.x + r.w; x++)
+                isRoom[y * w + x] = true;
 
-    for (int y = 2; y < map.height() - 2; y++) {
-        for (int x = 2; x < map.width() - 2; x++) {
-            if (map.at(x, y).type != TileType::Floor)
-                continue;
+    // Scan room perimeters + corridor tiles (floor not in rooms)
+    for (int y = 2; y < h - 2; y++) {
+        for (int x = 2; x < w - 2; x++) {
+            if (map.at(x, y).type != TileType::Floor) continue;
             for (auto& d : DIRS) {
                 int wx = x + d[0], wy = y + d[1];
-                if (wx < 1 || wx >= map.width() - 1 ||
-                    wy < 1 || wy >= map.height() - 1)
-                    continue;
+                if (wx < 1 || wx >= w - 1 || wy < 1 || wy >= h - 1) continue;
                 if (map.at(wx, wy).type == TileType::Wall)
-                    cands.push_back({wx, wy, d[0], d[1]});
+                    out.push_back({wx, wy, d[0], d[1]});
             }
         }
     }
+}
 
+void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& chests,
+                                          std::vector<Position>& taken,
+                                          PlayerClass cls, int floor,
+                                          std::vector<SecretCand>& cands,
+                                          std::mt19937& rng)
+{
+    static const int INNER = 3;
+
+    // Fisher-Yates shuffle using RNG
     for (int i = static_cast<int>(cands.size()) - 1; i > 0; i--)
-        std::swap(cands[i], cands[std::rand() % (i + 1)]);
+        std::swap(cands[i], cands[rngInt(rng, 0, i)]);
 
     for (const auto& c : cands) {
         int startX, startY, endX, endY;
@@ -321,34 +339,25 @@ void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& che
 
 // ─── Main population ──────────────────────────────────────────────────────────
 
-// populate() — asigna contenido a las salas generadas por BSPDungeon.
-// Asignación de salas por rol (el índice 0 = sala inicial del jugador):
-//   rooms[0]       → sala de spawn del jugador (reservada, no se puebla)
-//   rooms[n-1]     → escaleras al siguiente piso
-//   rooms[n-2]     → puerta bloqueada (requiere matar todos los enemigos)
-//   rooms[i]       → tienda (una sala aleatoria entre inicio y fin)
-//   resto          → enemigos, cofres, salas secretas
-// El vector 'taken' acumula posiciones ya ocupadas para que pickPos() las evite.
 DungeonPopulator::Result DungeonPopulator::populate(
-    Map& map, const std::vector<BSPDungeon::Room>& rooms, int floor, PlayerClass cls)
+    Map& map, const std::vector<BSPDungeon::Room>& rooms, int floor, PlayerClass cls,
+    std::mt19937& rng)
 {
     Result result;
     int n = static_cast<int>(rooms.size());
 
     std::vector<Position> taken;
-    taken.push_back({rooms[0].centerX(), rooms[0].centerY()});  // posición inicial del jugador
-
+    taken.push_back({rooms[0].centerX(), rooms[0].centerY()});
 
     if (n >= 3) {
-        result.lockedDoorPos    = pickPos(rooms[n - 2], taken);
+        result.lockedDoorPos    = pickPos(rooms[n - 2], taken, rng);
         result.lockedDoorExists = true;
         result.stairsPos        = result.lockedDoorPos;
     } else {
-        // Stairs in last room when there is no locked door
-        result.stairsPos = pickPos(rooms[n - 1], taken);
+        result.stairsPos = pickPos(rooms[n - 1], taken, rng);
     }
 
-    // Tienda: cualquier sala que no sea inicio, fin ni sala de puerta bloqueada
+    // Tienda
     {
         std::vector<int> shopCandidates;
         for (int i = 1; i < n - 1; i++) {
@@ -356,7 +365,7 @@ DungeonPopulator::Result DungeonPopulator::populate(
             shopCandidates.push_back(i);
         }
         if (!shopCandidates.empty()) {
-            int si = shopCandidates[std::rand() % static_cast<int>(shopCandidates.size())];
+            int si = shopCandidates[rngInt(rng, 0, static_cast<int>(shopCandidates.size()) - 1)];
             result.shopRoom        = rooms[si];
             result.shopMerchantPos = {result.shopRoom.centerX(), result.shopRoom.centerY()};
             result.shopExists      = true;
@@ -364,61 +373,64 @@ DungeonPopulator::Result DungeonPopulator::populate(
         }
     }
 
-    // spawnChance crece con el piso (más difícil = más enemigos por sala)
+    // Enemies
     int spawnChance = std::min(85, 50 + (floor - 1) * 8);
     for (int i = 1; i < n; i++) {
         if (result.shopExists &&
             rooms[i].x == result.shopRoom.x && rooms[i].y == result.shopRoom.y)
             continue;
-        if (std::rand() % 100 < spawnChance)
-            result.enemies.push_back({pickPos(rooms[i], taken), pickPos(rooms[i], taken),
-                                      pickEnemyType(floor), true});
-        if (floor >= 3 && std::rand() % 100 < 20 + floor * 3)
-            result.enemies.push_back({pickPos(rooms[i], taken), pickPos(rooms[i], taken),
-                                      pickEnemyType(floor), true});
+        if (rngInt(rng, 0, 99) < spawnChance)
+            result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
+                                      pickEnemyType(floor, rng), true});
+        if (floor >= 3 && rngInt(rng, 0, 99) < 20 + floor * 3)
+            result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
+                                      pickEnemyType(floor, rng), true});
     }
 
     // Chests
-    int chestCount = 2 + std::rand() % 3;
+    int chestCount = 2 + rngInt(rng, 0, 2);
     std::vector<int> eligible;
     for (int i = 1; i < n - 1; i++) eligible.push_back(i);
     for (int i = static_cast<int>(eligible.size()) - 1; i > 0; i--)
-        std::swap(eligible[i], eligible[std::rand() % (i + 1)]);
+        std::swap(eligible[i], eligible[rngInt(rng, 0, i)]);
     chestCount = std::min(chestCount, static_cast<int>(eligible.size()));
 
     for (int ci = 0; ci < chestCount; ci++) {
-        int roll = std::rand() % 100;
+        int roll = rngInt(rng, 0, 99);
         ChestLoot loot;
         int coins = 0;
         Item item{};
-        int baseCoins = 10 + std::rand() % 40;
+        int baseCoins = 10 + rngInt(rng, 0, 39);
         if (roll < 55) {
             loot  = ChestLoot::Coins;
             coins = baseCoins * (1 + (floor - 1) / 2);
         } else {
             loot     = ChestLoot::Item;
-            int r    = std::rand() % 4;
+            int r    = rngInt(rng, 0, 3);
             if      (r == 0) item = pickPotion(floor);
             else if (r == 1) item = pickWeapon(cls, floor);
             else             item = pickArmor(cls, floor);
         }
-        result.chests.push_back({pickPos(rooms[eligible[ci]], taken), false, loot, coins, item});
+        result.chests.push_back({pickPos(rooms[eligible[ci]], taken, rng), false, loot, coins, item});
     }
 
-    // Mimics: small chance (~12%) that a chest is actually a mimic
+    // Mimics
     for (auto& ch : result.chests)
-        if (!ch.opened && std::rand() % 100 < 12)
+        if (!ch.opened && rngInt(rng, 0, 99) < 12)
             ch.isMimic = true;
 
-    // Secret rooms
-    int numSecret = 1 + std::rand() % 2;
+    // Secret rooms — collect candidates once, try up to 2 placements
+    std::vector<SecretCand> secCands;
+    collectSecretCandidates(map, rooms, secCands);
+
+    int numSecret = 1 + rngInt(rng, 0, 1);
     for (int i = 0; i < numSecret; i++)
-        tryPlaceSecretRoom(map, result.chests, taken, cls, floor);
+        tryPlaceSecretRoom(map, result.chests, taken, cls, floor, secCands, rng);
 
     // Boss every 5 floors
     if (floor % 5 == 0 && floor > 0 && n >= 3)
-        result.enemies.push_back({pickPos(rooms[n - 2], taken), pickPos(rooms[n - 2], taken),
-                                  pickEnemyType(floor), true, true});
+        result.enemies.push_back({pickPos(rooms[n - 2], taken, rng), pickPos(rooms[n - 2], taken, rng),
+                                  pickEnemyType(floor, rng), true, true});
 
     return result;
 }
