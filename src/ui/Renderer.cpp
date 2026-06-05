@@ -70,17 +70,17 @@ Color Renderer::colorFromPair(int pair) {
 // ─── primitivas de layout ────────────────────────────────────────────────────
 
 void Renderer::drawBorder(TerminalScreen& scr, int col, int row, int w, int h, Color c) {
-    scr.put(col,         row,         0x250C, c);
-    scr.put(col + w - 1, row,         0x2510, c);
-    scr.put(col,         row + h - 1, 0x2514, c);
-    scr.put(col + w - 1, row + h - 1, 0x2518, c);
+    scr.put(col,         row,         0x2554, c);
+    scr.put(col + w - 1, row,         0x2557, c);
+    scr.put(col,         row + h - 1, 0x255A, c);
+    scr.put(col + w - 1, row + h - 1, 0x255D, c);
     for (int x = 1; x < w - 1; x++) {
-        scr.put(col + x, row,         0x2500, c);
-        scr.put(col + x, row + h - 1, 0x2500, c);
+        scr.put(col + x, row,         0x2550, c);
+        scr.put(col + x, row + h - 1, 0x2550, c);
     }
     for (int y = 1; y < h - 1; y++) {
-        scr.put(col,         row + y, 0x2502, c);
-        scr.put(col + w - 1, row + y, 0x2502, c);
+        scr.put(col,         row + y, 0x2551, c);
+        scr.put(col + w - 1, row + y, 0x2551, c);
     }
 }
 
@@ -298,7 +298,6 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
 // HUD inferior: 6 filas (separador + retrato 20×10 half-block + contenido compacto + controles)
 void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
     int cols = scr.cols();
-    drawHSep(scr, 0, row, cols);
 
     constexpr int kPortBorderW = 22;
     constexpr int kPortBorderH = 12;
@@ -714,21 +713,22 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
-        drawMap(scr, 0, 0, mapW, scr.rows(), map, entities,
+        drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor());
-        drawVSep(scr, mapW, 0, scr.rows());
+        drawBorder(scr, 0, 0, mapW, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom);
         if (!message.empty())
-            drawCentered(scr, scr.rows() / 2, 0, mapW,
+            drawCentered(scr, scr.rows() / 2, 1, mapW - 2,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
     } else {
         int hudH = 13;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 0,0, scr.cols(), mapH, map, entities,
+        drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor());
+        drawBorder(scr, 0, 0, scr.cols(), mapH);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
-            drawCentered(scr, mapH / 2, 0, scr.cols(),
+            drawCentered(scr, mapH / 2, 1, scr.cols() - 2,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
     }
 }

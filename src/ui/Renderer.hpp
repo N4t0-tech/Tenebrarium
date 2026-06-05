@@ -18,6 +18,10 @@
 
 class Renderer {
 public:
+    // ── Primitivas de layout ─────────────────────────────────────────────────
+    static void drawBorder(TerminalScreen& scr, int col, int row, int w, int h,
+                           Color c = WHITE);
+
     // ── Menús ────────────────────────────────────────────────────────────────
     static void drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink);
     static void drawCredits(TerminalScreen& scr);
@@ -50,9 +54,6 @@ public:
                          bool sellMode = false, int sellSelection = 0);
 
 private:
-    // ── Primitivas de layout ─────────────────────────────────────────────────
-    static void drawBorder(TerminalScreen& scr, int col, int row, int w, int h,
-                           Color c = WHITE);
     static void drawHSep(TerminalScreen& scr, int col, int row, int w,
                          Color c = WHITE);
     static void drawVSep(TerminalScreen& scr, int col, int row, int h,

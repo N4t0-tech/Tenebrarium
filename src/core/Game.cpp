@@ -377,14 +377,17 @@ void Game::run()
                 mapPixH = (rows - kHudBarH) * cellH;
             }
 
-            // Limpiar el área del mapa con negro para evitar "fantasmas" del zoom x1
-            DrawRectangle(offX, offY, mapPixW, mapPixH, BLACK);
+            // Limpiar solo el interior del mapa, dejando el borde intacto
+            DrawRectangle(offX + cellW, offY + cellH,
+                          mapPixW - 2 * cellW, mapPixH - 2 * cellH, BLACK);
 
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
             Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
             int  zFontH = fontSize * mapZoom_;
-            TerminalScreen mapScr(mapPixW / zCellW, mapPixH / zCellH,
+            int innerPixW = mapPixW - 2 * cellW;
+            int innerPixH = mapPixH - 2 * cellH;
+            TerminalScreen mapScr(innerPixW / zCellW, innerPixH / zCellH,
                                   zCellW, zCellH, zFont, zFontH);
             mapScr.clear();
 
@@ -404,13 +407,14 @@ void Game::run()
                 if (acc.shopExists())
                     zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
-                Renderer::drawMap(mapScr, 0, 0, mapScr.cols(), mapScr.rows(),
+                Renderer::drawMap(mapScr, 0, 0,
+                                   mapScr.cols(), mapScr.rows(),
                                    acc.map(), zEntities,
                                    Renderer::colorForPlayerClass(player_->getClass()),
                                    player_->getDungeonFloor());
             }
 
-             mapScr.render(offX, offY);
+             mapScr.render(offX + cellW, offY + cellH);
          }
 
         EndTextureMode();
