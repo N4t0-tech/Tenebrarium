@@ -69,6 +69,9 @@ private:
     bool victory_{false};
     bool secretEasterEgg_{false};
 
+    bool   shovelDigging_{false};
+    double shovelDigEndTime_{0.0};
+
     double screenshotMsgEndTime_{0.0};
     int screenshotCounter_{0};
 
@@ -117,6 +120,7 @@ private:
     void generateShopStock();
     bool isInShopRoom(Dungeon::Lock& acc, Position p) const;
     void useBomb(Dungeon::Lock& acc);
+    void useShovel();
 
     void initQuests();
     void checkQuestProgress();

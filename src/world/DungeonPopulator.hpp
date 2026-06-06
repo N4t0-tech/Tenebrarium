@@ -31,6 +31,7 @@ public:
     static Item             pickBeer();
     static Item             pickManaPotion();
     static Item             pickBomb(int floor);
+    static Item             pickShovel(int floor);
     static EnemyType        pickEnemyType(int floor, std::mt19937& rng);
     static std::unique_ptr<Enemy> makeEnemy(EnemyType t, int floor, bool isBoss = false);
     static int              xpForEnemy(EnemyType t, int floor);

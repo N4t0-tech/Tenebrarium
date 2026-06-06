@@ -21,6 +21,7 @@ static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
 static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
 static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
+static constexpr Color COL_BROWN   = { 169, 112,  52, 255 };
 
 static constexpr Color COL_BLACK   = BLACK;
 
@@ -371,6 +372,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      else
          put("M " + std::to_string(player.countManaPotions()) + " maná", COL_BLUE);
      put("B " + std::to_string(player.getInventory().getItemCount("Bomba")) + " bomba(s)", COL_ORANGE);
+     put("P " + std::to_string(player.getInventory().getItemCount("Pala")) + " pala(s)", COL_BROWN);
      int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
@@ -440,6 +442,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     else
         a3(" M:" + std::to_string(player.countManaPotions()), COL_BLUE);
     a3(" B:" + std::to_string(player.getInventory().getItemCount("Bomba")), COL_ORANGE);
+    a3(" P:" + std::to_string(player.getInventory().getItemCount("Pala")), COL_BROWN);
 
     // row 4: floor + zoom
     int c4 = rpC;
@@ -1070,6 +1073,8 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
                 tag = "[ARMADURA]"; ic = COL_GREEN;
             } else if (item.type == ItemType::Consumable && item.statBonus > 0) {
                 tag = "[POCIÓN] "; ic = COL_CYAN;
+            } else if (item.type == ItemType::Consumable && item.name == "Pala") {
+                tag = "[PALA]   "; ic = COL_BROWN;
             } else if (item.type == ItemType::Consumable) {
                 tag = "[MANA]   "; ic = COL_BLUE;
             } else if (item.type == ItemType::Bomb) {

@@ -419,13 +419,24 @@ void Game::run()
 
         EndTextureMode();
 
+    // Shake de la pala (desplaza la textura renderizada)
+    float shakeX = 0, shakeY = 0;
+    if (shovelDigging_ && GetTime() < shovelDigEndTime_) {
+        float progress = (shovelDigEndTime_ - GetTime()) / 0.6f;
+        float intensity = 3.0f * progress;
+        shakeX = (float)((std::rand() % 7) - 3) * intensity / 3.0f;
+        shakeY = (float)((std::rand() % 7) - 3) * intensity / 3.0f;
+    } else if (shovelDigging_) {
+        shovelDigging_ = false;
+    }
+
     BeginDrawing();
     ClearBackground(BLACK);
     if (shaderEnabled_) BeginShaderMode(crtShader);
     DrawTexturePro(
         renderTarget.texture,
         {0, 0, (float)rtW, -(float)rtH},
-        {0, 0, (float)screenW, (float)screenH},
+        {shakeX, shakeY, (float)screenW, (float)screenH},
         {0, 0}, 0.0f, WHITE);
     if (shaderEnabled_) EndShaderMode();
 
@@ -536,6 +547,13 @@ void Game::run()
             DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
             Color blackFg = {0, 0, 0, 255};
             DrawTextEx(font, msg.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
+        }
+
+        // Efecto visual de la pala: overlay marrón encima de todo
+        if (shovelDigging_ && GetTime() < shovelDigEndTime_) {
+            float progress = (shovelDigEndTime_ - GetTime()) / 0.6f;
+            uint8_t alpha = (uint8_t)(80 * progress);
+            DrawRectangle(0, 0, screenW, screenH, {139, 90, 43, alpha});
         }
 
         EndDrawing();
@@ -1473,6 +1491,11 @@ void Game::inputInventory(int key)
                     }
                 }
             }
+            if (item.name == "Pala")
+            {
+                useShovel();
+                return;
+            }
         }
         break;
     }
@@ -1655,6 +1678,8 @@ void Game::generateShopStock()
     Item bomb = DungeonPopulator::pickBomb(shopFloor);
     bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});
+    Item shovel = DungeonPopulator::pickShovel(shopFloor);
+    shopStock_.push_back({shovel, shovel.value, false});
     Item w = DungeonPopulator::pickWeapon(cls, shopFloor);
     shopStock_.push_back({w, w.value + shopFloor * 5, false});
     Item a = DungeonPopulator::pickArmor(cls, shopFloor);
@@ -1700,10 +1725,24 @@ void Game::useBomb(Dungeon::Lock& acc)
     dungeon_->messageEndTime = GetTime() + 2.0;
 }
 
-
-
-
-
+void Game::useShovel()
+{
+    player_->getInventory().removeItem("Pala");
+    player_->descendFloor();
+    if (player_->getDungeonFloor() > 20) {
+        victory_ = true;
+        setState(GameState::GameOver);
+        return;
+    }
+    setState(GameState::Exploration);
+    shovelDigging_ = true;
+    shovelDigEndTime_ = GetTime() + 0.6;
+    if (dungeon_) {
+        dungeon_->message = "Excavas hacia el piso " + std::to_string(player_->getDungeonFloor()) + "...";
+        dungeon_->messageEndTime = GetTime() + 2.0;
+    }
+    saveGame();
+}
 
 void Game::inputCombat(int key)
 {

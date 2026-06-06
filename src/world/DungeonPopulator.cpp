@@ -225,6 +225,12 @@ Item DungeonPopulator::pickBomb(int floor)
     return {"Bomba", "Destruye paredes secretas.", ItemType::Bomb, price, 1, 0, 1};
 }
 
+Item DungeonPopulator::pickShovel(int floor)
+{
+    int price = 200 + floor * 50;
+    return {"Pala", "Excava hacia el siguiente piso.", ItemType::Consumable, price, 1, 0, 1};
+}
+
 // ─── Position helper ──────────────────────────────────────────────────────────
 
 Position DungeonPopulator::pickPos(const BSPDungeon::Room& r, std::vector<Position>& taken,
