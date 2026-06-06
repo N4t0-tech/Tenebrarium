@@ -456,7 +456,10 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     a4("  [+/-]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 
     // row 5: separator
-    drawHSep(scr, rpX + 1, row + 5, rpW - 2, COL_GRAY);
+    for (int x = 0; x < rpW - 2; x++)
+        scr.put(rpX + 1 + x, row + 5, 0x2550, COL_WHITE);
+    scr.put(rpX, row + 5, 0x2560, COL_WHITE);
+    scr.put(rpX + rpW - 1, row + 5, 0x2563, COL_WHITE);
 
     // row 6-7: controls
     scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
@@ -622,7 +625,10 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
 
         drawBorder(scr, cardX, cardY, cardW, cardH, COL_YELLOW);
         scr.putStr(cardX + 2, cardY + 1, nameRole, COL_YELLOW, COL_BLACK, CELL_BOLD);
-        drawHSep(scr, cardX + 1, cardY + 2, cardW - 2, COL_YELLOW);
+        for (int x = 0; x < cardW - 2; x++)
+            scr.put(cardX + 1 + x, cardY + 2, 0x2550, COL_YELLOW);
+        scr.put(cardX, cardY + 2, 0x2560, COL_YELLOW);
+        scr.put(cardX + cardW - 1, cardY + 2, 0x2563, COL_YELLOW);
         scr.putStr(cardX + 2, cardY + 3, stats, COL_GREEN);
         scr.putStr(cardX + 2, cardY + 4, c.desc, COL_GRAY, COL_BLACK, CELL_DIM);
         scr.putStr(cardX + 2, cardY + 5, "~~ CLASE SECRETA ~~", COL_MAGENTA, COL_BLACK, CELL_DIM);
@@ -659,7 +665,10 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
             scr.putStr(listCol + 2, br + 1, c.name, tc, COL_BLACK, tf);
             scr.putStr(listCol + 2, br + 2,
                        std::string("[ ") + c.role + " ]", tc, COL_BLACK, tf);
-            drawHSep(scr, listCol + 1, br + 3, boxW - 2, tc);
+            for (int x = 0; x < boxW - 2; x++)
+                scr.put(listCol + 1 + x, br + 3, 0x2550, tc);
+            scr.put(listCol, br + 3, 0x2560, tc);
+            scr.put(listCol + boxW - 1, br + 3, 0x2563, tc);
             std::string manaLabel = (i == 0) ? " AG:" : " MP:";
             scr.putStr(listCol + 2, br + 4,
                 "HP:" + std::to_string(c.hp) +
@@ -742,7 +751,10 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
         for (int r = 0; r < 4; r++)
             scr.putStr(px + 1, py + 1 + r, mapRows[r], COL_GRAY, COL_BLACK, CELL_DIM);
         // separador horizontal interior
-        drawHSep(scr, px + 1, py + 5, pw - 2, bc);
+        for (int x = 0; x < pw - 2; x++)
+            scr.put(px + 1 + x, py + 5, 0x2550, bc);
+        scr.put(px, py + 5, 0x2560, bc);
+        scr.put(px + pw - 1, py + 5, 0x2563, bc);
         // barra inferior simulada
         scr.putStr(px + 1, py + 6, "Hero Lv1 HP\xe2\x96\x88\xe2\x96\x88\xe2\x96\x91 MP\xe2\x96\x91\xe2\x96\x91",
                    COL_WHITE, COL_BLACK, CELL_DIM);
@@ -1035,29 +1047,106 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
     int cx = scr.cols() / 2;
     int w  = 60, sc2 = cx - w / 2, r = 2;
-    drawBorder(scr, sc2, 1, w, scr.rows() - 2);
-    scr.putStr(sc2 + 2, r++, "=== EQUIPO ===", COL_CYAN, COL_BLACK, CELL_BOLD);
 
-    auto makeSlot = [&](int row, int sel, const char* label,
-                        const std::optional<Item>& slot) {
-        std::string line;
-        Color c = COL_GRAY;
-        uint8_t f = CELL_DIM;
-        if (slot) {
-            std::string tag = (slot->type == ItemType::Weapon) ? "[ARMA]   " : "[ARMADURA]";
-            line = tag + " " + slot->name + "  +" + std::to_string(slot->statBonus)
-                 + (slot->type == ItemType::Weapon ? " ATK" : " DEF");
-            c = (slot->type == ItemType::Weapon) ? COL_YELLOW : COL_GREEN;
-            f = 0;
-        } else {
-            line = std::string(label) + "  (vacio)";
+    // Retrato del jugador a la izquierda del panel (si hay espacio)
+    if (sc2 >= 26) {
+        int px = 1, py = 2;
+        int bw = sc2 - 2;
+        const char* miniPf = portraitForClass(player.getClass());
+        static constexpr int kMiniH = 10;
+        int bh = kMiniH + 1 + 7 + 1 + 2 + 2;
+
+        drawBorder(scr, px, py, bw, bh);
+        if (miniPf) {
+            int pox = px + 1 + (bw - 2 - 20) / 2;
+            drawPortrait(scr, pox, py + 1, miniPf, 1.0f);
         }
-        if (selection == sel) f |= CELL_INVERTED;
-        scr.putStr(sc2 + 2, row, line, c, COL_BLACK, f);
-    };
-    makeSlot(r++, 0, "Arma    ", player.getEquippedWeapon());
-    makeSlot(r++, 1, "Armadura", player.getEquippedArmor());
-    drawHSep(scr, sc2 + 1, r++, w - 2);
+
+        int ly = py + kMiniH + 1;
+        for (int x = 0; x < bw - 2; x++)
+            scr.put(px + 1 + x, ly, 0x2550, COL_WHITE);
+        scr.put(px, ly, 0x2560, COL_WHITE);
+        scr.put(px + bw - 1, ly, 0x2563, COL_WHITE);
+
+        int barLen = std::max(2, std::min(20, bw - 14));
+        int barCol = px + 5;
+        int indent = px + 2;
+        ly++;
+        scr.putStr(indent, ly, player.getName(),
+                   colorForPlayerClass(player.getClass()), COL_BLACK, CELL_BOLD);
+
+        ly++;
+        scr.putStr(indent, ly,
+                   "Nv." + std::to_string(player.getLevel())
+                   + "  " + className(player), COL_WHITE);
+
+        ly++;
+        scr.putStr(indent, ly, "HP ", COL_GREEN);
+        int hpPct = player.getMaxHp() > 0
+            ? (player.getHp() * barLen / player.getMaxHp()) : 0;
+        for (int i = 0; i < barLen; i++)
+            scr.put(barCol + i, ly,
+                    i < hpPct ? 0x2588 : 0x2591, COL_GREEN, COL_BLACK, 0);
+        scr.putStr(barCol + barLen + 1, ly,
+                   " " + std::to_string(player.getHp())
+                   + "/" + std::to_string(player.getMaxHp()),
+                   COL_GREEN, COL_BLACK, CELL_DIM);
+
+        ly++;
+        std::string mpLbl = player.getClass() == PlayerClass::Warrior ? "AG " : "MP ";
+        int mpPct = player.getMaxMana() > 0
+            ? (player.getMana() * barLen / player.getMaxMana()) : 0;
+        scr.putStr(indent, ly, mpLbl, COL_CYAN);
+        for (int i = 0; i < barLen; i++)
+            scr.put(barCol + i, ly,
+                    i < mpPct ? 0x2588 : 0x2591, COL_CYAN, COL_BLACK, 0);
+        scr.putStr(barCol + barLen + 1, ly,
+                   " " + std::to_string(player.getMana())
+                   + "/" + std::to_string(player.getMaxMana()),
+                   COL_CYAN, COL_BLACK, CELL_DIM);
+
+        ly++;
+        scr.putStr(indent, ly,
+                   "ATK " + std::to_string(player.getAttack())
+                   + "  DEF " + std::to_string(player.getDefense()),
+                   COL_GRAY);
+
+        ly++;
+        scr.putStr(indent, ly,
+                   "$ " + std::to_string(player.getCoins()),
+                   COL_YELLOW);
+
+        ly++;
+        scr.putStr(indent, ly,
+                   "Piso " + std::to_string(player.getDungeonFloor()),
+                   COL_GRAY, COL_BLACK, CELL_DIM);
+
+        ly++;
+        {
+            int sw = bw - 2;
+            std::string title = " EQUIPO ";
+            int titleStart = px + 1 + (sw - (int)title.size()) / 2;
+            for (int x = 0; x < sw; x++)
+                scr.put(px + 1 + x, ly, 0x2550, COL_WHITE);
+            scr.put(px, ly, 0x2560, COL_WHITE);
+            scr.put(px + bw - 1, ly, 0x2563, COL_WHITE);
+            scr.putStr(titleStart, ly, title, COL_WHITE, COL_BLACK, CELL_BOLD);
+        }
+        ly++;
+        auto equipLine = [&](const std::string& label,
+                             const std::optional<Item>& slot, Color c) {
+            if (slot)
+                scr.putStr(indent, ly, label + slot->name
+                           + " +" + std::to_string(slot->statBonus), c);
+            else
+                scr.putStr(indent, ly, label + "(vacio)", COL_GRAY, COL_BLACK, CELL_DIM);
+            ly++;
+        };
+        equipLine("Arma:  ", player.getEquippedWeapon(), COL_YELLOW);
+        equipLine("Armad: ", player.getEquippedArmor(), COL_GREEN);
+    }
+
+    drawBorder(scr, sc2, 1, w, scr.rows() - 2);
 
     scr.putStr(sc2 + 2, r++, "=== MOCHILA ===", COL_CYAN, COL_BLACK, CELL_BOLD);
     const auto& items = player.getInventory().items();
@@ -1092,11 +1181,15 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
                 line += "  +" + std::to_string(item.statBonus) + " HP";
             else if (item.type == ItemType::Consumable)
                 line += "  +50% " + std::string(player.getClass() == PlayerClass::Warrior ? "AG" : "MP");
-            uint8_t f = (selection == 2 + i) ? CELL_INVERTED : 0;
+            uint8_t f = (selection == i) ? CELL_INVERTED : 0;
             scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
         }
     }
-    drawHSep(scr, sc2 + 1, r++, w - 2);
+    for (int x = 0; x < w - 2; x++)
+        scr.put(sc2 + 1 + x, r, 0x2550, COL_WHITE);
+    scr.put(sc2, r, 0x2560, COL_WHITE);
+    scr.put(sc2 + w - 1, r, 0x2563, COL_WHITE);
+    r++;
     scr.putStr(sc2 + 2, r++,
         "ATK:" + std::to_string(player.getAttack()) +
         "  DEF:" + std::to_string(player.getDefense()) +
@@ -1263,7 +1356,11 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
         scr.putStr(sc2 + 2, r++,
                    "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
                    COL_ORANGE);
-        drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+        for (int x = 0; x < w - 2; x++)
+            scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
+        scr.put(sc2, r, 0x2560, COL_ORANGE);
+        scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
+        r++;
         bool any = false;
         for (int i = 0; i < static_cast<int>(inv.size()); i++) {
             const auto& item = inv[i];
@@ -1281,7 +1378,11 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
         }
         if (!any)
             scr.putStr(sc2 + 2, r++, "(nada que vender)", COL_GRAY, COL_BLACK, CELL_DIM);
-        drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+        for (int x = 0; x < w - 2; x++)
+            scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
+        scr.put(sc2, r, 0x2560, COL_ORANGE);
+        scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
+        r++;
         if (!message.empty())
             scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
         scr.putStr(sc2 + 2, r,
@@ -1297,7 +1398,11 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     scr.putStr(sc2 + 2, r++,
                "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
                COL_ORANGE);
-    drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+    for (int x = 0; x < w - 2; x++)
+        scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
+    scr.put(sc2, r, 0x2560, COL_ORANGE);
+    scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
+    r++;
     for (int i = 0; i < static_cast<int>(stock.size()); i++) {
         const auto& s = stock[i];
         bool sel = (i == selection);
@@ -1308,7 +1413,11 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
         uint8_t lf = s.sold ? CELL_DIM : (sel ? CELL_INVERTED : 0);
         scr.putStr(sc2 + 2, r++, line, lc, COL_BLACK, lf);
     }
-    drawHSep(scr, sc2 + 1, r++, w - 2, COL_ORANGE);
+    for (int x = 0; x < w - 2; x++)
+        scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
+    scr.put(sc2, r, 0x2560, COL_ORANGE);
+    scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
+    r++;
     if (!message.empty())
         scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
     scr.putStr(sc2 + 2, r,

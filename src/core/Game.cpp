@@ -1450,7 +1450,7 @@ void Game::inputInventory(int key)
     if (!player_)
         return;
     const int bagSize = static_cast<int>(player_->getInventory().items().size());
-    const int total = 2 + bagSize;
+    const int total = bagSize;
     switch (key)
     {
     case 'w':
@@ -1461,20 +1461,20 @@ void Game::inputInventory(int key)
     case 'E':
     case '\n':
     {
-        int bagIdx = inventorySelection_ - 2;
+        int bagIdx = inventorySelection_;
         if (bagIdx >= 0 && bagIdx < bagSize)
         {
             player_->equipItem(bagIdx);
-            int newTotal = 2 + static_cast<int>(player_->getInventory().items().size());
-            if (inventorySelection_ >= newTotal)
-                inventorySelection_ = std::max(0, newTotal - 1);
+            int newSize = static_cast<int>(player_->getInventory().items().size());
+            if (inventorySelection_ >= newSize)
+                inventorySelection_ = std::max(0, newSize - 1);
         }
         break;
     }
     case 'u':
     case 'U':
     {
-        int bagIdx = inventorySelection_ - 2;
+        int bagIdx = inventorySelection_;
         if (bagIdx >= 0 && bagIdx < bagSize)
         {
             auto& items = player_->getInventory().items();
