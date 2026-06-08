@@ -97,7 +97,7 @@ void GameSerializer::save(Game& g)
 
     auto acc = g.dungeon_->lock();
 
-    f << 3 << '\n'; // version 3 adds ch.isMimic
+    f << 4 << '\n'; // version 4 adds bestiary data
 
     // Player
     wstr(f, g.player_->name_);
@@ -188,6 +188,12 @@ void GameSerializer::save(Game& g)
         f << '\n';
     }
 
+    // Bestiary
+    f << kBestiaryEntryCount << '\n';
+    for (const auto& be : g.bestiary_)
+        f << be.kills << ' ' << be.encountered << ' '
+          << be.firstSeenFloor << ' ' << be.discovered << '\n';
+
     // HUD layout
     f << static_cast<int>(g.hudLayout_) << '\n';
 }
@@ -200,7 +206,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || (version != 1 && version != 2 && version != 3))
+    if (!(f >> version) || (version != 1 && version != 2 && version != 3 && version != 4))
         return false;
 
     // Player
@@ -392,6 +398,22 @@ bool GameSerializer::load(Game& g)
     int hud;
     if (!(f >> hud)) return false;
     g.hudLayout_ = static_cast<HudLayout>(hud);
+
+    // Bestiary (version 4+)
+    g.initBestiary();
+    if (version >= 4) {
+        int bc;
+        if (!(f >> bc)) return false;
+        for (int i = 0; i < bc && i < kBestiaryEntryCount; i++) {
+            int kills, encountered, firstSeen, discovered;
+            if (!(f >> kills >> encountered >> firstSeen >> discovered))
+                return false;
+            g.bestiary_[i].kills = kills;
+            g.bestiary_[i].encountered = encountered;
+            g.bestiary_[i].firstSeenFloor = firstSeen;
+            g.bestiary_[i].discovered = discovered != 0;
+        }
+    }
 
     // Restore runtime state
     g.combat_.reset();

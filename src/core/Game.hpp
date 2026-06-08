@@ -15,6 +15,7 @@
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
+#include "bestiary/Bestiary.hpp"
 #include <string>
 #include <memory>
 #include <vector>
@@ -83,6 +84,9 @@ private:
     std::vector<Quest> quests_;
     int                questLogSelection_{0};
 
+    std::array<BestiaryEntry, kBestiaryEntryCount> bestiary_;
+    int                bestiarySelection_{0};
+
     int                   inventorySelection_{0};
 
     void saveGame();
@@ -116,6 +120,7 @@ private:
     void inputInventory(int key);
     void inputShop(int key);
     void inputQuestLog(int key);
+    void inputBestiary(int key);
     void inputSettings(int key);
     void generateShopStock();
     bool isInShopRoom(Dungeon::Lock& acc, Position p) const;
@@ -123,6 +128,7 @@ private:
     void useShovel();
 
     void initQuests();
+    void initBestiary();
     void checkQuestProgress();
 
     // Thread de IA: mueve enemigos cada 600 ms (ver EnemyAI::run).

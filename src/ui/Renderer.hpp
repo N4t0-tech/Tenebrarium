@@ -13,6 +13,7 @@
 #include "ui/HudLayout.hpp"
 #include "core/ShopItem.hpp"
 #include "quests/Quest.hpp"
+#include "bestiary/Bestiary.hpp"
 #include <string>
 #include <vector>
 
@@ -46,6 +47,9 @@ public:
                            bool isBoss = false, int flashIdx = -1);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
+    static void drawBestiary(TerminalScreen& scr,
+                             const std::array<BestiaryEntry, kBestiaryEntryCount>& bestiary,
+                             int selection);
     static void drawGameOver(TerminalScreen& scr, bool victory = false);
     static void drawQuitDialog(TerminalScreen& scr, int selection);
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,

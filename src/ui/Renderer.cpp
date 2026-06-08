@@ -382,9 +382,10 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      put("  E   bomba",    COL_GRAY, CELL_DIM);
       put("  P   poción",   COL_GRAY, CELL_DIM);
      put("  R   tomar",   COL_GRAY, CELL_DIM);
-     put("  I   mochila",  COL_GRAY, CELL_DIM);
-     put("  M   misiones", COL_GRAY, CELL_DIM);
-     put("  Esc salir",   COL_GRAY, CELL_DIM);
+      put("  I   mochila",  COL_GRAY, CELL_DIM);
+      put("  M   misiones", COL_GRAY, CELL_DIM);
+      put("  B   bestiario",COL_GRAY, CELL_DIM);
+      put("  Esc salir",   COL_GRAY, CELL_DIM);
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
 }
 
@@ -464,7 +465,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     // row 6-7: controls
     scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
                COL_GRAY, COL_BLACK, CELL_DIM);
-    scr.putStr(rpC, row + 7, "[M]Mis  [Esc]Salir  [+/-]Zoom",
+    scr.putStr(rpC, row + 7, "[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom",
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
@@ -1286,6 +1287,87 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
             dy++;
             scr.putStr(detailX + 1, dy, "XP: " + std::to_string(q.xpReward) +
                        "   Oro: " + std::to_string(q.goldReward), COL_YELLOW);
+        }
+    }
+
+    drawCentered(scr, y0 + h - 1, x0, w,
+                 " W/S navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
+}
+
+// ─── drawBestiary ──────────────────────────────────────────────────────────────
+
+void Renderer::drawBestiary(TerminalScreen& scr,
+                             const std::array<BestiaryEntry, kBestiaryEntryCount>& bestiary,
+                             int selection) {
+    int cols = scr.cols();
+    int rows = scr.rows();
+    int w = std::min(cols - 4, 70);
+    int x0 = (cols - w) / 2;
+    int y0 = 1;
+    int h = rows - 2;
+
+    drawBorder(scr, x0, y0, w, h);
+    drawCentered(scr, y0, x0, w, " BESTIARIO ", COL_CYAN, CELL_BOLD);
+
+    int listW = 28;
+    int detailX = x0 + listW + 1;
+    drawVSep(scr, x0 + listW, y0 + 1, h - 2);
+
+    int ly = y0 + 1;
+    for (int i = 0; i < kBestiaryEntryCount; i++) {
+        const auto& be = bestiary[i];
+        uint8_t f = (i == selection) ? CELL_INVERTED : 0;
+        if (be.discovered) {
+            Color c = colorFromPair(kBestiaryData[i].colorPair);
+            scr.put(x0 + 1, ly, kBestiaryData[i].glyph, c, COL_BLACK, f);
+            scr.putStr(x0 + 3, ly, be.name, c, COL_BLACK, f);
+            int pad = x0 + 3 + static_cast<int>(be.name.size());
+            while (pad < x0 + listW - 5 - 2)
+                scr.put(pad++, ly, ' ', COL_BLACK);
+            scr.putStr(pad, ly, " x" + std::to_string(be.kills),
+                       COL_WHITE, COL_BLACK, f);
+        } else {
+            std::string line = "  ???";
+            while (static_cast<int>(line.size()) < listW - 2)
+                line += ' ';
+            scr.putStr(x0 + 1, ly, line, COL_GRAY, COL_BLACK, f | CELL_DIM);
+        }
+        ly++;
+    }
+
+    // Panel derecho: detalle del seleccionado
+    if (selection >= 0 && selection < kBestiaryEntryCount) {
+        const auto& be = bestiary[selection];
+        const auto& info = kBestiaryData[selection];
+        int dx = detailX + 1;
+        int dy = y0 + 1;
+
+        if (be.discovered) {
+            Color gc = colorFromPair(info.colorPair);
+            scr.put(dx, dy, info.glyph, gc);
+            scr.putStr(dx + 2, dy, be.name, gc, COL_BLACK, CELL_BOLD);
+            dy++;
+
+            scr.putStr(dx, dy++, "Kills: " + std::to_string(be.kills)
+                       + "  Encontrado piso " + std::to_string(be.firstSeenFloor),
+                       COL_WHITE);
+
+            dy++;
+            scr.putStr(dx, dy++, "Stats base:", COL_GRAY, COL_BLACK, CELL_BOLD);
+            scr.putStr(dx, dy++, "HP  " + std::to_string(info.baseHp), COL_WHITE);
+            scr.putStr(dx, dy++, "ATK " + std::to_string(info.baseAtk), COL_WHITE);
+            scr.putStr(dx, dy++, "DEF " + std::to_string(info.baseDef), COL_WHITE);
+            scr.putStr(dx, dy++, "PA  " + std::to_string(info.basePa), COL_WHITE);
+            scr.putStr(dx, dy++, "Piso " + std::to_string(info.firstFloor) + "+", COL_WHITE);
+
+            if (!info.special.empty()) {
+                dy++;
+                scr.putStr(dx, dy++, info.special, COL_YELLOW, COL_BLACK, CELL_DIM);
+            }
+        } else {
+            scr.putStr(dx, dy++, "???", COL_GRAY, COL_BLACK, CELL_DIM);
+            scr.putStr(dx, dy + 1, "Aun no has encontrado", COL_GRAY, COL_BLACK, CELL_DIM);
+            scr.putStr(dx, dy + 2, "esta criatura.", COL_GRAY, COL_BLACK, CELL_DIM);
         }
     }
 

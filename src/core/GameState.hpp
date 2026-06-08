@@ -12,6 +12,7 @@ enum class GameState {
     Combat,      // sistema de combate por turnos
     Inventory,   // pantalla de mochila y equipo
     QuestLog,    // diario de misiones
+    Bestiary,    // bestiario
     GameOver,    // derrota o victoria (victory_ distingue cuál)
     Shop,        // tienda del piso
     QuitDialog,  // confirmación de salida (ESC cancela sin regenerar el mapa)

@@ -723,6 +723,14 @@ void Game::dispatchInput(int key)
             break;
         }
 
+        // Open bestiary
+        if (key == 'b' || key == 'B')
+        {
+            bestiarySelection_ = 0;
+            setState(GameState::Bestiary);
+            break;
+        }
+
         // Search adjacent tiles for secret walls / use bomb
         if (key == 'e' || key == 'E')
         {
@@ -880,6 +888,9 @@ void Game::dispatchInput(int key)
         break;
     case GameState::QuestLog:
         inputQuestLog(key);
+        break;
+    case GameState::Bestiary:
+        inputBestiary(key);
         break;
     case GameState::GameOver:
         if (key == '\n' || key == 27)
@@ -1123,6 +1134,7 @@ void Game::inputHudSelect(int key)
             bomba.quantity = 2;
             player_->getInventory().addItem(bomba);
         }
+        initBestiary();
         initQuests();
         setState(GameState::Exploration);
         break;
@@ -1140,6 +1152,18 @@ void Game::update()
         dungeon_->openLockedDoor();
         dungeon_->message = "El silencio se apodera del Tenebrarium... algo cede en la oscuridad.";
         dungeon_->messageEndTime = GetTime() + 2.0;
+    }
+}
+
+void Game::initBestiary()
+{
+    for (int i = 0; i < kBestiaryEntryCount; i++) {
+        bestiary_[i].type = static_cast<EnemyType>(i);
+        bestiary_[i].name = kBestiaryData[i].name;
+        bestiary_[i].kills = 0;
+        bestiary_[i].encountered = 0;
+        bestiary_[i].firstSeenFloor = 999;
+        bestiary_[i].discovered = false;
     }
 }
 
@@ -1275,6 +1299,9 @@ void Game::render(TerminalScreen &scr)
     case GameState::QuestLog:
         Renderer::drawQuestLog(scr, quests_, questLogSelection_);
         break;
+    case GameState::Bestiary:
+        Renderer::drawBestiary(scr, bestiary_, bestiarySelection_);
+        break;
     case GameState::GameOver:
         Renderer::drawGameOver(scr, victory_);
         break;
@@ -1396,6 +1423,19 @@ void Game::setState(GameState newState)
             enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Skeleton, fl));
         }
         combat_ = std::make_unique<CombatSystem>(*player_, std::move(enemies));
+
+        // Bestiary: marcar enemigos como encontrados
+        for (const auto& e : combat_->getEnemies()) {
+            int idx = static_cast<int>(e->getType());
+            if (idx >= 0 && idx < kBestiaryEntryCount) {
+                auto& be = bestiary_[idx];
+                if (!be.discovered) {
+                    be.discovered = true;
+                    be.firstSeenFloor = player_->getDungeonFloor();
+                }
+                be.encountered++;
+            }
+        }
     }
 
     if (newState == GameState::GameOver)
@@ -1515,6 +1555,22 @@ void Game::inputQuestLog(int key)
     case 'w':
     case 's':
         if (n > 0) navV(key, questLogSelection_, n);
+        break;
+    case 27:
+    case 'q':
+    case 'Q':
+        state_ = GameState::Exploration;
+        break;
+    }
+}
+
+void Game::inputBestiary(int key)
+{
+    switch (key)
+    {
+    case 'w':
+    case 's':
+        navV(key, bestiarySelection_, kBestiaryEntryCount);
         break;
     case 27:
     case 'q':
@@ -1762,6 +1818,11 @@ void Game::inputCombat(int key)
             {
                 auto acc = dungeon_->lock();
                 auto &we = acc.enemies()[combatWorldEnemyIdx_];
+                int ei = static_cast<int>(we.type);
+                if (ei >= 0 && ei < kBestiaryEntryCount) {
+                    bestiary_[ei].kills++;
+                    bestiary_[ei].discovered = true;
+                }
                 int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor());
                 int xpGained = we.isBoss ? baseXp * 5 : baseXp;
                 player_->gainXp(xpGained);
