@@ -473,19 +473,125 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
 
 void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
-    std::ifstream f(assetsDir() + "title.txt");
-    std::string line;
-    int ty = cy - 8;
-    while (std::getline(f, line)) {
-        int cols = 0;
-        for (unsigned char c : line)
-            if ((c & 0xC0) != 0x80) cols++;
-        int x = cx - cols / 2;
-        scr.putStr(x, ty++, line, COL_GRAY, COL_BLACK, CELL_BOLD);
+
+    // ── Cache title with relative offsets (resize-proof) ──
+    struct TitleCell { int codepoint; int colOff; int rowOff; };
+    static std::vector<TitleCell> titleCells;
+    static bool titleLoaded = false;
+    if (!titleLoaded) {
+        std::ifstream f(assetsDir() + "title.txt");
+        std::string line;
+        int rowOff = -8;
+        while (std::getline(f, line)) {
+            int cols = 0;
+            for (unsigned char c : line)
+                if ((c & 0xC0) != 0x80) cols++;
+            int xOff = -cols / 2;
+            const unsigned char* s = reinterpret_cast<const unsigned char*>(line.c_str());
+            while (*s) {
+                int cp, len;
+                if      (*s < 0x80)  { cp = *s;       len = 1; }
+                else if (*s < 0xE0)  { cp = (*s & 0x1F) << 6 | (s[1] & 0x3F); len = 2; }
+                else if (*s < 0xF0)  { cp = (*s & 0x0F) << 12 | (s[1] & 0x3F) << 6 | (s[2] & 0x3F); len = 3; }
+                else                 { cp = (*s & 0x07) << 18 | (s[1] & 0x3F) << 12 | (s[2] & 0x3F) << 6 | (s[3] & 0x3F); len = 4; }
+                titleCells.push_back({cp, xOff, rowOff});
+                xOff++;
+                s += len;
+            }
+            rowOff++;
+        }
+        titleLoaded = true;
     }
+
+    // ── Glitch state (offsets tambien en relativo) ──
+    struct GlitchInst { int colOff, rowOff; int origCp, glitchCp; double triggerTime; bool active; };
+    static constexpr int kGlitchMax = 3;
+    static constexpr double kBlockDur   = 0.25;
+    static constexpr double kFadeDur    = 0.10;
+    static constexpr double kAfterDur   = 0.10;
+    static constexpr int kGlyphCount = 10;
+    static const int blockGlyphs[] = { 0x2593, 0x2592, 0x2591, 0x2588, '@', '#', '$', '%', '&', '+' };
+    static const Color gold = {255, 220, 80, 255};
+    static GlitchInst insts[kGlitchMax] = {};
+    static double nextGlitchTime = 0.0;
+    static int rowGlitchOff = 999;
+    static double rowGlitchEnd = 0.0;
+    static double nextRowGlitch = 8.0;
+
+    // ── Draw title ──
+    for (const auto& cell : titleCells) {
+        int screenCol = cx + cell.colOff;
+        int screenRow = cy + cell.rowOff;
+        bool glitched = false;
+
+        // Point glitch: bloque 250ms → fade 100ms → afterimage 100ms
+        for (int i = 0; i < kGlitchMax; i++) {
+            auto& g = insts[i];
+            if (!g.active || g.colOff != cell.colOff || g.rowOff != cell.rowOff) continue;
+            double t = GetTime() - g.triggerTime;
+            if (t < kBlockDur) {
+                scr.put(screenCol, screenRow, g.glitchCp, gold, COL_BLACK, CELL_BOLD);
+            } else if (t < kBlockDur + kFadeDur) {
+                float p = (float)((t - kBlockDur) / kFadeDur);
+                Color c = { (uint8_t)(255 - (uint8_t)(55 * p)), (uint8_t)(220 - (uint8_t)(20 * p)),
+                            (uint8_t)(80 + (uint8_t)(120 * p)), 255 };
+                scr.put(screenCol, screenRow, cell.codepoint, c, COL_BLACK, CELL_BOLD);
+            } else if (t < kBlockDur + kFadeDur + kAfterDur) {
+                scr.put(screenCol, screenRow, cell.codepoint, COL_GRAY, COL_BLACK, CELL_DIM);
+            } else {
+                g.active = false;
+                scr.put(screenCol, screenRow, cell.codepoint, COL_GRAY, COL_BLACK, CELL_BOLD);
+            }
+            glitched = true;
+            break;
+        }
+        if (glitched) continue;
+
+        // Row glitch: línea completa por 100ms cada ~8s
+        if (cell.rowOff == rowGlitchOff && GetTime() < rowGlitchEnd && cell.codepoint != ' ') {
+            int gp = blockGlyphs[(cell.colOff * 7 + (int)(GetTime() * 50)) % kGlyphCount];
+            scr.put(screenCol, screenRow, gp, gold, COL_BLACK, CELL_BOLD);
+            continue;
+        }
+
+        scr.put(screenCol, screenRow, cell.codepoint, COL_GRAY, COL_BLACK, CELL_BOLD);
+    }
+
+    // ── Update glitch timers ──
+    if (GetTime() >= nextGlitchTime && !titleCells.empty()) {
+        for (auto& g : insts)
+            if (g.active && GetTime() - g.triggerTime >= kBlockDur + kFadeDur + kAfterDur)
+                g.active = false;
+        int count = GetRandomValue(1, kGlitchMax);
+        for (int i = 0, act = 0; i < kGlitchMax && act < count; i++) {
+            if (!insts[i].active) {
+                int idx = GetRandomValue(0, (int)titleCells.size() - 1);
+                if (titleCells[idx].codepoint != ' ') {
+                    insts[i] = { titleCells[idx].colOff, titleCells[idx].rowOff,
+                                 titleCells[idx].codepoint,
+                                 blockGlyphs[GetRandomValue(0, kGlyphCount - 1)],
+                                 GetTime(), true };
+                    act++;
+                }
+            }
+        }
+        nextGlitchTime = GetTime() + 0.8 + GetRandomValue(-200, 300) / 1000.0;
+    }
+
+    if (GetTime() >= nextRowGlitch && !titleCells.empty()) {
+        rowGlitchOff = titleCells[GetRandomValue(0, (int)titleCells.size() - 1)].rowOff;
+        rowGlitchEnd = GetTime() + 0.1;
+        nextRowGlitch = GetTime() + 8.0 + GetRandomValue(-2000, 3000) / 1000.0;
+    }
+    if (GetTime() >= rowGlitchEnd) rowGlitchOff = 999;
+
+    // ── Subtitle ──
+    int ty = cy;
     ty++;
     scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
     ty++;
+
+    // ── Menu ──
     const char* opts4[] = { "Continuar", "Nueva Partida", "Configuración", "Créditos", "Salir" };
     const char* opts3[] = { "Nueva Partida", "Configuración", "Créditos", "Salir" };
     int n = hasSave ? 5 : 4;
@@ -499,7 +605,6 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
         bool sel = (i == selection);
         Color c = sel ? COL_YELLOW : COL_WHITE;
         uint8_t fl = sel ? CELL_BOLD : 0;
-        // El item seleccionado parpadea entre invertido y normal
         if (sel && blink) fl |= CELL_INVERTED;
         scr.putStr(x, ty++, label, c, COL_BLACK, fl);
     }
