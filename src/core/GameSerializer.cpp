@@ -394,11 +394,6 @@ bool GameSerializer::load(Game& g)
         }
     }
 
-    // HUD
-    int hud;
-    if (!(f >> hud)) return false;
-    g.hudLayout_ = static_cast<HudLayout>(hud);
-
     // Bestiary (version 4+)
     g.initBestiary();
     if (version >= 4) {
@@ -414,6 +409,11 @@ bool GameSerializer::load(Game& g)
             g.bestiary_[i].discovered = discovered != 0;
         }
     }
+
+    // HUD
+    int hud;
+    if (!(f >> hud)) return false;
+    g.hudLayout_ = static_cast<HudLayout>(hud);
 
     // Restore runtime state
     g.combat_.reset();

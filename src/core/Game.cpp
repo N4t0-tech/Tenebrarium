@@ -925,6 +925,7 @@ void Game::inputTitle(int key)
             if (menuSelection_ == 0)
             {
                 loadGame();
+                loadSettings();
             }
             else if (menuSelection_ == 1)
             {
