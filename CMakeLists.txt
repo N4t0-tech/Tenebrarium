@@ -14,7 +14,9 @@ FetchContent_Declare(raylib
 )
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_GAMES    OFF CACHE BOOL "" FORCE)
+set(CMAKE_WARN_DEPRECATION OFF)
 FetchContent_MakeAvailable(raylib)
+set(CMAKE_WARN_DEPRECATION ON)
 
 find_package(ZLIB REQUIRED)
 
