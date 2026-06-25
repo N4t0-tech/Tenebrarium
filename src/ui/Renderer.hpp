@@ -24,7 +24,7 @@ public:
                            Color c = WHITE);
 
     // ── Menús ────────────────────────────────────────────────────────────────
-    static void drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink);
+    static void drawTitle(TerminalScreen& scr);
     static void drawCredits(TerminalScreen& scr);
     static void drawNameInput(TerminalScreen& scr, const std::string& name, bool blink);
     static void drawClassSelect(TerminalScreen& scr, int selection, bool secretUnlocked = false);

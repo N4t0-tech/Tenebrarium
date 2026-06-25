@@ -60,6 +60,7 @@ public:
     void doFlee();              // 3 PA — 70% chance to escape
     void doLoot();              // 1 PA — attempt to loot current target, 3 outcomes
     void cycleTarget();         // TAB — cycle to next alive enemy
+    int  getLootChance()  const;
 
 private:
     Player&                               player_;
@@ -72,6 +73,7 @@ private:
     bool                                  fled_;
     std::vector<StatusEffect>             playerEffects_;
     std::vector<std::vector<StatusEffect>> enemyEffects_;
+    std::vector<int>                      lootAttempts_;
 
     // ── Internal helpers ─────────────────────────────────────────────────────
     bool hasEnoughAp(int amount) const { return currentAp_ >= amount; }

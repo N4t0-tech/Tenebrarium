@@ -19,6 +19,7 @@ CombatSystem::CombatSystem(Player& player, std::vector<std::unique_ptr<Enemy>> e
       fled_(false)
 {
     enemyEffects_.resize(enemies_.size());
+    lootAttempts_.resize(enemies_.size(), 0);
     std::srand(static_cast<unsigned>(std::time(nullptr)));
     logMessage("=== Comienza el combate! ===");
     logMessage("PA disponibles: " + ts(currentAp_) + "/" + ts(maxAp_));
@@ -175,24 +176,36 @@ void CombatSystem::doLoot() {
     auto& target = enemies_[currentTarget_];
     if (!target->isAlive()) { logMessage("No hay objetivos vivos."); return; }
     if (!hasEnoughAp(1)) { logMessage("PA insuficientes para saquear."); return; }
+    if (currentTarget_ >= static_cast<int>(lootAttempts_.size())) {
+        logMessage("No puedes saquear a este enemigo.");
+        return;
+    }
+
+    int& attempts = lootAttempts_[currentTarget_];
+    if (attempts >= 3) {
+        logMessage(target->getName() + " no tiene mas objetos.");
+        return;
+    }
 
     currentAp_ -= 1;
+
+    int successThreshold = std::max(0, 40 - attempts * 15);
+    int partialThreshold = std::max(0, 70 - attempts * 20);
+    attempts++;
+
     int roll = std::rand() % 100;
 
-    if (roll < 40) {
-        // Saqueo exitoso
+    if (roll < successThreshold) {
         Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
         player_.getInventory().addItem(loot);
         logMessage("Saqueo exitoso! Obtienes " + loot.name + ".");
-    } else if (roll < 70) {
-        // Saqueo parcial: recibes la mitad del daño del enemigo
+    } else if (roll < partialThreshold) {
         Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
         player_.getInventory().addItem(loot);
         int dmg = std::max(1, target->getAttack() - player_.getDefense()) / 2;
         player_.takeDamageRaw(dmg);
         logMessage("Saqueas pero " + target->getName() + " te golpea! Recibes " + ts(dmg) + " daño.");
     } else {
-        // Fracaso: el enemigo te golpea con todo
         int dmg = std::max(1, target->getAttack() - player_.getDefense());
         player_.takeDamageRaw(dmg);
         logMessage("No logras saquear! " + target->getName() + " te golpea por " + ts(dmg) + " daño.");
@@ -201,6 +214,16 @@ void CombatSystem::doLoot() {
     checkCombatOver();
     if (isOver()) return;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
+}
+
+int CombatSystem::getLootChance() const {
+    if (currentTarget_ < 0 || currentTarget_ >= static_cast<int>(enemies_.size()))
+        return 0;
+    if (!enemies_[currentTarget_]->isAlive()) return 0;
+    if (currentTarget_ >= static_cast<int>(lootAttempts_.size())) return 0;
+    int a = lootAttempts_[currentTarget_];
+    if (a >= 3) return 0;
+    return 70 - a * 20; // 70, 50, 30
 }
 
 void CombatSystem::cycleTarget() {
@@ -247,6 +270,7 @@ void CombatSystem::handleSlimeSplits() {
                     "Slime Pequeño", babyHp, babyAtk, babyDef,
                     babyXP, EnemyType::Slime, 1, false));
                 enemyEffects_.emplace_back();
+                lootAttempts_.push_back(0);
             }
             enemies_[i]->setSplitsOnDeath(false);
         }
@@ -347,6 +371,20 @@ void CombatSystem::processEnemyTurn() {
         }
     }
 
+    // Tick effects de duración después de los ataques (Defending, AttackBoosted)
+    for (auto& fx : playerEffects_) {
+        if (fx.type == StatusEffect::Type::AttackBoosted) {
+            fx.turnsLeft--;
+        }
+    }
+    playerEffects_.erase(
+        std::remove_if(playerEffects_.begin(), playerEffects_.end(),
+            [](const StatusEffect& fx) {
+                return fx.type == StatusEffect::Type::Defending
+                    || (fx.type == StatusEffect::Type::AttackBoosted && fx.turnsLeft <= 0);
+            }),
+        playerEffects_.end());
+
     // Restore player AP
     currentAp_ = maxAp_;
     logMessage("--- Turno del jugador  PA: " + ts(currentAp_) + "/" + ts(maxAp_) + " ---");
@@ -359,12 +397,12 @@ void CombatSystem::tickPlayerEffects() {
         if (fx.type == StatusEffect::Type::Poisoned) {
             player_.takeDamageRaw(fx.magnitude);
             logMessage(player_.getName() + " sufre " + ts(fx.magnitude) + " daño por veneno.");
+            fx.turnsLeft--;
         }
-        fx.turnsLeft--;
     }
     playerEffects_.erase(
         std::remove_if(playerEffects_.begin(), playerEffects_.end(),
-            [](const StatusEffect& fx) { return fx.turnsLeft <= 0; }),
+            [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Poisoned && fx.turnsLeft <= 0; }),
         playerEffects_.end());
 }
 

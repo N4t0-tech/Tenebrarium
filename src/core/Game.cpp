@@ -366,6 +366,43 @@ void Game::run()
         ClearBackground(BLACK);
         scr.render(offX, offY);
 
+        // Menu del título (Raylib directo)
+        if (state_.load() == GameState::MainMenu && menuPhase_ == MenuPhase::Title) {
+            int cy = scr.rows() / 2;
+            bool hs = hasSave();
+            const char* opts4[] = { "Continuar", "Nueva Partida", "Configuración", "Créditos", "Salir" };
+            const char* opts3[] = { "Nueva Partida", "Configuración", "Créditos", "Salir" };
+            int n = hs ? 5 : 4;
+            const char** opts = hs ? opts4 : opts3;
+            int baseY = offY + (cy + 3) * cellH;
+            int selSize = fontSize + 2;
+            Font& selFont = getFont(selSize);
+            int optH = cellH + 6;
+
+            for (int i = 0; i < n; i++) {
+                int py = baseY + i * optH;
+                bool sel = (i == menuSelection_);
+                if (sel) {
+                    bool isSalir = (i == n - 1);
+                    Color c = isSalir ? Color{200, 30, 40, 255} : Color{255, 230, 60, 255};
+                    Vector2 preSz = MeasureTextEx(selFont, "> ", (float)selSize, 0);
+                    Vector2 fullSz = MeasureTextEx(selFont, (std::string("> ") + opts[i]).c_str(), (float)selSize, 0);
+                    int px = (screenW - (int)fullSz.x) / 2;
+                    DrawTextEx(selFont, "> ", {(float)px, (float)py}, (float)selSize, 0, c);
+                    DrawTextEx(selFont, opts[i], {(float)(px + (int)preSz.x), (float)py}, (float)selSize, 0, c);
+                } else {
+                    std::string text = std::string("  ") + opts[i];
+                    Vector2 sz = MeasureTextEx(font, text.c_str(), (float)fontSize, 0);
+                    int px = (screenW - (int)sz.x) / 2;
+                    DrawTextEx(font, text.c_str(), {(float)px, (float)py}, (float)fontSize, 0, Color{160, 160, 160, 255});
+                }
+            }
+            int hintY = baseY + n * optH + 10;
+            const char* hint = "W/S navegar  |  ENTER para confirmar";
+            Vector2 hintSz = MeasureTextEx(font, hint, (float)fontSize, 0);
+            DrawTextEx(font, hint, {(float)((screenW - (int)hintSz.x) / 2), (float)hintY}, (float)fontSize, 0, Color{160, 160, 160, 255});
+        }
+
         if (mapZoom_ > 1 && state_.load() == GameState::Exploration && dungeon_ && player_) {
 
             int mapPixW, mapPixH;
@@ -1228,8 +1265,7 @@ void Game::render(TerminalScreen &scr)
         switch (menuPhase_)
         {
         case MenuPhase::Title:
-            Renderer::drawTitle(scr, menuSelection_, hasSave(),
-                                std::fmod(GetTime(), 1.0) < 0.5);
+            Renderer::drawTitle(scr);
             break;
         case MenuPhase::Credits:
             Renderer::drawCredits(scr);

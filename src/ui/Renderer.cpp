@@ -471,7 +471,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
 
 // ─── drawTitle ───────────────────────────────────────────────────────────────
 
-void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool blink) {
+void Renderer::drawTitle(TerminalScreen& scr) {
     int cx = scr.cols() / 2, cy = scr.rows() / 2;
 
     // ── Cache title with relative offsets (resize-proof) ──
@@ -586,32 +586,7 @@ void Renderer::drawTitle(TerminalScreen& scr, int selection, bool hasSave, bool 
     if (GetTime() >= rowGlitchEnd) rowGlitchOff = 999;
 
     // ── Subtitle ──
-    int ty = cy;
-    ty++;
-    scr.putStr(cx - 16, ty++, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
-    ty++;
-
-    // ── Menu ──
-    const char* opts4[] = { "Continuar", "Nueva Partida", "Configuración", "Créditos", "Salir" };
-    const char* opts3[] = { "Nueva Partida", "Configuración", "Créditos", "Salir" };
-    int n = hasSave ? 5 : 4;
-    const char** opts = hasSave ? opts4 : opts3;
-    for (int i = 0; i < n; i++) {
-        std::string label = std::string("  ") + opts[i] + "  ";
-        int labelWidth = 0;
-        for (unsigned char c : label)
-            if ((c & 0xC0) != 0x80) labelWidth++;
-        int x = cx - labelWidth / 2;
-        bool sel = (i == selection);
-        Color c = sel ? COL_YELLOW : COL_WHITE;
-        uint8_t fl = sel ? CELL_BOLD : 0;
-        if (sel && blink) fl |= CELL_INVERTED;
-        scr.putStr(x, ty++, label, c, COL_BLACK, fl);
-    }
-    ty++;
-    drawCentered(scr, ty, 0, scr.cols(),
-                 "W/S navegar  |  ENTER para confirmar",
-                 COL_GRAY, CELL_DIM);
+    scr.putStr(cx - 16, cy + 1, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
 }
 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
@@ -1115,7 +1090,9 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(1,            br, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
         scr.putStr(cols / 3,     br, "[5] Poción (" + std::to_string(player.countHpPotions()) + ")  1PA", player.countHpPotions() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
         scr.putStr(2 * cols / 3, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
-        scr.putStr(1,            br, "[7] Saquear     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
+        int lootPct = combat.getLootChance();
+        std::string lootStr = "[7] Saquear (" + std::to_string(lootPct) + "%)  1PA";
+        scr.putStr(1, br, lootStr, (ap >= 1 && lootPct > 0) ? COL_WHITE : COL_GRAY);
         scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
         scr.putStr(2 * cols / 3, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
         if (combat.getPhase() == CombatPhase::EnemyTurn)
