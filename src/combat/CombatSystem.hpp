@@ -67,8 +67,8 @@ private:
     std::vector<std::unique_ptr<Enemy>>   enemies_;
     std::vector<std::string>              log_;
     int                                   currentTarget_;
+    int                                   maxAp_;
     int                                   currentAp_;
-    static constexpr int                  maxAp_ = 3;
     CombatPhase                           phase_;
     bool                                  fled_;
     std::vector<StatusEffect>             playerEffects_;

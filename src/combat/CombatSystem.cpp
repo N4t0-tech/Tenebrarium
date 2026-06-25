@@ -14,6 +14,7 @@ CombatSystem::CombatSystem(Player& player, std::vector<std::unique_ptr<Enemy>> e
     : player_(player),
       enemies_(std::move(enemies)),
       currentTarget_(0),
+      maxAp_(player.getClass() == PlayerClass::Ranger ? 4 : 3),
       currentAp_(maxAp_),
       phase_(CombatPhase::PlayerTurn),
       fled_(false)
