@@ -385,6 +385,14 @@ void CombatSystem::processEnemyTurn() {
             }),
         playerEffects_.end());
 
+    // Eliminar Frozen del enemigo (expiró tras este turno)
+    for (auto& fxv : enemyEffects_) {
+        fxv.erase(
+            std::remove_if(fxv.begin(), fxv.end(),
+                [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Frozen; }),
+            fxv.end());
+    }
+
     // Restore player AP
     currentAp_ = maxAp_;
     logMessage("--- Turno del jugador  PA: " + ts(currentAp_) + "/" + ts(maxAp_) + " ---");
@@ -417,6 +425,7 @@ void CombatSystem::tickEnemyEffects() {
                            + " daño por veneno.");
                 if (!enemies_[i]->isAlive())
                     logMessage("  " + enemies_[i]->getName() + " muere envenenado!");
+                fx.turnsLeft--;
             }
             if (fx.type == StatusEffect::Type::TrapPending) {
                 enemies_[i]->takeDamageRaw(fx.magnitude);
@@ -424,13 +433,17 @@ void CombatSystem::tickEnemyEffects() {
                            + ts(fx.magnitude) + " daño.");
                 if (!enemies_[i]->isAlive())
                     logMessage("  " + enemies_[i]->getName() + " derrotado!");
+                fx.turnsLeft--;
             }
-            fx.turnsLeft--;
         }
 
         enemyEffects_[i].erase(
             std::remove_if(enemyEffects_[i].begin(), enemyEffects_[i].end(),
-                [](const StatusEffect& fx) { return fx.turnsLeft <= 0; }),
+                [](const StatusEffect& fx) {
+                    return (fx.type == StatusEffect::Type::Poisoned
+                         || fx.type == StatusEffect::Type::TrapPending)
+                        && fx.turnsLeft <= 0;
+                }),
             enemyEffects_[i].end());
     }
 }
