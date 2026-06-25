@@ -315,11 +315,12 @@ void CombatSystem::processEnemyTurn() {
         if (!enemy->isAlive()) continue;
 
         int attackCount = enemy->getBasePa();
-        bool frozen = std::any_of(enemyEffects_[i].begin(), enemyEffects_[i].end(),
+        auto frozenIt = std::find_if(enemyEffects_[i].begin(), enemyEffects_[i].end(),
             [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Frozen; });
-        if (frozen) {
-            attackCount = std::max(0, attackCount - 1);
-            logMessage(enemy->getName() + " esta congelado (-1 PA).");
+        if (frozenIt != enemyEffects_[i].end()) {
+            int lostPa = frozenIt->magnitude;
+            attackCount = std::max(0, attackCount - lostPa);
+            logMessage(enemy->getName() + " congelado (-" + ts(lostPa) + " PA).");
         }
 
         for (int pa = 0; pa < attackCount; pa++) {
