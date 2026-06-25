@@ -327,6 +327,11 @@ void CombatSystem::processEnemyTurn() {
 
             int rawDmg = std::max(1, enemy->getAttack() - player_.getDefense());
 
+            // Orco: 2 ataques por turno pero cada golpe es al 60%
+            if (enemy->getType() == EnemyType::Orc) {
+                rawDmg = std::max(1, rawDmg * 60 / 100);
+            }
+
             // Check DefendingHeavy first (consumed on first hit)
             auto heavyIt = std::find_if(playerEffects_.begin(), playerEffects_.end(),
                 [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::DefendingHeavy; });
