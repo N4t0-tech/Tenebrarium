@@ -22,8 +22,35 @@ find_package(ZLIB REQUIRED)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
+execute_process(
+    COMMAND git describe --tags --always --dirty
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(GIT_VERSION STREQUAL "" OR GIT_VERSION MATCHES "^[0-9a-f]+$")
+    set(GIT_VERSION "0.0.0")
+endif()
+string(REGEX REPLACE "^v" "" RAW_VERSION "${GIT_VERSION}")
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" VERSION_BASE "${RAW_VERSION}")
+if(NOT VERSION_BASE)
+    set(VERSION_BASE "0.0.0")
+endif()
+set(GIT_VERSION_STRING "${VERSION_BASE}")
+string(REPLACE "." "," GIT_VERSION_COMMA "${VERSION_BASE}")
+string(APPEND GIT_VERSION_COMMA ",0")
+
+set(ICON_PATH "${CMAKE_SOURCE_DIR}/assets/tenebrarium.ico")
+set(MANIFEST_PATH "${CMAKE_SOURCE_DIR}/src/win_resources.manifest")
+configure_file(
+    src/win_resources.rc.in
+    ${CMAKE_BINARY_DIR}/generated/win_resources.rc
+    @ONLY
+)
+
 if(WIN32)
-    add_executable(tenebrarium WIN32 ${SOURCES})
+    add_executable(tenebrarium WIN32 ${SOURCES} ${CMAKE_BINARY_DIR}/generated/win_resources.rc)
 else()
     add_executable(tenebrarium ${SOURCES})
 endif()
