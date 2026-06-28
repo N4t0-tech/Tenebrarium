@@ -418,6 +418,7 @@ bool GameSerializer::load(Game& g)
     // Restore runtime state
     g.combat_.reset();
     g.combatWorldEnemyIdx_ = -1;
+    g.combatEnemyIndices_.clear();
     g.pendingCombatEnemy_  = -1;
     g.dungeon_->message.clear();
     g.state_.store(GameState::Exploration);

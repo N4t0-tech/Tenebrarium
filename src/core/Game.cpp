@@ -1313,10 +1313,15 @@ void Game::render(TerminalScreen &scr)
         if (combat_ && player_ && dungeon_)
         {
             bool boss = false;
-            if (combatWorldEnemyIdx_ >= 0) {
+            if (!combatEnemyIndices_.empty()) {
                 auto acc = dungeon_->lock();
-                if (combatWorldEnemyIdx_ < static_cast<int>(acc.enemies().size()))
-                    boss = acc.enemies()[combatWorldEnemyIdx_].isBoss;
+                for (int idx : combatEnemyIndices_) {
+                    if (idx < static_cast<int>(acc.enemies().size())
+                        && acc.enemies()[idx].isBoss) {
+                        boss = true;
+                        break;
+                    }
+                }
             }
             int flashIdx = (GetTime() < combatFlashEndTime_) ? combatFlashIdx_ : -1;
             Renderer::drawCombat(scr, *combat_, *player_,
@@ -1446,12 +1451,28 @@ void Game::setState(GameState newState)
         } else if (combatWorldEnemyIdx_ >= 0)
         {
             auto acc = dungeon_->lock();
-            if (combatWorldEnemyIdx_ < static_cast<int>(acc.enemies().size())) {
-                bool boss = acc.enemies()[combatWorldEnemyIdx_].isBoss;
-                enemies.push_back(DungeonPopulator::makeEnemy(
-                    acc.enemies()[combatWorldEnemyIdx_].type, fl, boss));
-                if (!boss && enemies.back()->getType() == EnemyType::Spider && (std::rand() % 100) < 1)
-                    enemies.back()->setName("Ariatña");
+            auto& worldEnemies = acc.enemies();
+            if (combatWorldEnemyIdx_ < static_cast<int>(worldEnemies.size())) {
+                int cx = worldEnemies[combatWorldEnemyIdx_].pos.x;
+                int cy = worldEnemies[combatWorldEnemyIdx_].pos.y;
+
+                combatEnemyIndices_.clear();
+                for (int i = 0; i < static_cast<int>(worldEnemies.size())
+                     && static_cast<int>(combatEnemyIndices_.size()) < 5; i++)
+                {
+                    if (!worldEnemies[i].alive) continue;
+                    if (std::abs(worldEnemies[i].pos.x - cx) <= 2
+                        && std::abs(worldEnemies[i].pos.y - cy) <= 2)
+                        combatEnemyIndices_.push_back(i);
+                }
+
+                for (int idx : combatEnemyIndices_) {
+                    bool boss = worldEnemies[idx].isBoss;
+                    auto e = DungeonPopulator::makeEnemy(worldEnemies[idx].type, fl, boss);
+                    if (!boss && e->getType() == EnemyType::Spider && (std::rand() % 100) < 1)
+                        e->setName("Ariatña");
+                    enemies.push_back(std::move(e));
+                }
             }
         }
         else
@@ -1518,6 +1539,7 @@ void Game::returnToExploration()
     // Return to the same map without regenerating — just clear combat state
     combat_.reset();
     combatWorldEnemyIdx_ = -1;
+    combatEnemyIndices_.clear();
     if (dungeon_) dungeon_->message.clear();
     state_.store(GameState::Exploration);
 }
@@ -1851,27 +1873,34 @@ void Game::inputCombat(int key)
         }
         else if (combat_->playerWon())
         {
-            if (combatWorldEnemyIdx_ >= 0)
+            if (!combatEnemyIndices_.empty())
             {
                 auto acc = dungeon_->lock();
-                auto &we = acc.enemies()[combatWorldEnemyIdx_];
-                int ei = static_cast<int>(we.type);
-                if (ei >= 0 && ei < kBestiaryEntryCount) {
-                    bestiary_[ei].kills++;
-                    bestiary_[ei].discovered = true;
-                }
-                int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor());
-                int xpGained = we.isBoss ? baseXp * 5 : baseXp;
-                player_->gainXp(xpGained);
-                we.alive = false;
-                dungeon_->enemiesKilled++;
-                int lootChance = we.isBoss ? 45 : 15;
-                // chance the enemy drops a potion
-                if (std::rand() % 100 < lootChance)
+                std::string lootMsg;
+                for (int idx : combatEnemyIndices_)
                 {
-                    Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
-                    player_->getInventory().addItem(pot);
-                    dungeon_->message = "El enemigo soltó una " + pot.name + "!";
+                    auto &we = acc.enemies()[idx];
+                    int ei = static_cast<int>(we.type);
+                    if (ei >= 0 && ei < kBestiaryEntryCount) {
+                        bestiary_[ei].kills++;
+                        bestiary_[ei].discovered = true;
+                    }
+                    int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor());
+                    int xpGained = we.isBoss ? baseXp * 5 : baseXp;
+                    player_->gainXp(xpGained);
+                    we.alive = false;
+                    dungeon_->enemiesKilled++;
+                    int lootChance = we.isBoss ? 45 : 15;
+                    if (std::rand() % 100 < lootChance)
+                    {
+                        Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
+                        player_->getInventory().addItem(pot);
+                        if (!lootMsg.empty()) lootMsg += ", ";
+                        lootMsg += pot.name;
+                    }
+                }
+                if (!lootMsg.empty()) {
+                    dungeon_->message = "Botín: " + lootMsg + ".";
                     dungeon_->messageEndTime = GetTime() + 2.0;
                 }
             }

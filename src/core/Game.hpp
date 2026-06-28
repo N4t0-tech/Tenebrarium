@@ -59,8 +59,9 @@ private:
     int                            combatFlashIdx_;
     double                         combatFlashEndTime_;
 
-    int           combatWorldEnemyIdx_{-1};
-    bool          mimicCombat_{false};
+    int                combatWorldEnemyIdx_{-1};
+    std::vector<int>   combatEnemyIndices_;
+    bool               mimicCombat_{false};
 
     std::atomic<int>  pendingCombatEnemy_{-1};
 
