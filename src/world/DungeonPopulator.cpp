@@ -388,7 +388,10 @@ DungeonPopulator::Result DungeonPopulator::populate(
         if (rngInt(rng, 0, 99) < spawnChance)
             result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
                                       pickEnemyType(floor, rng), true});
-        if (floor >= 3 && rngInt(rng, 0, 99) < 20 + floor * 3)
+        if (rngInt(rng, 0, 99) < 15 + floor * 3)
+            result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
+                                      pickEnemyType(floor, rng), true});
+        if (floor >= 2 && rngInt(rng, 0, 99) < floor * 3)
             result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
                                       pickEnemyType(floor, rng), true});
     }
