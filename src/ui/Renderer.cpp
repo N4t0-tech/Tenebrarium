@@ -194,6 +194,7 @@ static const char* portraitForClass(PlayerClass pc) {
 void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
+                       const std::vector<Position>& torches,
                        Color playerColor, int floor) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
@@ -232,21 +233,64 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             const Tile& tile = map.at(mx, my);
             if (!tile.explored) continue;
 
-            if (mx == pp.x && my == pp.y) {
-                scr.put(dc, dr, '@', playerColor, colFloor, CELL_BOLD);
-                continue;
-            }
-
             if (tile.visible) {
                 float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
                 float pixelDist = std::sqrt(dx*dx + dy*dy * cellAspect * cellAspect);
                 float factor = std::max(0.45f, 1.0f - (pixelDist / FOV_RADIUS) * 0.55f);
 
+                // Luz dinámica de antorchas
+                float torchBoost = 0.0f;
+                if (!torches.empty()) {
+                    auto hasLos = [&](int x1, int y1, int x2, int y2) -> bool {
+                        int dx = x2 - x1, dy = y2 - y1;
+                        int adx = std::abs(dx), ady = std::abs(dy);
+                        int sx = (dx > 0) ? 1 : ((dx < 0) ? -1 : 0);
+                        int sy = (dy > 0) ? 1 : ((dy < 0) ? -1 : 0);
+                        int err = adx - ady;
+                        int x = x1, y = y1;
+                        while (x != x2 || y != y2) {
+                            int e2 = 2 * err;
+                            if (e2 > -ady) { err -= ady; x += sx; }
+                            if (e2 <  adx) { err += adx; y += sy; }
+                            if (x == x2 && y == y2) break;
+                            if (!map.isWalkable(x, y)) return false;
+                        }
+                        return true;
+                    };
+
+                    for (size_t ti = 0; ti < torches.size(); ti++) {
+                        if (!hasLos(torches[ti].x, torches[ti].y, mx, my)) continue;
+                        float tdx = (float)(mx - torches[ti].x);
+                        float tdy = (float)(my - torches[ti].y);
+                        float tdist = std::sqrt(tdx*tdx + tdy*tdy);
+                        float falloff = std::max(0.0f, 1.0f - tdist / 5.0f);
+                        if (falloff > 0.0f) {
+                            float flicker = 0.85f + 0.15f * std::sin(GetTime() * 3.0f + ti * 5.7f);
+                            torchBoost += falloff * flicker;
+                        }
+                    }
+                }
+                float f = std::min(1.0f, factor + torchBoost * 0.15f);
+
+                auto litBg = [&](Color c) -> Color {
+                    if (torchBoost <= 0) return c;
+                    float w = std::min(1.0f, torchBoost * 0.15f);
+                    return { (uint8_t)(c.r * (1-w) + COL_ORANGE.r * w),
+                             (uint8_t)(c.g * (1-w) + COL_ORANGE.g * w),
+                             (uint8_t)(c.b * (1-w) + COL_ORANGE.b * w), 255 };
+                };
+
+                // Jugador (dentro del bloque visible para que reciba torchBoost)
+                if (mx == pp.x && my == pp.y) {
+                    scr.put(dc, dr, '@', applyFactor(playerColor, f), litBg(colFloor), CELL_BOLD);
+                    continue;
+                }
+
                 bool drew = false;
                 for (const auto& ent : entities) {
                     if (ent.pos.x == mx && ent.pos.y == my) {
-                        Color ec = applyFactor(colorFromPair(ent.colorPair), factor);
-                        scr.put(dc, dr, ent.glyph, ec, colFloor,
+                        Color ec = applyFactor(colorFromPair(ent.colorPair), f);
+                        scr.put(dc, dr, ent.glyph, ec, litBg(colFloor),
                                 ent.bold ? CELL_BOLD : 0);
                         drew = true;
                         break;
@@ -255,11 +299,12 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 if (drew) continue;
 
                 if (tile.type == TileType::SecretWall) {
-                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, factor), colWall, CELL_DIM);
+                    scr.put(dc, dr, '#', applyFactor(COL_GRAY, f), colWall, CELL_DIM);
                     continue;
                 }
                 Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
-                scr.put(dc, dr, tile.glyph, applyFactor(colTile, factor), tileBg, 0);
+                scr.put(dc, dr, tile.glyph, applyFactor(colTile, f),
+                        litBg(tileBg), 0);
             } else {
                 bool drewAlwaysVisible = false;
                 for (const auto& ent : entities) {
@@ -896,12 +941,13 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
 void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
+                                const std::vector<Position>& torches,
                                 const std::string& message, int mapZoom,
                                 int scrollTick) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
-        drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities,
+        drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities, torches,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor());
         drawBorder(scr, 0, 0, mapW, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
@@ -911,7 +957,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
     } else {
         int hudH = 13;
         int mapH = scr.rows() - hudH;
-        drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities,
+        drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities, torches,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor());
         drawBorder(scr, 0, 0, scr.cols(), mapH);
         drawHudBar(scr, mapH, player, mapZoom);

@@ -28,3 +28,7 @@ struct WorldChest {
     Item      item;
     bool      isMimic = false;
 };
+
+struct WorldTorch {
+    Position pos;
+};

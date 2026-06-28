@@ -444,9 +444,15 @@ void Game::run()
                 if (acc.shopExists())
                     zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
 
+                std::vector<Position> zTorchPos;
+                for (const auto& t : acc.torches()) {
+                    zEntities.push_back({t.pos, 'i', 9, true});
+                    zTorchPos.push_back(t.pos);
+                }
+
                 Renderer::drawMap(mapScr, 0, 0,
                                    mapScr.cols(), mapScr.rows(),
-                                   acc.map(), zEntities,
+                                   acc.map(), zEntities, zTorchPos,
                                    Renderer::colorForPlayerClass(player_->getClass()),
                                    player_->getDungeonFloor());
             }
@@ -1303,8 +1309,15 @@ void Game::render(TerminalScreen &scr)
                     entities.push_back({acc.stairsPos(), '>', 3, true, true});
                 if (acc.shopExists())
                     entities.push_back({acc.shopMerchantPos(), '$', 4, true});
+
+                std::vector<Position> torchPos;
+                for (const auto& t : acc.torches()) {
+                    entities.push_back({t.pos, 'i', 9, true});
+                    torchPos.push_back(t.pos);
+                }
+
                 Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,
-                                           entities, "", mapZoom_, scrollTick_);
+                                           entities, torchPos, "", mapZoom_, scrollTick_);
                 scrollTick_++;
              }
          }

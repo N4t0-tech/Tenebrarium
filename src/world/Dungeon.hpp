@@ -40,6 +40,9 @@ public:
         auto&       chests()       { return self.chests_; }
         const auto& chests() const { return self.chests_; }
 
+        auto&       torches()       { return self.torches_; }
+        const auto& torches() const { return self.torches_; }
+
         // Convenience
         Position  playerPos()     const { return self.map_.getPlayerPos(); }
         void      setPlayerPos(int x, int y) { self.map_.setPlayerPos(x, y); }
@@ -80,6 +83,7 @@ private:
     Map                    map_{80, 40};
     std::vector<WorldEnemy> enemies_;
     std::vector<WorldChest> chests_;
+    std::vector<WorldTorch> torches_;
     Position               stairsPos_{};
     Position               lockedDoorPos_{};
     bool                   lockedDoorExists_ = false;

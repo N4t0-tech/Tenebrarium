@@ -36,11 +36,13 @@ public:
     static void drawExploration(TerminalScreen& scr, const Map& map,
                                 const Player& player, HudLayout layout,
                                 const std::vector<MapEntity>& entities,
+                                const std::vector<Position>& torches,
                                 const std::string& message = "",
                                 int mapZoom = 1, int scrollTick = 0);
     static Color colorForPlayerClass(PlayerClass pc);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
                          const Map& map, const std::vector<MapEntity>& entities,
+                         const std::vector<Position>& torches,
                          Color playerColor, int floor = 1);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,

@@ -441,5 +441,33 @@ DungeonPopulator::Result DungeonPopulator::populate(
         result.enemies.push_back({pickPos(rooms[n - 2], taken, rng), pickPos(rooms[n - 2], taken, rng),
                                   pickEnemyType(floor, rng), true, true});
 
+    // Torches — decoración en salas (no en tienda ni spawn)
+    for (int i = 1; i < n - 1; i++) {
+        if (result.shopExists &&
+            rooms[i].x == result.shopRoom.x && rooms[i].y == result.shopRoom.y)
+            continue;
+        if (rngInt(rng, 0, 99) < 70) {
+            Position tpos;
+            if (rooms[i].w >= 6 && rooms[i].h >= 6) {
+                int corner = rngInt(rng, 0, 3);
+                switch (corner) {
+                    case 0: tpos = {rooms[i].x + 1,         rooms[i].y + 1};         break;
+                    case 1: tpos = {rooms[i].x + rooms[i].w - 2, rooms[i].y + 1};    break;
+                    case 2: tpos = {rooms[i].x + 1,         rooms[i].y + rooms[i].h - 2}; break;
+                    case 3: tpos = {rooms[i].x + rooms[i].w - 2, rooms[i].y + rooms[i].h - 2}; break;
+                }
+            } else {
+                tpos = {rooms[i].centerX(), rooms[i].centerY()};
+            }
+            bool ok = true;
+            for (const auto& t : taken)
+                if (t.x == tpos.x && t.y == tpos.y) { ok = false; break; }
+            if (ok) {
+                taken.push_back(tpos);
+                result.torches.push_back({tpos});
+            }
+        }
+    }
+
     return result;
 }

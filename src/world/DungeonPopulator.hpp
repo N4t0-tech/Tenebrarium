@@ -14,6 +14,7 @@ public:
     struct Result {
         std::vector<WorldEnemy>  enemies;
         std::vector<WorldChest>  chests;
+        std::vector<WorldTorch>  torches;
         Position                 stairsPos{};
         Position                 lockedDoorPos{};
         bool                     lockedDoorExists{false};

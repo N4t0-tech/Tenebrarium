@@ -18,6 +18,7 @@ void Dungeon::generate(int floor, PlayerClass cls) {
     auto pop = DungeonPopulator::populate(map_, gen.getRooms(), floor, cls, gen.rng());
     enemies_         = std::move(pop.enemies);
     chests_          = std::move(pop.chests);
+    torches_         = std::move(pop.torches);
     stairsPos_       = pop.stairsPos;
     lockedDoorPos_   = pop.lockedDoorPos;
     lockedDoorExists_= pop.lockedDoorExists;
