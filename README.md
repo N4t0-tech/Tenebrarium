@@ -11,6 +11,9 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - Ventana nativa (Linux / Windows) con fuente monoespaciada empaquetada
 - Generación procedural de mazmorras (BSP) con campo de visión
 - Combate por turnos con sistema de Puntos de Acción (3 PA por turno)
+- **Combate múltiple**: enemigos cercanos en área 5×5 se unen a la pelea (máx. 5)
+- **Hasta 3 enemigos por sala** en pisos profundos
+- **Antorchas decorativas** con luz dinámica que parpadea y respeta paredes
 - 3 clases: Guerrero, Mago, Ranger — cada una con 3 artes únicas
 - Inventario por slots, equipo, pociones, cofres, llaves y salas secretas
 - Tienda con mercader por piso
