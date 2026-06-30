@@ -49,7 +49,7 @@ EnemyType DungeonPopulator::pickEnemyType(int floor, std::mt19937& rng)
 
 std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool isBoss)
 {
-    float s  = 1.0f + (floor - 1) * 0.15f;
+    float s  = 1.0f + (floor - 1) * 0.09f;
     auto  sc = [s](int base) { return std::max(1, static_cast<int>(base * s)); };
     std::string name;
     int hp, atk, def, xp, pa = 1;
@@ -78,9 +78,9 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
         name = "???";      hp = 10;      atk = 5;      def = 1;      xp = 5;       pa = 1; break;
     }
     if (isBoss) {
-        hp  = static_cast<int>(hp  * 2.0f);
-        atk = static_cast<int>(atk * 2.0f);
-        def = static_cast<int>(def * 2.0f);
+        hp  = static_cast<int>(hp  * 2.5f);
+        atk = static_cast<int>(atk * 2.5f);
+        def = static_cast<int>(def * 2.5f);
         switch (t) {
         case EnemyType::Goblin:   name = "Rey Goblin";      break;
         case EnemyType::Skeleton: name = "Señor Liche";     break;
@@ -140,7 +140,6 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
     };
     static const std::vector<Item> ranger = {
         {"Arco Corto",     "Rápido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
-        {"Honda",          "Simple pero efectiva.",     ItemType::Weapon, 30, 1, 2, 1},
         {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5, 1},
         {"Arco Elfico",    "Tallado en madera élfica.", ItemType::Weapon, 50, 1, 5, 1},
         {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7, 1},
@@ -179,7 +178,7 @@ Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
         {{"Cota de Malla",      "Protección media.",   ItemType::Armor, 40, 1, 3, 1},
          {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
         {{"Túnica Arcana",      "Ligera y mágica.",    ItemType::Armor, 30, 1, 1, 1},
-         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 3, 1}},
+         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 4, 1}},
         {{"Cuero Reforzado",    "Ágil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
          {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
         {{"Manto del Equilibrio","Pesa lo que debe pesar.",      ItemType::Armor, 40, 1, 3, 1},
