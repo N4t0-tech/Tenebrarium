@@ -134,16 +134,16 @@ jobs:
         run: |
           curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
           unzip butler.zip
-          chmod +x linux-amd64/butler
+          chmod +x butler
 
       - name: Desplegar Linux en itch.io
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
         run: |
-          ./linux-amd64/butler push tenebrarium-linux.zip halleynato/tenebrarium:linux --userversion "${GITHUB_REF_NAME#v}"
+          ./butler push tenebrarium-linux.zip halleynato/tenebrarium:linux --userversion "${GITHUB_REF_NAME#v}"
 
       - name: Desplegar Windows en itch.io
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
         run: |
-          ./linux-amd64/butler push tenebrarium-windows.zip halleynato/tenebrarium:windows --userversion "${GITHUB_REF_NAME#v}"
+          ./butler push tenebrarium-windows.zip halleynato/tenebrarium:windows --userversion "${GITHUB_REF_NAME#v}"
