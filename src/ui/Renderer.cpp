@@ -195,7 +195,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
                        const std::vector<Position>& torches,
-                       Color playerColor, int floor) {
+                       Color playerColor, int floor, bool isVillage) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -211,11 +211,20 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                       uint8_t(a.g + (b.g - a.g) * t),
                       uint8_t(a.b + (b.b - a.b) * t), 255 };
     };
-    Color colFloor   = lerp(FG_GREEN, FG_MONO, t);
-    Color colWall    = lerp(WG_GREEN, WG_MONO, t);
-    Color colDim     = lerp(DG_GREEN, DG_MONO, t);
-    Color colTile    = lerp(TILE_GREEN, TILE_MONO, t);
-    Color colDimGlyph = lerp(DIM_GREEN, DIM_MONO, t);
+    Color colFloor, colWall, colTile, colDim, colDimGlyph;
+    if (isVillage) {
+        colFloor     = BLACK;               // fondo negro del pueblo
+        colWall      = BLACK;
+        colTile      = { 190, 168, 116, 255 };
+        colDim       = BLACK;
+        colDimGlyph  = { 95,  84,  58, 255 };
+    } else {
+        colFloor   = lerp(FG_GREEN, FG_MONO, t);
+        colWall    = lerp(WG_GREEN, WG_MONO, t);
+        colDim     = lerp(DG_GREEN, DG_MONO, t);
+        colTile    = lerp(TILE_GREEN, TILE_MONO, t);
+        colDimGlyph = lerp(DIM_GREEN, DIM_MONO, t);
+    }
 
     static constexpr float FOV_RADIUS = 8.0f;
     float cellAspect = (float)scr.cellH() / scr.cellW();
@@ -240,6 +249,8 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
 
                 // Luz dinámica de antorchas
                 float torchBoost = 0.0f;
+                float torchRadius = isVillage ? 8.0f : 5.0f;
+                float torchIntensity = isVillage ? 0.35f : 0.15f;
                 if (!torches.empty()) {
                     auto hasLos = [&](int x1, int y1, int x2, int y2) -> bool {
                         int dx = x2 - x1, dy = y2 - y1;
@@ -263,26 +274,29 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                         float tdx = (float)(mx - torches[ti].x);
                         float tdy = (float)(my - torches[ti].y);
                         float tdist = std::sqrt(tdx*tdx + tdy*tdy);
-                        float falloff = std::max(0.0f, 1.0f - tdist / 5.0f);
+                        float falloff = std::max(0.0f, 1.0f - tdist / torchRadius);
                         if (falloff > 0.0f) {
                             float flicker = 0.85f + 0.15f * std::sin(GetTime() * 3.0f + ti * 5.7f);
                             torchBoost += falloff * flicker;
                         }
                     }
                 }
-                float f = std::min(1.0f, factor + torchBoost * 0.15f);
+                float f = std::min(1.0f, factor + torchBoost * torchIntensity);
 
                 auto litBg = [&](Color c) -> Color {
-                    if (torchBoost <= 0) return c;
-                    float w = std::min(1.0f, torchBoost * 0.15f);
-                    return { (uint8_t)(c.r * (1-w) + COL_ORANGE.r * w),
-                             (uint8_t)(c.g * (1-w) + COL_ORANGE.g * w),
-                             (uint8_t)(c.b * (1-w) + COL_ORANGE.b * w), 255 };
+                    if (!isVillage && torchBoost > 0) {
+                        float w = std::min(1.0f, torchBoost * torchIntensity);
+                        return { (uint8_t)(c.r * (1-w) + COL_ORANGE.r * w),
+                                 (uint8_t)(c.g * (1-w) + COL_ORANGE.g * w),
+                                 (uint8_t)(c.b * (1-w) + COL_ORANGE.b * w), 255 };
+                    }
+                    return c;
                 };
 
                 // Jugador (dentro del bloque visible para que reciba torchBoost)
                 if (mx == pp.x && my == pp.y) {
-                    scr.put(dc, dr, '@', applyFactor(playerColor, f), litBg(colFloor), CELL_BOLD);
+                    Color entBg = isVillage ? Color{tile.fg_r, tile.fg_g, tile.fg_b, 255} : litBg(colFloor);
+                    scr.put(dc, dr, '@', applyFactor(playerColor, f), entBg, CELL_BOLD);
                     continue;
                 }
 
@@ -290,7 +304,12 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 for (const auto& ent : entities) {
                     if (ent.pos.x == mx && ent.pos.y == my) {
                         Color ec = applyFactor(colorFromPair(ent.colorPair), f);
-                        scr.put(dc, dr, ent.glyph, ec, litBg(colFloor),
+                        Color entBg = isVillage
+                            ? ((ent.glyph == 'i')
+                                ? Color{tile.bg_r, tile.bg_g, tile.bg_b, 255}
+                                : Color{tile.fg_r, tile.fg_g, tile.fg_b, 255})
+                            : litBg(colFloor);
+                        scr.put(dc, dr, ent.glyph, ec, entBg,
                                 ent.bold ? CELL_BOLD : 0);
                         drew = true;
                         break;
@@ -303,7 +322,10 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                     continue;
                 }
                 Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
-                scr.put(dc, dr, tile.glyph, applyFactor(colTile, f),
+                if (isVillage)
+                    tileBg = Color{tile.bg_r, tile.bg_g, tile.bg_b, 255};
+                Color tileFg = isVillage ? Color{tile.fg_r, tile.fg_g, tile.fg_b, 255} : colTile;
+                scr.put(dc, dr, tile.glyph, applyFactor(tileFg, f),
                         litBg(tileBg), 0);
             } else {
                 bool drewAlwaysVisible = false;
@@ -421,7 +443,9 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
      int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
-    put("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
+    std::string incTag = player.getIncursions() > 0
+                       ? "  Inc " + std::to_string(player.getIncursions()) : "";
+    put("Piso " + std::to_string(fl) + incTag + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, sepW);
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
@@ -498,7 +522,9 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     int fl = player.getDungeonFloor();
     std::string diff = fl <= 2 ? "Fácil" : fl <= 4 ? "Normal" : fl <= 6 ? "Difícil" : "Peligroso";
     Color dc = fl <= 2 ? COL_GREEN : fl <= 4 ? COL_YELLOW : COL_RED;
-    a4("Piso " + std::to_string(fl) + " [" + diff + "]", dc, CELL_DIM);
+    std::string incTag = player.getIncursions() > 0
+                       ? "  Inc " + std::to_string(player.getIncursions()) : "";
+    a4("Piso " + std::to_string(fl) + incTag + " [" + diff + "]", dc, CELL_DIM);
     a4("  [+/-]zoom:" + std::to_string(mapZoom), COL_GRAY, CELL_DIM);
 
     // row 5: separator
@@ -943,12 +969,12 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const std::vector<MapEntity>& entities,
                                 const std::vector<Position>& torches,
                                 const std::string& message, int mapZoom,
-                                int scrollTick) {
+                                int scrollTick, bool isVillage) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor());
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage);
         drawBorder(scr, 0, 0, mapW, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
         if (!message.empty())
@@ -958,7 +984,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int hudH = 13;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor());
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage);
         drawBorder(scr, 0, 0, scr.cols(), mapH);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
@@ -1604,7 +1630,7 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     int w = 66, sc2 = cx - w / 2, r = 2;
     int boxH = static_cast<int>(stock.size()) + 8;
     drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
-    scr.putStr(sc2 + 2, r++, "=== TIENDA DEL PISO ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
+    scr.putStr(sc2 + 2, r++, "=== TIENDA DEL PUEBLO ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
     scr.putStr(sc2 + 2, r++,
                "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
                COL_ORANGE);
@@ -1633,4 +1659,65 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     scr.putStr(sc2 + 2, r,
                "W/S navegar  |  ENTER comprar  |  V vender  |  ESC salir",
                COL_GRAY, COL_BLACK, CELL_DIM);
+}
+
+void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
+                               const Player& player, int incursions) {
+    int cx = scr.cols() / 2;
+    int w = 66, bx = cx - w / 2, r = 2;
+
+    int n = (menu == VillageMenu::Forge) ? 2 : 4;
+    int boxH = n + 8;
+    drawBorder(scr, bx, 1, w, boxH, COL_ORANGE);
+    scr.putStr(bx + 2, r++,
+               menu == VillageMenu::Forge ? "=== FORJA ===" : "=== ENTRENAMIENTO ===",
+               COL_ORANGE, COL_BLACK, CELL_BOLD);
+    scr.putStr(bx + 2, r++,
+               "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
+               COL_ORANGE);
+    for (int x = 0; x < w - 2; x++)
+        scr.put(bx + 1 + x, r, 0x2550, COL_ORANGE);
+    scr.put(bx, r, 0x2560, COL_ORANGE);
+    scr.put(bx + w - 1, r, 0x2563, COL_ORANGE);
+    r++;
+
+    if (menu == VillageMenu::Forge) {
+        std::string wName  = player.getEquippedWeapon()
+                           ? player.getEquippedWeapon()->name : "(sin arma)";
+        std::string aName  = player.getEquippedArmor()
+                           ? player.getEquippedArmor()->name : "(sin armadura)";
+        std::string wBonus = player.getEquippedWeapon()
+                           ? " +" + std::to_string(player.getEquippedWeapon()->statBonus) + " ATK" : "";
+        std::string aBonus = player.getEquippedArmor()
+                           ? " +" + std::to_string(player.getEquippedArmor()->statBonus) + " DEF" : "";
+        int wCost = 50 + 25 * (player.getEquippedWeapon() ? player.getEquippedWeapon()->statBonus : 0)
+                    + 20 * (incursions - 1);
+        int aCost = 50 + 25 * (player.getEquippedArmor() ? player.getEquippedArmor()->statBonus : 0)
+                    + 20 * (incursions - 1);
+        auto row = [&](int i, const std::string& text, int cost, bool has) {
+            bool sel = (i == selection);
+            Color lc = has ? (sel ? COL_ORANGE : COL_WHITE) : COL_GRAY;
+            uint8_t lf = sel && has ? CELL_INVERTED : (has ? 0 : CELL_DIM);
+            scr.putStr(bx + 2, r, text + "  -  " + std::to_string(cost) + " $",
+                       lc, COL_BLACK, lf);
+            r++;
+        };
+        row(0, "[ARMA]     " + wName + wBonus, wCost, player.getEquippedWeapon().has_value());
+        row(1, "[ARMADURA] " + aName + aBonus, aCost, player.getEquippedArmor().has_value());
+        scr.putStr(bx + 2, r++, "ENTER forjar +1  |  ESC salir", COL_GRAY, COL_BLACK, CELL_DIM);
+        return;
+    }
+
+    int costs[4] = {60 + 20 * incursions, 80 + 30 * incursions,
+                    70 + 25 * incursions, 50 + 20 * incursions};
+    const char* labels[4] = { "+10 Vida Max    ", "+2  Ataque     ",
+                              "+1  Defensa     ", "+5  Mana Max    " };
+    for (int i = 0; i < 4; i++) {
+        bool sel = (i == selection);
+        Color lc = sel ? COL_ORANGE : COL_WHITE;
+        uint8_t lf = sel ? CELL_INVERTED : 0;
+        scr.putStr(bx + 2, r++, std::string(labels[i]) + " -  " +
+                   std::to_string(costs[i]) + " $", lc, COL_BLACK, lf);
+    }
+    scr.putStr(bx + 2, r, "ENTER entrenar  |  ESC salir", COL_GRAY, COL_BLACK, CELL_DIM);
 }

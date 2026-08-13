@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <ctime>
 
-void Dungeon::generate(int floor, PlayerClass cls) {
+void Dungeon::generate(int depth, PlayerClass cls, int incursions) {
     std::lock_guard l(mutex_);
 
     BSPDungeon gen(80, 40);
@@ -15,16 +15,15 @@ void Dungeon::generate(int floor, PlayerClass cls) {
     map_.setPlayerPos(start.x, start.y);
     map_.updateFov();
 
-    auto pop = DungeonPopulator::populate(map_, gen.getRooms(), floor, cls, gen.rng());
-    enemies_         = std::move(pop.enemies);
-    chests_          = std::move(pop.chests);
-    torches_         = std::move(pop.torches);
-    stairsPos_       = pop.stairsPos;
-    lockedDoorPos_   = pop.lockedDoorPos;
-    lockedDoorExists_= pop.lockedDoorExists;
-    shopExists_      = pop.shopExists;
-    shopRoom_        = pop.shopRoom;
-    shopMerchantPos_ = pop.shopMerchantPos;
+    auto pop = DungeonPopulator::populate(map_, gen.getRooms(), depth, cls, incursions, gen.rng());
+    enemies_          = std::move(pop.enemies);
+    chests_           = std::move(pop.chests);
+    torches_          = std::move(pop.torches);
+    stairsPos_        = pop.stairsPos;
+    stairsUpPos_      = pop.stairsUpPos;
+    stairsUpExists_   = pop.stairsUpExists;
+    lockedDoorPos_    = pop.lockedDoorPos;
+    lockedDoorExists_ = pop.lockedDoorExists;
 
     // Reset runtime state
     lockedDoorOpen_ = false;
@@ -35,7 +34,7 @@ void Dungeon::generate(int floor, PlayerClass cls) {
     messageEndTime = 0.0;
 }
 
-int Dungeon::aiTick(bool playerInShop) {
+int Dungeon::aiTick() {
     std::lock_guard l(mutex_);
 
     Position player = map_.getPlayerPos();
@@ -44,25 +43,11 @@ int Dungeon::aiTick(bool playerInShop) {
         auto& we = enemies_[i];
         if (!we.alive) continue;
 
-        if (playerInShop) {
-            if (we.pos.x == we.spawnPos.x && we.pos.y == we.spawnPos.y)
-                continue;
-            Position next = AI::bfsStep(we.pos, we.spawnPos, map_);
-            if (next.x != we.pos.x || next.y != we.pos.y)
-                we.pos = next;
-            continue;
-        }
-
         int dist = std::max(std::abs(we.pos.x - player.x),
                             std::abs(we.pos.y - player.y));
         if (dist > 10) continue;
 
         Position next = AI::bfsStep(we.pos, player, map_);
-
-        if (shopExists_ &&
-            next.x >= shopRoom_.x && next.x < shopRoom_.x + shopRoom_.w &&
-            next.y >= shopRoom_.y && next.y < shopRoom_.y + shopRoom_.h)
-            continue;
 
         if (next.x == player.x && next.y == player.y)
             return i;

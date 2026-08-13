@@ -23,6 +23,24 @@ static inline void navV(int key, int& sel, int n) {
     if (key == 's') sel = (sel + 1) % n;
 }
 
+// Entidades situacionales de la aldea (tienda, forja, entrenamiento, escalera y farolas)
+static std::vector<MapEntity> villageEntities(const VillageLayout& v) {
+    std::vector<MapEntity> ents = {
+        {v.shop,       'T', 2, true, true},
+        {v.forge,      'F', 9, true, true},
+        {v.training,   'E', 3, true, true},
+        {v.stairsDown, 'v', 6, true, true},
+    };
+    for (const Position& p : v.lanterns)
+        ents.push_back({p, 'i', 9, true, true});
+    return ents;
+}
+
+// Farolas de la aldea: posiciones de luz cálida parpadeante
+static std::vector<Position> villageTorches(const VillageLayout& v) {
+    return v.lanterns;
+}
+
 // Forward declarations of file-local helpers (defined near setState)
 static int glyphForEnemy(EnemyType t);
 static int colorPairForEnemy(EnemyType t);
@@ -99,8 +117,8 @@ void Game::run()
     // Dibujo de caja: ─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼  (U+2500–U+257F)
     for (int i = 0x2500; i <= 0x257F; i++)
         codepoints.push_back(i);
-    // Elementos de bloque: █ ░ ▒ ▓ ▀ ▄ etc. (U+2580–U+259F)
-    for (int i = 0x2580; i <= 0x259F; i++)
+    // Elementos de bloque y figuras geométricas: █ ░ ▒ ▓ ▀ ▄ ▲ ▼ ■ ◄ ► ● etc.
+    for (int i = 0x2580; i <= 0x25FF; i++)
         codepoints.push_back(i);
     // Símbolos misceláneos usados por CP437 (flechas, caras, etc.)
     int extras[] = {
@@ -403,7 +421,11 @@ void Game::run()
             DrawTextEx(font, hint, {(float)((screenW - (int)hintSz.x) / 2), (float)hintY}, (float)fontSize, 0, Color{160, 160, 160, 255});
         }
 
-        if (mapZoom_ > 1 && state_.load() == GameState::Exploration && dungeon_ && player_) {
+        GameState curState = state_.load();
+        if (mapZoom_ > 1 && player_
+            && (curState == GameState::Exploration || curState == GameState::Village)
+            && (dungeon_ || village_)
+            && villageMenu_ == VillageMenu::None) {
 
             int mapPixW, mapPixH;
             if (hudLayout_ == HudLayout::Sidebar) {
@@ -428,9 +450,9 @@ void Game::run()
                                   zCellW, zCellH, zFont, zFontH);
             mapScr.clear();
 
-            std::vector<MapEntity> zEntities;
-            {
+            if (dungeon_) {
                 auto acc = dungeon_->lock();
+                std::vector<MapEntity> zEntities;
                 for (const auto& we : acc.enemies())
                     if (we.alive)
                         zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
@@ -441,8 +463,8 @@ void Game::run()
                     zEntities.push_back({acc.lockedDoorPos(), '+', 1, false});
                 if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
                     zEntities.push_back({acc.stairsPos(), '>', 3, true, true});
-                if (acc.shopExists())
-                    zEntities.push_back({acc.shopMerchantPos(), '$', 4, true});
+                if (acc.stairsUpExists() && (acc.lockedDoorOpen() || !acc.lockedDoorExists()))
+                    zEntities.push_back({acc.stairsUpPos(), '^', 4, true, true});
 
                 std::vector<Position> zTorchPos;
                 for (const auto& t : acc.torches()) {
@@ -455,10 +477,17 @@ void Game::run()
                                    acc.map(), zEntities, zTorchPos,
                                    Renderer::colorForPlayerClass(player_->getClass()),
                                    player_->getDungeonFloor());
+            } else if (village_) {
+                Renderer::drawMap(mapScr, 0, 0,
+                                   mapScr.cols(), mapScr.rows(),
+                                   village_->map, villageEntities(*village_),
+                                   villageTorches(*village_),
+                                   Renderer::colorForPlayerClass(player_->getClass()),
+                                   player_->getDungeonFloor(), true);
             }
 
-             mapScr.render(offX + cellW, offY + cellH);
-         }
+            mapScr.render(offX + cellW, offY + cellH);
+        }
 
         EndTextureMode();
 
@@ -572,8 +601,29 @@ void Game::run()
             int pixelY = offY + mapPixelH - (5 * cellH) - msgPixelH;
 
             Color yellowBg = {255, 230, 60, 255};
-            DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
+        DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
 
+            Color blackFg = {0, 0, 0, 255};
+            DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
+        }
+
+        // Mensaje del pueblo (Raylib directo, encima de todo)
+        if (village_ && !villageMessage_.empty() && GetTime() < villageMessageEndTime_) {
+            std::string msgText = " " + villageMessage_ + " ";
+            int msgPixelW = (int)MeasureTextEx(font, msgText.c_str(), (float)fontSize, 0).x;
+            int msgPixelH = cellH;
+            int mapPixelW, mapPixelH;
+            if (hudLayout_ == HudLayout::Sidebar) {
+                mapPixelW = (cols - kSidebarW - 1) * cellW;
+                mapPixelH = rows * cellH;
+            } else {
+                mapPixelW = cols * cellW;
+                mapPixelH = (rows - kHudBarH) * cellH;
+            }
+            int pixelX = offX + (mapPixelW - msgPixelW) / 2;
+            int pixelY = offY + mapPixelH - (5 * cellH) - msgPixelH;
+            Color yellowBg = {255, 230, 60, 255};
+            DrawRectangle(pixelX, pixelY, msgPixelW, msgPixelH, yellowBg);
             Color blackFg = {0, 0, 0, 255};
             DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
         }
@@ -697,6 +747,9 @@ void Game::dispatchInput(int key)
             inputSettings(key);
             break;
         }
+        break;
+    case GameState::Village:
+        inputVillage(key);
         break;
     case GameState::Exploration:
     {
@@ -829,19 +882,11 @@ void Game::dispatchInput(int key)
         if (nx == pos.x && ny == pos.y)
             break;
 
-        // Merchant tile → open shop
+        // Validar que el destino sea caminable
         {
             auto acc = dungeon_->lock();
             if (!acc.isWalkable(nx, ny))
                 break;
-            if (acc.shopExists() && nx == acc.shopMerchantPos().x && ny == acc.shopMerchantPos().y)
-            {
-                generateShopStock();
-                shopSelection_ = 0;
-                dungeon_->message.clear();
-                setState(GameState::Shop);
-                break;
-            }
         }
 
         // Locked door blocks movement
@@ -904,11 +949,16 @@ void Game::dispatchInput(int key)
 
         // Stairs on new tile
         {
-            auto acc = dungeon_->lock();
-            if ((!acc.lockedDoorExists() || acc.lockedDoorOpen()) &&
-                acc.stairsPos().x == nx && acc.stairsPos().y == ny)
+            bool descend = false;
+            bool victory = false;
             {
-                if (player_->getDungeonFloor() >= 20) {
+                auto acc = dungeon_->lock();
+                descend = (!acc.lockedDoorExists() || acc.lockedDoorOpen()) &&
+                    acc.stairsPos().x == nx && acc.stairsPos().y == ny;
+                victory = descend && player_->getDungeonFloor() >= 20;
+            }
+            if (descend) {
+                if (victory) {
                     victory_ = true;
                     setState(GameState::GameOver);
                 } else {
@@ -919,6 +969,23 @@ void Game::dispatchInput(int key)
                     dungeon_->messageEndTime = GetTime() + 2.0;
                     saveGame();
                 }
+            }
+        }
+
+        // Stairs up → volver al pueblo (solo con el piso libre de monstruos)
+        {
+            bool goVillage = false;
+            {
+                auto acc = dungeon_->lock();
+                goVillage = acc.stairsUpExists() &&
+                    (acc.lockedDoorOpen() || !acc.lockedDoorExists()) &&
+                    acc.stairsUpPos().x == nx && acc.stairsUpPos().y == ny;
+            }
+            if (goVillage) {
+                saveGame();
+                setState(GameState::Village);
+                villageMessage_ = "Regresas al pueblo.";
+                villageMessageEndTime_ = GetTime() + 2.0;
             }
         }
         break;
@@ -1180,7 +1247,9 @@ void Game::inputHudSelect(int key)
         }
         initBestiary();
         initQuests();
-        setState(GameState::Exploration);
+        setState(GameState::Village);
+        villageMessage_ = "Bienvenido a la aldea, " + playerName_ + ".";
+        villageMessageEndTime_ = GetTime() + 3.0;
         break;
     }
     }
@@ -1307,8 +1376,8 @@ void Game::render(TerminalScreen &scr)
                     entities.push_back({acc.lockedDoorPos(), '+', 1, false});
                 if (!acc.lockedDoorExists() || acc.lockedDoorOpen())
                     entities.push_back({acc.stairsPos(), '>', 3, true, true});
-                if (acc.shopExists())
-                    entities.push_back({acc.shopMerchantPos(), '$', 4, true});
+                if (acc.stairsUpExists() && (acc.lockedDoorOpen() || !acc.lockedDoorExists()))
+                    entities.push_back({acc.stairsUpPos(), '^', 4, true, true});
 
                 std::vector<Position> torchPos;
                 for (const auto& t : acc.torches()) {
@@ -1321,6 +1390,19 @@ void Game::render(TerminalScreen &scr)
                 scrollTick_++;
              }
          }
+        break;
+    case GameState::Village:
+        if (village_ && player_)
+        {
+            if (villageMenu_ != VillageMenu::None) {
+                Renderer::drawVillageMenu(scr, villageMenu_, villageSelection_,
+                                          *player_, player_->getIncursions());
+            } else {
+                Renderer::drawExploration(scr, village_->map, *player_, hudLayout_,
+                                          villageEntities(*village_), villageTorches(*village_),
+                                          "", mapZoom_, scrollTick_, true);
+            }
+        }
         break;
     case GameState::Combat:
         if (combat_ && player_ && dungeon_)
@@ -1344,7 +1426,7 @@ void Game::render(TerminalScreen &scr)
     case GameState::Shop:
         if (player_)
             Renderer::drawShop(scr, shopStock_, shopSelection_,
-                               *player_, dungeon_ ? dungeon_->message : "",
+                               *player_, dungeon_ ? dungeon_->message : villageMessage_,
                                shopSellMode_, shopSellSelection_);
         break;
     case GameState::Inventory:
@@ -1419,7 +1501,7 @@ void Game::setState(GameState newState)
     {
         // Guardar antes de limpiar (permitir continuar después)
         // No guardar si venimos de GameOver (muerte/victoria) — ya se borró el save
-        if (state_.load() != GameState::GameOver && player_ && dungeon_)
+        if (state_.load() != GameState::GameOver && player_ && (dungeon_ || village_))
             saveGame();
         pendingCombatEnemy_.store(-1);
         victory_ = false;
@@ -1431,7 +1513,23 @@ void Game::setState(GameState newState)
         playerName_.clear();
         player_.reset();
         dungeon_.reset();
+        village_.reset();
         combat_.reset();
+    }
+
+    if (newState == GameState::Village)
+    {
+        // Pueblo hub: no hay mazmorra ni IA activa mientras estás aquí.
+        pendingCombatEnemy_.store(-1);
+        mimicCombat_ = false;
+        combat_.reset();
+        dungeon_.reset();
+        villageMenu_ = VillageMenu::None;
+        villageMessage_.clear();
+        villageMessageEndTime_ = 0.0;
+        village_ = std::make_unique<VillageLayout>(buildVillage());
+        if (player_)
+            village_->map.setPlayerPos(village_->spawn.x, village_->spawn.y);
     }
 
     if (newState == GameState::Exploration)
@@ -1439,14 +1537,14 @@ void Game::setState(GameState newState)
         pendingCombatEnemy_.store(-1);
         mimicCombat_ = false;
         combat_.reset();
-        shopStock_.clear();  // el stock se regenera la primera vez que se entra a la tienda del nuevo piso
-
+        shopStock_.clear();  // el stock del pueblo se regenera al empezar una incursión
 
         int floor = player_ ? player_->getDungeonFloor() : 1;
         PlayerClass cls = player_ ? player_->getClass() : PlayerClass::Warrior;
+        int inc = player_ ? player_->getIncursions() : 0;
 
         dungeon_ = std::make_unique<Dungeon>();
-        dungeon_->generate(floor, cls);
+        dungeon_->generate(floor, cls, inc);
     }
 
     if (newState == GameState::Combat && player_ && dungeon_)
@@ -1458,8 +1556,9 @@ void Game::setState(GameState newState)
         // Si combatWorldEnemyIdx_ == -1 (caso raro/debug) se usan dos enemigos por defecto.
         std::vector<std::unique_ptr<Enemy>> enemies;
         int fl = player_ ? player_->getDungeonFloor() : 1;
+        int inc = player_ ? player_->getIncursions() : 1;
         if (mimicCombat_) {
-            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Mimic, fl));
+            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Mimic, fl, inc));
             mimicCombat_ = false;
         } else if (combatWorldEnemyIdx_ >= 0)
         {
@@ -1481,7 +1580,7 @@ void Game::setState(GameState newState)
 
                 for (int idx : combatEnemyIndices_) {
                     bool boss = worldEnemies[idx].isBoss;
-                    auto e = DungeonPopulator::makeEnemy(worldEnemies[idx].type, fl, boss);
+                    auto e = DungeonPopulator::makeEnemy(worldEnemies[idx].type, fl, inc, boss);
                     if (!boss && e->getType() == EnemyType::Spider && (std::rand() % 100) < 1)
                         e->setName("Ariatña");
                     enemies.push_back(std::move(e));
@@ -1490,8 +1589,8 @@ void Game::setState(GameState newState)
         }
         else
         {
-            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Goblin, fl));
-            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Skeleton, fl));
+            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Goblin, fl, inc));
+            enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Skeleton, fl, inc));
         }
         combat_ = std::make_unique<CombatSystem>(*player_, std::move(enemies));
 
@@ -1549,12 +1648,13 @@ void Game::openChest(WorldChest& chest)
 
 void Game::returnToExploration()
 {
-    // Return to the same map without regenerating — just clear combat state
+    // Vuelve al mapa sin regenerar, limpiando el estado de combate.
+    // Si no hay mazmorra activa (estamos en el pueblo) se regresa al pueblo.
     combat_.reset();
     combatWorldEnemyIdx_ = -1;
     combatEnemyIndices_.clear();
     if (dungeon_) dungeon_->message.clear();
-    state_.store(GameState::Exploration);
+    state_.store(dungeon_ ? GameState::Exploration : GameState::Village);
 }
 
 void Game::inputInventory(int key)
@@ -1614,7 +1714,7 @@ void Game::inputInventory(int key)
     case 27:
     case 'q':
     case 'Q':
-        state_.store(GameState::Exploration, std::memory_order_release);
+        state_.store(dungeon_ ? GameState::Exploration : GameState::Village, std::memory_order_release);
         break;
     }
 }
@@ -1631,7 +1731,7 @@ void Game::inputQuestLog(int key)
     case 27:
     case 'q':
     case 'Q':
-        state_ = GameState::Exploration;
+        state_ = dungeon_ ? GameState::Exploration : GameState::Village;
         break;
     }
 }
@@ -1647,8 +1747,167 @@ void Game::inputBestiary(int key)
     case 27:
     case 'q':
     case 'Q':
-        state_ = GameState::Exploration;
+        state_ = dungeon_ ? GameState::Exploration : GameState::Village;
         break;
+    }
+}
+
+void Game::inputVillage(int key)
+{
+    if (!player_ || !village_) return;
+
+    const int inc = std::max(1, player_->getIncursions());
+
+    // Submenú de forja: mejorar arma/armadura equipada
+    if (villageMenu_ == VillageMenu::Forge)
+    {
+        switch (key)
+        {
+        case 'w':
+        case 's':
+            navV(key, villageSelection_, 2);
+            break;
+        case '\n':
+        {
+            const bool weaponSlot = (villageSelection_ == 0);
+            const auto& opt = weaponSlot ? player_->getEquippedWeapon()
+                                         : player_->getEquippedArmor();
+            if (!opt) {
+                showMessage(weaponSlot ? "No tienes arma equipada."
+                                       : "No tienes armadura equipada.");
+                break;
+            }
+            int cost = 50 + 25 * opt->statBonus + 20 * (inc - 1);
+            if (player_->getCoins() < cost) {
+                showMessage("No tienes suficiente oro para forjar.");
+                break;
+            }
+            player_->addCoins(-cost);
+            bool ok = weaponSlot ? player_->upgradeEquippedWeapon()
+                                 : player_->upgradeEquippedArmor();
+            if (ok)
+                showMessage(weaponSlot ? "Forjas: +1 ATK!"
+                                       : "Forjas: +1 DEF!");
+            break;
+        }
+        case 27:
+        case 'q':
+        case 'Q':
+            villageMenu_ = VillageMenu::None;
+            break;
+        }
+        return;
+    }
+
+    // Submenú de entrenamiento: gastar oro en mejoras permanentes
+    if (villageMenu_ == VillageMenu::Training)
+    {
+        const int costs[4] = {60 + 20 * inc, 80 + 30 * inc, 70 + 25 * inc, 50 + 20 * inc};
+        switch (key)
+        {
+        case 'w':
+        case 's':
+            navV(key, villageSelection_, 4);
+            break;
+        case '\n':
+        {
+            int sel = villageSelection_;
+            if (player_->getCoins() < costs[sel]) {
+                showMessage("No tienes suficiente oro para entrenar.");
+                break;
+            }
+            player_->addCoins(-costs[sel]);
+            switch (sel) {
+            case 0: player_->trainHealth(10); showMessage("Entrenas: +10 de vida maxima!"); break;
+            case 1: player_->trainAttack(2);  showMessage("Entrenas: +2 de ataque!");       break;
+            case 2: player_->trainDefense(1); showMessage("Entrenas: +1 de defensa!");      break;
+            case 3: player_->trainMana(5);    showMessage("Entrenas: +5 de mana maximo!");  break;
+            }
+            break;
+        }
+        case 27:
+        case 'q':
+        case 'Q':
+            villageMenu_ = VillageMenu::None;
+            break;
+        }
+        return;
+    }
+
+    // Caminando por el pueblo
+    if (key == 27) {
+        menuSelection_ = 0;
+        setState(GameState::QuitDialog);
+        return;
+    }
+    if (key == 'i' || key == 'I') { inventorySelection_ = 0; setState(GameState::Inventory); return; }
+    if (key == 'm' || key == 'M') { questLogSelection_ = 0;  setState(GameState::QuestLog);  return; }
+    if (key == 'b' || key == 'B') { bestiarySelection_ = 0;  setState(GameState::Bestiary);  return; }
+
+    if (key == 'p' || key == 'P') {
+        int healed = player_->useConsumable();
+        if (healed > 0)               showMessage("Usas una poción: +" + std::to_string(healed) + " HP!");
+        else if (player_->countConsumables() > 0) showMessage("Ya tienes la vida al máximo!");
+        else                          showMessage("No tienes pociones.");
+        return;
+    }
+    if (key == 'r' || key == 'R') {
+        bool used = false;
+        for (const auto& item : player_->getInventory().items()) {
+            if (item.type == ItemType::Consumable && item.statBonus == 0) {
+                int restored = player_->getMaxMana() / 2;
+                player_->restoreMana(restored);
+                player_->getInventory().removeItem(item.name);
+                std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
+                showMessage("Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!");
+                used = true;
+                break;
+            }
+        }
+        if (!used)
+            showMessage(player_->getClass() == PlayerClass::Warrior
+                ? "No tienes cerveza." : "No tienes poción de mana.");
+        return;
+    }
+
+    // Movimiento
+    Position pos = village_->map.getPlayerPos();
+    int nx = pos.x, ny = pos.y;
+    if      (key == 'w') ny--;
+    else if (key == 's') ny++;
+    else if (key == 'a') nx--;
+    else if (key == 'd') nx++;
+    else return;
+
+    if (!village_->map.isWalkable(nx, ny)) return;
+    village_->map.setPlayerPos(nx, ny);
+
+    if (nx == village_->shop.x && ny == village_->shop.y) {
+        generateShopStock();
+        shopSelection_ = 0;
+        shopSellMode_ = false;
+        setState(GameState::Shop);
+        return;
+    }
+    if (nx == village_->forge.x && ny == village_->forge.y) {
+        villageSelection_ = player_->getEquippedWeapon() ? 0
+                          : (player_->getEquippedArmor() ? 1 : 0);
+        villageMenu_ = VillageMenu::Forge;
+        return;
+    }
+    if (nx == village_->training.x && ny == village_->training.y) {
+        villageSelection_ = 0;
+        villageMenu_ = VillageMenu::Training;
+        return;
+    }
+    if (nx == village_->stairsDown.x && ny == village_->stairsDown.y) {
+        player_->beginIncursion();
+        setState(GameState::Exploration);
+        dungeon_->message = "Incursión " + std::to_string(player_->getIncursions()) +
+                            ": desciendes al Tenebrarium...";
+        dungeon_->messageEndTime = GetTime() + 2.0;
+        saveGame();
+        return;
     }
 }
 
@@ -1657,7 +1916,7 @@ void Game::inputShop(int key)
     int n = static_cast<int>(shopStock_.size());
     if (n == 0)
     {
-        state_ = GameState::Exploration;
+        state_ = dungeon_ ? GameState::Exploration : GameState::Village;
         return;
     }
 
@@ -1698,11 +1957,8 @@ void Game::inputShop(int key)
                     int sellPrice = item.value / 2;
                     player_->addCoins(sellPrice);
                     player_->getInventory().removeItem(item.name);
-                    if (dungeon_) {
-                        dungeon_->message = "Vendiste " + item.name + " por " +
-                                            std::to_string(sellPrice) + " monedas!";
-                        dungeon_->messageEndTime = GetTime() + 2.0;
-                    }
+                    showMessage("Vendiste " + item.name + " por " +
+                                std::to_string(sellPrice) + " monedas!");
                     if (shopSellSelection_ >= static_cast<int>(inv.size()))
                         shopSellSelection_ = std::max(0, static_cast<int>(inv.size()) - 1);
                 }
@@ -1717,7 +1973,7 @@ void Game::inputShop(int key)
         case 'q':
         case 'Q':
             shopSellMode_ = false;
-            state_ = GameState::Exploration;
+            state_ = dungeon_ ? GameState::Exploration : GameState::Village;
             break;
         }
         return;
@@ -1734,15 +1990,12 @@ void Game::inputShop(int key)
         auto &s = shopStock_[shopSelection_];
         if (s.sold)
         {
-            if (dungeon_) dungeon_->message = "Ya vendido.";
+            showMessage("Ya vendido.");
             break;
         }
         if (player_->getCoins() < s.price)
         {
-            if (dungeon_) {
-                dungeon_->message = "No tienes suficiente oro.";
-                dungeon_->messageEndTime = GetTime() + 2.0;
-            }
+            showMessage("No tienes suficiente oro.");
             break;
         }
         player_->addCoins(-s.price);
@@ -1751,10 +2004,7 @@ void Game::inputShop(int key)
         else
             player_->pickupItem(s.item);
         s.sold = true;
-        if (dungeon_) {
-            dungeon_->message = "Compraste: " + s.item.name + "!";
-            dungeon_->messageEndTime = GetTime() + 2.0;
-        }
+        showMessage("Compraste: " + s.item.name + "!");
         break;
     }
     case 'v':
@@ -1777,21 +2027,21 @@ void Game::inputShop(int key)
     case 27:
     case 'q':
     case 'Q':
-        state_ = GameState::Exploration;
+        state_ = dungeon_ ? GameState::Exploration : GameState::Village;
         break;
     }
 }
 
 void Game::generateShopStock()
 {
-    // Stock lazy: se genera la primera vez que el jugador entra a la tienda del piso.
-    // shopStock_.clear() se llama en setState(Exploration) al cambiar de piso.
+    // Stock lazy: se genera la primera vez que se entra a la tienda del pueblo.
+    // shopStock_.clear() se llama en setState(Exploration) al empezar una incursión.
     if (!shopStock_.empty())
         return;
     PlayerClass cls = player_->getClass();
-    int shopFloor = player_ ? player_->getDungeonFloor() : 1;
-    Item p1 = DungeonPopulator::pickPotion(shopFloor);
-    Item p2 = DungeonPopulator::pickPotion(shopFloor);
+    int tier = std::max(1, player_->getIncursions());
+    Item p1 = DungeonPopulator::pickPotion(tier);
+    Item p2 = DungeonPopulator::pickPotion(tier);
     shopStock_.push_back({p1, p1.value, false});
     shopStock_.push_back({p2, p2.value, false});
     if (cls == PlayerClass::Warrior) {
@@ -1803,54 +2053,15 @@ void Game::generateShopStock()
         manaPot.quantity = 3;
         shopStock_.push_back({manaPot, 8, false});
     }
-    Item bomb = DungeonPopulator::pickBomb(shopFloor);
+    Item bomb = DungeonPopulator::pickBomb(tier);
     bomb.quantity = 3; // Vender en grupos de 3
     shopStock_.push_back({bomb, bomb.value, false});
-    Item shovel = DungeonPopulator::pickShovel(shopFloor);
+    Item shovel = DungeonPopulator::pickShovel(tier);
     shopStock_.push_back({shovel, shovel.value, false});
-    Item w = DungeonPopulator::pickWeapon(cls, shopFloor);
-    shopStock_.push_back({w, w.value + shopFloor * 5, false});
-    Item a = DungeonPopulator::pickArmor(cls, shopFloor);
-    shopStock_.push_back({a, a.value + shopFloor * 5, false});
-}
-
-bool Game::isInShopRoom(Dungeon::Lock& acc, Position p) const
-{
-    return acc.isInShopRoom(p);
-}
-
-void Game::useBomb(Dungeon::Lock& acc)
-{
-    for (const auto &item : player_->getInventory().items())
-    {
-        if (item.type == ItemType::Bomb)
-        {
-            player_->getInventory().removeItem(item.name);
-            const int sdx[] = {0, 0, -1, 1};
-            const int sdy[] = {-1, 1, 0, 0};
-            Position pos = acc.playerPos();
-            for (int i = 0; i < 4; i++)
-            {
-                int ax = pos.x + sdx[i], ay = pos.y + sdy[i];
-                if (acc.isSecretWall(ax, ay) && acc.map().destroyTile(ax, ay))
-                {
-                    dungeon_->explosionActive = true;
-                    dungeon_->explosionEndTime = GetTime() + 0.5;
-                    dungeon_->explosionX = ax;
-                    dungeon_->explosionY = ay;
-                    acc.map().updateFov();
-                    dungeon_->message = "La bomba destruye la pared!";
-                    dungeon_->messageEndTime = GetTime() + 2.0;
-                    return;
-                }
-            }
-            dungeon_->message = "No hay paredes secretas adyacentes.";
-            dungeon_->messageEndTime = GetTime() + 2.0;
-            return;
-        }
-    }
-    dungeon_->message = "No tienes bombas.";
-    dungeon_->messageEndTime = GetTime() + 2.0;
+    Item w = DungeonPopulator::pickWeapon(cls, tier);
+    shopStock_.push_back({w, w.value + tier * 5, false});
+    Item a = DungeonPopulator::pickArmor(cls, tier);
+    shopStock_.push_back({a, a.value + tier * 5, false});
 }
 
 void Game::useShovel()
@@ -1898,7 +2109,8 @@ void Game::inputCombat(int key)
                         bestiary_[ei].kills++;
                         bestiary_[ei].discovered = true;
                     }
-                    int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor());
+                    int baseXp = DungeonPopulator::xpForEnemy(we.type, player_->getDungeonFloor(),
+                                                  player_->getIncursions());
                     int xpGained = we.isBoss ? baseXp * 5 : baseXp;
                     player_->gainXp(xpGained);
                     we.alive = false;
@@ -2041,5 +2253,15 @@ void Game::loadSettings() {
             try { shaderEnabled_ = std::stoi(line.substr(14)) != 0; }
             catch (...) {}
         }
+    }
+}
+
+void Game::showMessage(const std::string& msg, double duration) {
+    if (dungeon_) {
+        dungeon_->message = msg;
+        dungeon_->messageEndTime = GetTime() + duration;
+    } else {
+        villageMessage_ = msg;
+        villageMessageEndTime_ = GetTime() + duration;
     }
 }

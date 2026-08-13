@@ -12,6 +12,7 @@
 #include "entities/Enemy.hpp"
 #include "combat/CombatSystem.hpp"
 #include "world/Dungeon.hpp"
+#include "world/Village.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -53,6 +54,14 @@ private:
     std::unique_ptr<Player>        player_;
     std::unique_ptr<Dungeon>       dungeon_;
     std::unique_ptr<CombatSystem>  combat_;
+
+    // Pueblo hub (estado Village). villageMenu_ controla el submenú abierto
+    // (forja / entrenamiento) mientras el jugador camina por el mapa.
+    std::unique_ptr<VillageLayout> village_;
+    VillageMenu  villageMenu_{VillageMenu::None};
+    int          villageSelection_{0};
+    std::string  villageMessage_;
+    double       villageMessageEndTime_{0.0};
     bool                           combatShowingArts_;  // true = submenú de habilidades abierto
     int                            combatArtSelection_;
     // Flash visual al impactar: índice del enemigo que parpadea y hasta cuándo
@@ -123,10 +132,11 @@ private:
     void inputQuestLog(int key);
     void inputBestiary(int key);
     void inputSettings(int key);
+void inputVillage(int key);
     void generateShopStock();
-    bool isInShopRoom(Dungeon::Lock& acc, Position p) const;
-    void useBomb(Dungeon::Lock& acc);
     void useShovel();
+    // Enruta un mensaje transitorio al mapa activo (mazmorra o pueblo).
+    void showMessage(const std::string& msg, double duration = 2.0);
 
     void initQuests();
     void initBestiary();
