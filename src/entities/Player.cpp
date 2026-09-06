@@ -26,7 +26,7 @@ void Player::gainXp(int amount) {
 
 void Player::levelUp() {
     level_++;
-    xpToNextLevel_ = static_cast<int>(xpToNextLevel_ * 1.5);  // umbral crece x1.5 cada nivel
+    xpToNextLevel_ = std::min(999999, static_cast<int>(xpToNextLevel_ * 1.5));  // umbral crece x1.5 cada nivel
     maxHp_ += 10;
     hp_ = maxHp_;   // curación completa al subir nivel
     baseAttack_  += 2;

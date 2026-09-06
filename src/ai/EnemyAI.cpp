@@ -10,10 +10,14 @@ void EnemyAI::run(Game& g)
         if (!g.aiRunning_) break;
 
         GameState s = g.state_.load(std::memory_order_acquire);
-        if ((s != GameState::Exploration && s != GameState::Shop) || !g.dungeon_)
+        if ((s != GameState::Exploration && s != GameState::Shop))
             continue;
 
-        int idx = g.dungeon_->aiTick();
+        auto dungeon = g.dungeon_;
+        if (!dungeon)
+            continue;
+
+        int idx = dungeon->aiTick();
         if (idx >= 0)
             g.pendingCombatEnemy_.store(idx, std::memory_order_release);
 

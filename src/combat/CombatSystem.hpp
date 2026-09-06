@@ -57,7 +57,7 @@ public:
     void doDefend();            // 1 PA — Defending status for 1 enemy turn
     void doUseItem();
     void doEndTurn();           // 0 PA — force enemy turn
-    void doFlee();              // 3 PA — 70% chance to escape
+    void doFlee();              // 3 PA — 45% chance to escape
     void doLoot();              // 1 PA — attempt to loot current target, 3 outcomes
     void cycleTarget();         // TAB — cycle to next alive enemy
     int  getLootChance()  const;

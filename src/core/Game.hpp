@@ -51,9 +51,9 @@ private:
 
     HudLayout     hudLayout_;   // Sidebar o Bottom — elegido en HudSelect
 
-    std::unique_ptr<Player>        player_;
-    std::unique_ptr<Dungeon>       dungeon_;
-    std::unique_ptr<CombatSystem>  combat_;
+    std::unique_ptr<Player>              player_;
+    std::shared_ptr<Dungeon>             dungeon_;
+    std::unique_ptr<CombatSystem>        combat_;
 
     // Pueblo hub (estado Village). villageMenu_ controla el submenú abierto
     // (forja / entrenamiento) mientras el jugador camina por el mapa.

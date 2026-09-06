@@ -41,7 +41,7 @@ void GameSerializer::wstr(std::ostream& o, const std::string& s)
 bool GameSerializer::rstr(std::istream& in, std::string& s)
 {
     size_t n;
-    if (!(in >> n)) return false;
+    if (!(in >> n) || n > 100000) return false;
     char sp;
     in.get(sp);
     s.resize(n);
@@ -62,6 +62,8 @@ bool GameSerializer::ritem(std::istream& in, Item& item, int version)
         return false;
     int t;
     if (!(in >> t >> item.value >> item.slots >> item.statBonus))
+        return false;
+    if (t < 0 || t > static_cast<int>(ItemType::Bomb))
         return false;
     item.type = static_cast<ItemType>(t);
     if (version >= 2) {
@@ -285,7 +287,7 @@ bool GameSerializer::load(Game& g)
     // Recreate dungeon (solo si el save estaba en la mazmorra)
     g.dungeon_.reset();
     if (inDungeon)
-        g.dungeon_ = std::make_unique<Dungeon>();
+        g.dungeon_ = std::make_shared<Dungeon>();
 
     if (inDungeon)
     {
@@ -325,6 +327,8 @@ bool GameSerializer::load(Game& g)
                         >> type >> alive >> boss))
                     return false;
                 we.type   = static_cast<EnemyType>(type);
+                if (type < 0 || type >= kBestiaryEntryCount)
+                    we.type = EnemyType::Goblin;
                 we.alive  = alive;
                 we.isBoss = boss;
             }

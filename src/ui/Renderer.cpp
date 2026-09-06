@@ -155,7 +155,7 @@ void Renderer::drawVSep(TerminalScreen& scr, int col, int row, int h, Color c) {
 
 void Renderer::drawCentered(TerminalScreen& scr, int row, int col0, int w,
                              const std::string& str, Color fg, uint8_t flags) {
-    int len = static_cast<int>(str.size());
+    int len = utf8Len(str);
     int x   = col0 + std::max(0, (w - len) / 2);
     scr.putStr(x, row, str, fg, COL_BLACK, flags);
 }
@@ -1122,16 +1122,6 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         er++;
     }
 
-    // Log (derecha)
-    drawVSep(scr, halfW, 0, rows - 8);
-    int lr = 1;
-    scr.putStr(halfW + 2, lr++, "LOG", COL_WHITE, COL_BLACK, CELL_BOLD);
-    drawHSep(scr, halfW + 1, lr++, halfW - 1);
-    const auto& log = combat.getLog();
-    int logStart = std::max(0, static_cast<int>(log.size()) - (rows - 12));
-    for (int i = logStart; i < static_cast<int>(log.size()); i++)
-        scr.putStr(halfW + 2, lr++, log[i], logColor(log[i]));
-
     // Bottom bar — calculate start row dynamically so content never overflows
     int ap = combat.getCurrentAp(), maxAp = combat.getMaxAp();
     std::string apStr = "PA: ";
@@ -1156,6 +1146,16 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             bottomRows += 1;
     }
     int br = std::max(0, rows - bottomRows);
+
+    // Log (derecha)
+    drawVSep(scr, halfW, 0, rows - 8);
+    int lr = 1;
+    scr.putStr(halfW + 2, lr++, "LOG", COL_WHITE, COL_BLACK, CELL_BOLD);
+    drawHSep(scr, halfW + 1, lr++, halfW - 1);
+    const auto& log = combat.getLog();
+    int logStart = std::max(0, static_cast<int>(log.size()) - (rows - 12));
+    for (int i = logStart; i < static_cast<int>(log.size()) && lr < br - 1; i++)
+        scr.putStr(halfW + 2, lr++, log[i], logColor(log[i]));
 
     drawHSep(scr, 0, br++, cols);
     scr.putStr(1, br, player.getName() + " [" + className(player) + "]",

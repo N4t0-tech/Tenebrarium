@@ -367,6 +367,10 @@ void Game::run()
                 pendingCombatEnemy_.store(-1);
                 setState(GameState::Combat);
             }
+            else if (combatIdx >= 0)
+            {
+                pendingCombatEnemy_.store(-1);
+            }
         }
 
         processInput();
@@ -883,16 +887,13 @@ void Game::dispatchInput(int key)
         if (nx == pos.x && ny == pos.y)
             break;
 
-        // Validar que el destino sea caminable
+        // All movement checks under a single lock to prevent AI race conditions
         {
             auto acc = dungeon_->lock();
+
             if (!acc.isWalkable(nx, ny))
                 break;
-        }
 
-        // Locked door blocks movement
-        {
-            auto acc = dungeon_->lock();
             if (acc.lockedDoorExists() && !acc.lockedDoorOpen() &&
                 acc.lockedDoorPos().x == nx && acc.lockedDoorPos().y == ny)
             {
@@ -900,12 +901,8 @@ void Game::dispatchInput(int key)
                 dungeon_->messageEndTime = GetTime() + 2.0;
                 break;
             }
-        }
 
-        // Enemy collision → combat
-        bool triggered = false;
-        {
-            auto acc = dungeon_->lock();
+            bool triggered = false;
             int idx = 0;
             for (auto &we : acc.enemies())
             {
@@ -922,11 +919,11 @@ void Game::dispatchInput(int key)
                 acc.setPlayerPos(nx, ny);
                 acc.map().updateFov();
             }
-        }
-        if (triggered)
-        {
-            setState(GameState::Combat);
-            break;
+            if (triggered)
+            {
+                setState(GameState::Combat);
+                break;
+            }
         }
 
         // Chest on new tile
@@ -1546,7 +1543,7 @@ void Game::setState(GameState newState)
         PlayerClass cls = player_ ? player_->getClass() : PlayerClass::Warrior;
         int inc = player_ ? player_->getIncursions() : 0;
 
-        dungeon_ = std::make_unique<Dungeon>();
+        dungeon_ = std::make_shared<Dungeon>();
         dungeon_->generate(floor, cls, inc);
     }
 
@@ -1698,15 +1695,16 @@ void Game::inputInventory(int key)
             {
                 int healed = std::min(item.statBonus, player_->getMaxHp() - player_->getHp());
                 if (healed > 0) {
+                    std::string itemName = item.name;
                     player_->heal(healed);
-                    player_->getInventory().removeItem(item.name);
+                    player_->getInventory().removeItem(itemName);
                     if (dungeon_) {
-                        dungeon_->message = "Usas " + item.name + ": +" + std::to_string(healed) + " HP!";
+                        dungeon_->message = "Usas " + itemName + ": +" + std::to_string(healed) + " HP!";
                         dungeon_->messageEndTime = GetTime() + 2.0;
                     }
                 }
             }
-            if (item.name == "Pala")
+            if (bagIdx < bagSize && player_->getInventory().items()[bagIdx].name == "Pala")
             {
                 useShovel();
                 return;
@@ -1958,9 +1956,10 @@ void Game::inputShop(int key)
                 if (item.type == ItemType::Weapon || item.type == ItemType::Armor)
                 {
                     int sellPrice = item.value / 2;
+                    std::string itemName = item.name;
                     player_->addCoins(sellPrice);
-                    player_->getInventory().removeItem(item.name);
-                    showMessage("Vendiste " + item.name + " por " +
+                    player_->getInventory().removeItem(itemName);
+                    showMessage("Vendiste " + itemName + " por " +
                                 std::to_string(sellPrice) + " monedas!");
                     if (shopSellSelection_ >= static_cast<int>(inv.size()))
                         shopSellSelection_ = std::max(0, static_cast<int>(inv.size()) - 1);
@@ -2122,9 +2121,10 @@ void Game::inputCombat(int key)
                     if (std::rand() % 100 < lootChance)
                     {
                         Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
-                        player_->getInventory().addItem(pot);
-                        if (!lootMsg.empty()) lootMsg += ", ";
-                        lootMsg += pot.name;
+                        if (player_->getInventory().addItem(pot)) {
+                            if (!lootMsg.empty()) lootMsg += ", ";
+                            lootMsg += pot.name;
+                        }
                     }
                 }
                 if (!lootMsg.empty()) {
