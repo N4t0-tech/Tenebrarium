@@ -29,7 +29,7 @@ static std::vector<MapEntity> villageEntities(const VillageLayout& v) {
         {v.shop,       'T', 2, true, true},
         {v.forge,      'F', 9, true, true},
         {v.training,   'E', 3, true, true},
-        {v.stairsDown, 'v', 6, true, true},
+        {v.stairsDown, 0x2193, 6, true, true},
     };
     for (const Position& p : v.lanterns)
         ents.push_back({p, 'i', 9, true, true});
@@ -478,12 +478,13 @@ void Game::run()
                                    Renderer::colorForPlayerClass(player_->getClass()),
                                    player_->getDungeonFloor());
             } else if (village_) {
+                float nf = static_cast<float>((1.0 - std::cos(2.0 * M_PI * GetTime() / 120.0)) * 0.5);
                 Renderer::drawMap(mapScr, 0, 0,
                                    mapScr.cols(), mapScr.rows(),
                                    village_->map, villageEntities(*village_),
                                    villageTorches(*village_),
                                    Renderer::colorForPlayerClass(player_->getClass()),
-                                   player_->getDungeonFloor(), true);
+                                   player_->getDungeonFloor(), true, nf);
             }
 
             mapScr.render(offX + cellW, offY + cellH);
@@ -1394,13 +1395,15 @@ void Game::render(TerminalScreen &scr)
     case GameState::Village:
         if (village_ && player_)
         {
+            // Ciclo día/noche: 120s (60 día + 60 noche), sinusoidal
+            float nightFactor = static_cast<float>((1.0 - std::cos(2.0 * M_PI * GetTime() / 120.0)) * 0.5);
             if (villageMenu_ != VillageMenu::None) {
                 Renderer::drawVillageMenu(scr, villageMenu_, villageSelection_,
                                           *player_, player_->getIncursions());
             } else {
                 Renderer::drawExploration(scr, village_->map, *player_, hudLayout_,
                                           villageEntities(*village_), villageTorches(*village_),
-                                          "", mapZoom_, scrollTick_, true);
+                                          "", mapZoom_, scrollTick_, true, nightFactor);
             }
         }
         break;

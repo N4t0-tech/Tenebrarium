@@ -21,6 +21,7 @@ static constexpr Color COL_MAGENTA = { 220,  80, 255, 255 };
 static constexpr Color COL_DK_GREEN= {  40, 160,  60, 255 };
 static constexpr Color COL_DK_GRAY = { 120, 120, 120, 255 };
 static constexpr Color COL_ORANGE  = { 255, 185,  40, 255 };
+static constexpr Color COL_TORCH   = { 255, 190, 120, 255 };
 static constexpr Color COL_BROWN   = { 169, 112,  52, 255 };
 
 static constexpr Color COL_BLACK   = BLACK;
@@ -195,7 +196,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
                        const std::vector<Position>& torches,
-                       Color playerColor, int floor, bool isVillage) {
+                       Color playerColor, int floor, bool isVillage, float nightFactor) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -229,6 +230,14 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
     static constexpr float FOV_RADIUS = 8.0f;
     float cellAspect = (float)scr.cellH() / scr.cellW();
 
+    auto nightTint = [nightFactor](Color c) -> Color {
+        if (nightFactor <= 0.0f) return c;
+        return { (uint8_t)(c.r * (1.0f - nightFactor * 0.7f)),
+                 (uint8_t)(c.g * (1.0f - nightFactor * 0.7f)),
+                 (uint8_t)((int)c.b + (int)((255 - c.b) * nightFactor * 0.15f)),
+                 c.a };
+    };
+
     // Rellenar todo el viewport con negro frío
     for (int sy = 0; sy < viewH; sy++)
         for (int sx = 0; sx < viewW; sx++)
@@ -245,12 +254,13 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             if (tile.visible) {
                 float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
                 float pixelDist = std::sqrt(dx*dx + dy*dy * cellAspect * cellAspect);
-                float factor = std::max(0.45f, 1.0f - (pixelDist / FOV_RADIUS) * 0.55f);
+                float baseFactor = std::max(0.45f, 1.0f - (pixelDist / FOV_RADIUS) * 0.55f);
+                float factor = isVillage ? (1.0f - nightFactor) + nightFactor * baseFactor : baseFactor;
 
                 // Luz dinámica de antorchas
                 float torchBoost = 0.0f;
                 float torchRadius = isVillage ? 8.0f : 5.0f;
-                float torchIntensity = isVillage ? 0.35f : 0.15f;
+                float torchIntensity = isVillage ? 0.25f : 0.15f;
                 if (!torches.empty()) {
                     auto hasLos = [&](int x1, int y1, int x2, int y2) -> bool {
                         int dx = x2 - x1, dy = y2 - y1;
@@ -281,21 +291,22 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                         }
                     }
                 }
-                float f = std::min(1.0f, factor + torchBoost * torchIntensity);
+                float effectiveTorch = isVillage ? torchBoost * nightFactor : torchBoost;
+                float f = std::min(1.0f, factor + effectiveTorch * torchIntensity);
 
                 auto litBg = [&](Color c) -> Color {
-                    if (!isVillage && torchBoost > 0) {
-                        float w = std::min(1.0f, torchBoost * torchIntensity);
-                        return { (uint8_t)(c.r * (1-w) + COL_ORANGE.r * w),
-                                 (uint8_t)(c.g * (1-w) + COL_ORANGE.g * w),
-                                 (uint8_t)(c.b * (1-w) + COL_ORANGE.b * w), 255 };
+                    if (effectiveTorch > 0) {
+                        float w = std::min(1.0f, effectiveTorch * torchIntensity);
+                        return { (uint8_t)(c.r * (1-w) + COL_TORCH.r * w),
+                                 (uint8_t)(c.g * (1-w) + COL_TORCH.g * w),
+                                 (uint8_t)(c.b * (1-w) + COL_TORCH.b * w), 255 };
                     }
                     return c;
                 };
 
                 // Jugador (dentro del bloque visible para que reciba torchBoost)
                 if (mx == pp.x && my == pp.y) {
-                    Color entBg = isVillage ? Color{tile.fg_r, tile.fg_g, tile.fg_b, 255} : litBg(colFloor);
+                    Color entBg = litBg(isVillage ? nightTint(Color{tile.fg_r, tile.fg_g, tile.fg_b, 255}) : colFloor);
                     scr.put(dc, dr, '@', applyFactor(playerColor, f), entBg, CELL_BOLD);
                     continue;
                 }
@@ -305,9 +316,9 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                     if (ent.pos.x == mx && ent.pos.y == my) {
                         Color ec = applyFactor(colorFromPair(ent.colorPair), f);
                         Color entBg = isVillage
-                            ? ((ent.glyph == 'i')
-                                ? Color{tile.bg_r, tile.bg_g, tile.bg_b, 255}
-                                : Color{tile.fg_r, tile.fg_g, tile.fg_b, 255})
+                            ? litBg((ent.glyph == 'i')
+                                ? nightTint(Color{tile.bg_r, tile.bg_g, tile.bg_b, 255})
+                                : colFloor)
                             : litBg(colFloor);
                         scr.put(dc, dr, ent.glyph, ec, entBg,
                                 ent.bold ? CELL_BOLD : 0);
@@ -324,7 +335,14 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
                 if (isVillage)
                     tileBg = Color{tile.bg_r, tile.bg_g, tile.bg_b, 255};
-                Color tileFg = isVillage ? Color{tile.fg_r, tile.fg_g, tile.fg_b, 255} : colTile;
+                Color tileFg = isVillage
+                    ? nightTint(Color{tile.fg_r, tile.fg_g, tile.fg_b, 255}) : colTile;
+                if (isVillage && effectiveTorch > 0) {
+                    float w = std::min(1.0f, effectiveTorch * torchIntensity * 0.4f);
+                    tileFg = { (uint8_t)(tileFg.r * (1-w) + COL_TORCH.r * w),
+                               (uint8_t)(tileFg.g * (1-w) + COL_TORCH.g * w),
+                               (uint8_t)(tileFg.b * (1-w) + COL_TORCH.b * w), 255 };
+                }
                 scr.put(dc, dr, tile.glyph, applyFactor(tileFg, f),
                         litBg(tileBg), 0);
             } else {
@@ -969,12 +987,12 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const std::vector<MapEntity>& entities,
                                 const std::vector<Position>& torches,
                                 const std::string& message, int mapZoom,
-                                int scrollTick, bool isVillage) {
+                                int scrollTick, bool isVillage, float nightFactor) {
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage);
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, nightFactor);
         drawBorder(scr, 0, 0, mapW, scr.rows());
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
         if (!message.empty())
@@ -984,7 +1002,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int hudH = 13;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage);
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, nightFactor);
         drawBorder(scr, 0, 0, scr.cols(), mapH);
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
