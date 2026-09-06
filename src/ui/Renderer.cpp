@@ -474,6 +474,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
       put("  B   bestiario",COL_GRAY, CELL_DIM);
       put("  Esc salir",   COL_GRAY, CELL_DIM);
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
+     put("  F   pantalla",  COL_GRAY, CELL_DIM);
 }
 
 // HUD inferior: 6 filas (separador + retrato 20×10 half-block + contenido compacto + controles)
@@ -554,7 +555,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     // row 6-7: controls
     scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
                COL_GRAY, COL_BLACK, CELL_DIM);
-    scr.putStr(rpC, row + 7, "[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom",
+    scr.putStr(rpC, row + 7, "[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla",
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
 

@@ -109,6 +109,8 @@ void Game::run()
     SetWindowPosition(monX + (monW - SCREEN_W) / 2,
                       monY + (monH - SCREEN_H) / 2);
 
+    if (fullscreen_) ToggleFullscreen();
+
     // Codepoints necesarios: ASCII + dibujo de caja + bloques + algunos CP437
     std::vector<int> codepoints;
     // ASCII imprimible
@@ -306,7 +308,7 @@ void Game::run()
     // Render texture offscreen
     RenderTexture2D renderTarget = LoadRenderTexture(SCREEN_W, SCREEN_H);
     SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
-    int rtW = SCREEN_W, rtH = SCREEN_H;
+    constexpr int rtW = SCREEN_W, rtH = SCREEN_H;
 
     while (!WindowShouldClose() && !quitRequested_)
     {
@@ -319,7 +321,7 @@ void Game::run()
         float cellHideal = (float)screenH / (kTargetRows + 2 * kPadY);
         int fontSizeFromW = (int)(cellWideal / cellWperFontPt);
         int fontSizeFromH = (int)(cellHideal / cellHperFontPt);
-        int fontSize = std::clamp(std::min(fontSizeFromW, fontSizeFromH), 10, kRefFontSize);
+        int fontSize = std::clamp(std::min(fontSizeFromW, fontSizeFromH), 10, 24);
         Font& font   = getFont(fontSize);
         Font& font2x = getFont(fontSize * 2);
         Font& font3x = getFont(fontSize * 3);
@@ -340,18 +342,8 @@ void Game::run()
         if (cols < 1) cols = 1;
         if (rows < 1) rows = 1;
 
-        // Recrear render texture si la ventana cambió de tamaño
-        if (IsWindowResized() && (screenW != rtW || screenH != rtH))
-        {
-            UnloadRenderTexture(renderTarget);
-            renderTarget = LoadRenderTexture(screenW, screenH);
-            SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
-            rtW = screenW;
-            rtH = screenH;
-        }
-
-        // Actualizar uniform de resolución
-        float res[2] = {(float)rtW, (float)rtH};
+        // Actualizar uniform de resolución (fijo al tamaño del RenderTexture)
+        float res[2] = {(float)SCREEN_W, (float)SCREEN_H};
         SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
 
         // El thread de IA escribe pendingCombatEnemy_ y luego activa pendingRedraw_.
@@ -718,10 +710,11 @@ void Game::processInput()
         }
     }
 
-    // Carácter Unicode — interceptar + y - para zoom antes de dispatch
+    // Carácter Unicode — interceptar +, - y F antes de dispatch
     int cp = GetCharPressed();
     if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
     if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
+    if (cp == 'f' || cp == 'F') { ToggleFullscreen(); fullscreen_ = !fullscreen_; saveSettings(); return; }
     if (cp > 0)
         dispatchInput(cp);
 }
@@ -887,7 +880,9 @@ void Game::dispatchInput(int key)
         if (nx == pos.x && ny == pos.y)
             break;
 
-        // All movement checks under a single lock to prevent AI race conditions
+        // All movement checks under a single lock to prevent AI race conditions.
+        // setState(Combat) must be called AFTER releasing the lock to avoid deadlock.
+        bool combatTriggered = false;
         {
             auto acc = dungeon_->lock();
 
@@ -902,28 +897,27 @@ void Game::dispatchInput(int key)
                 break;
             }
 
-            bool triggered = false;
             int idx = 0;
             for (auto &we : acc.enemies())
             {
                 if (we.alive && we.pos.x == nx && we.pos.y == ny)
                 {
                     combatWorldEnemyIdx_ = idx;
-                    triggered = true;
+                    combatTriggered = true;
                     break;
                 }
                 idx++;
             }
-            if (!triggered)
+            if (!combatTriggered)
             {
                 acc.setPlayerPos(nx, ny);
                 acc.map().updateFov();
             }
-            if (triggered)
-            {
-                setState(GameState::Combat);
-                break;
-            }
+        }
+        if (combatTriggered)
+        {
+            setState(GameState::Combat);
+            break;
         }
 
         // Chest on new tile
@@ -2239,6 +2233,7 @@ void Game::saveSettings() const {
         f << "mapZoom=" << mapZoom_ << "\n";
         f << "hudLayout=" << static_cast<int>(hudLayout_) << "\n";
         f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
+        f << "fullscreen=" << static_cast<int>(fullscreen_) << "\n";
     }
 }
 
@@ -2254,6 +2249,9 @@ void Game::loadSettings() {
             catch (...) {}
         } else if (line.rfind("shaderEnabled=", 0) == 0) {
             try { shaderEnabled_ = std::stoi(line.substr(14)) != 0; }
+            catch (...) {}
+        } else if (line.rfind("fullscreen=", 0) == 0) {
+            try { fullscreen_ = std::stoi(line.substr(11)) != 0; }
             catch (...) {}
         }
     }

@@ -77,6 +77,7 @@ private:
     int  mapZoom_{1};
     int  scrollTick_{0};
     bool shaderEnabled_{true};
+    bool fullscreen_{false};
     bool victory_{false};
     bool secretEasterEgg_{false};
 
