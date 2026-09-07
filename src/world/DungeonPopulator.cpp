@@ -47,9 +47,14 @@ EnemyType DungeonPopulator::pickEnemyType(int floor, std::mt19937& rng)
     return EnemyType::Demon;
 }
 
-std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool isBoss)
+float DungeonPopulator::difficultyFactor(int depth, int incursions)
 {
-    float s  = 1.0f + (floor - 1) * 0.09f;
+    return (1.0f + (depth - 1) * 0.09f) * (1.0f + (incursions - 1) * 0.10f);
+}
+
+std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int depth, int incursions, bool isBoss)
+{
+    float s  = difficultyFactor(depth, incursions);
     auto  sc = [s](int base) { return std::max(1, static_cast<int>(base * s)); };
     std::string name;
     int hp, atk, def, xp, pa = 1;
@@ -99,7 +104,7 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int floor, bool 
     return enemy;
 }
 
-int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
+int DungeonPopulator::xpForEnemy(EnemyType t, int depth, int incursions)
 {
     int base;
     switch (t) {
@@ -115,7 +120,7 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int floor)
     case EnemyType::Slime:    base =  5; break;
     default:                  base =  5; break;
     }
-    return base + (floor - 1) * 5;
+    return static_cast<int>((base + (depth - 1) * 5) * difficultyFactor(depth, incursions));
 }
 
 // ─── Item tables ──────────────────────────────────────────────────────────────
@@ -345,8 +350,8 @@ void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& che
 // ─── Main population ──────────────────────────────────────────────────────────
 
 DungeonPopulator::Result DungeonPopulator::populate(
-    Map& map, const std::vector<BSPDungeon::Room>& rooms, int floor, PlayerClass cls,
-    std::mt19937& rng)
+    Map& map, const std::vector<BSPDungeon::Room>& rooms, int depth, PlayerClass cls,
+    int incursions, std::mt19937& rng)
 {
     Result result;
     int n = static_cast<int>(rooms.size());
@@ -362,37 +367,23 @@ DungeonPopulator::Result DungeonPopulator::populate(
         result.stairsPos = pickPos(rooms[n - 1], taken, rng);
     }
 
-    // Tienda
-    {
-        std::vector<int> shopCandidates;
-        for (int i = 1; i < n - 1; i++) {
-            if (n >= 3 && i == n - 2) continue;
-            shopCandidates.push_back(i);
-        }
-        if (!shopCandidates.empty()) {
-            int si = shopCandidates[rngInt(rng, 0, static_cast<int>(shopCandidates.size()) - 1)];
-            result.shopRoom        = rooms[si];
-            result.shopMerchantPos = {result.shopRoom.centerX(), result.shopRoom.centerY()};
-            result.shopExists      = true;
-            taken.push_back(result.shopMerchantPos);
-        }
-    }
+    // Escalera de subida: se coloca en la sala donde entras al piso.
+    // Solo se puede usar cuando todos los enemigos del piso están muertos.
+    result.stairsUpPos   = pickPos(rooms[0], taken, rng);
+    result.stairsUpExists = true;
 
     // Enemies
-    int spawnChance = std::min(85, 50 + (floor - 1) * 8);
+    int spawnChance = std::min(85, 50 + (depth - 1) * 8);
     for (int i = 1; i < n; i++) {
-        if (result.shopExists &&
-            rooms[i].x == result.shopRoom.x && rooms[i].y == result.shopRoom.y)
-            continue;
         if (rngInt(rng, 0, 99) < spawnChance)
             result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
-                                      pickEnemyType(floor, rng), true});
-        if (rngInt(rng, 0, 99) < 15 + floor * 3)
+                                      pickEnemyType(depth, rng), true});
+        if (rngInt(rng, 0, 99) < 15 + depth * 3)
             result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
-                                      pickEnemyType(floor, rng), true});
-        if (floor >= 2 && rngInt(rng, 0, 99) < floor * 3)
+                                      pickEnemyType(depth, rng), true});
+        if (depth >= 2 && rngInt(rng, 0, 99) < depth * 3)
             result.enemies.push_back({pickPos(rooms[i], taken, rng), pickPos(rooms[i], taken, rng),
-                                      pickEnemyType(floor, rng), true});
+                                      pickEnemyType(depth, rng), true});
     }
 
     // Chests
@@ -403,6 +394,7 @@ DungeonPopulator::Result DungeonPopulator::populate(
         std::swap(eligible[i], eligible[rngInt(rng, 0, i)]);
     chestCount = std::min(chestCount, static_cast<int>(eligible.size()));
 
+    float coinFactor = 1.0f + (incursions - 1) * 0.15f;
     for (int ci = 0; ci < chestCount; ci++) {
         int roll = rngInt(rng, 0, 99);
         ChestLoot loot;
@@ -411,13 +403,13 @@ DungeonPopulator::Result DungeonPopulator::populate(
         int baseCoins = 10 + rngInt(rng, 0, 39);
         if (roll < 55) {
             loot  = ChestLoot::Coins;
-            coins = baseCoins * (1 + (floor - 1) / 2);
+            coins = static_cast<int>(baseCoins * (1 + (depth - 1) / 2) * coinFactor);
         } else {
             loot     = ChestLoot::Item;
             int r    = rngInt(rng, 0, 3);
-            if      (r == 0) item = pickPotion(floor);
-            else if (r == 1) item = pickWeapon(cls, floor);
-            else             item = pickArmor(cls, floor);
+            if      (r == 0) item = pickPotion(depth);
+            else if (r == 1) item = pickWeapon(cls, depth);
+            else             item = pickArmor(cls, depth);
         }
         result.chests.push_back({pickPos(rooms[eligible[ci]], taken, rng), false, loot, coins, item});
     }
@@ -433,18 +425,15 @@ DungeonPopulator::Result DungeonPopulator::populate(
 
     int numSecret = 1 + rngInt(rng, 0, 1);
     for (int i = 0; i < numSecret; i++)
-        tryPlaceSecretRoom(map, result.chests, taken, cls, floor, secCands, rng);
+        tryPlaceSecretRoom(map, result.chests, taken, cls, depth, secCands, rng);
 
     // Boss every 5 floors
-    if (floor % 5 == 0 && floor > 0 && n >= 3)
+    if (depth % 5 == 0 && depth > 0 && n >= 3)
         result.enemies.push_back({pickPos(rooms[n - 2], taken, rng), pickPos(rooms[n - 2], taken, rng),
-                                  pickEnemyType(floor, rng), true, true});
+                                  pickEnemyType(depth, rng), true, true});
 
-    // Torches — decoración en salas (no en tienda ni spawn)
+    // Torches — decoración en salas (no en spawn)
     for (int i = 1; i < n - 1; i++) {
-        if (result.shopExists &&
-            rooms[i].x == result.shopRoom.x && rooms[i].y == result.shopRoom.y)
-            continue;
         if (rngInt(rng, 0, 99) < 70) {
             Position tpos;
             if (rooms[i].w >= 6 && rooms[i].h >= 6) {

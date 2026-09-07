@@ -8,6 +8,7 @@
 
 #include "ui/TerminalScreen.hpp"
 #include "world/Map.hpp"
+#include "world/Village.hpp"
 #include "entities/Player.hpp"
 #include "combat/CombatSystem.hpp"
 #include "ui/HudLayout.hpp"
@@ -38,12 +39,14 @@ public:
                                 const std::vector<MapEntity>& entities,
                                 const std::vector<Position>& torches,
                                 const std::string& message = "",
-                                int mapZoom = 1, int scrollTick = 0);
+                                int mapZoom = 1, int scrollTick = 0,
+                                bool isVillage = false, float nightFactor = 0.0f);
     static Color colorForPlayerClass(PlayerClass pc);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
                          const Map& map, const std::vector<MapEntity>& entities,
                          const std::vector<Position>& torches,
-                         Color playerColor, int floor = 1);
+                         Color playerColor, int floor = 1,
+                         bool isVillage = false, float nightFactor = 0.0f);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);
@@ -58,6 +61,8 @@ public:
                          int selection, const Player& player,
                          const std::string& message,
                          bool sellMode = false, int sellSelection = 0);
+    static void drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
+                                const Player& player, int incursions);
 
 private:
     static void drawHSep(TerminalScreen& scr, int col, int row, int w,

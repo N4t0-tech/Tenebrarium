@@ -118,6 +118,13 @@ void CombatSystem::doDefend() {
     if (phase_ != CombatPhase::PlayerTurn) return;
     if (!hasEnoughAp(1)) { logMessage("PA insuficientes para defender."); return; }
 
+    bool already = std::any_of(playerEffects_.begin(), playerEffects_.end(),
+        [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Defending; });
+    if (already) {
+        logMessage("Ya estás en postura defensiva.");
+        return;
+    }
+
     StatusEffect fx;
     fx.type      = StatusEffect::Type::Defending;
     fx.turnsLeft = 1;
@@ -315,12 +322,14 @@ void CombatSystem::processEnemyTurn() {
         if (!enemy->isAlive()) continue;
 
         int attackCount = enemy->getBasePa();
-        auto frozenIt = std::find_if(enemyEffects_[i].begin(), enemyEffects_[i].end(),
-            [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Frozen; });
-        if (frozenIt != enemyEffects_[i].end()) {
-            int lostPa = frozenIt->magnitude;
-            attackCount = std::max(0, attackCount - lostPa);
-            logMessage(enemy->getName() + " congelado (-" + ts(lostPa) + " PA).");
+        int totalFrozen = 0;
+        for (const auto& fx : enemyEffects_[i]) {
+            if (fx.type == StatusEffect::Type::Frozen)
+                totalFrozen += fx.magnitude;
+        }
+        if (totalFrozen > 0) {
+            attackCount = std::max(0, attackCount - totalFrozen);
+            logMessage(enemy->getName() + " congelado (-" + ts(totalFrozen) + " PA).");
         }
 
         for (int pa = 0; pa < attackCount; pa++) {
@@ -548,6 +557,13 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::Trampa: {
             if (!target->isAlive()) break;
+            bool already = std::any_of(enemyEffects_[currentTarget_].begin(),
+                enemyEffects_[currentTarget_].end(),
+                [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::TrapPending; });
+            if (already) {
+                logMessage(target->getName() + " ya tiene una trampa activa.");
+                break;
+            }
             StatusEffect fx;
             fx.type      = StatusEffect::Type::TrapPending;
             fx.turnsLeft = 1;
@@ -560,6 +576,13 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::Veneno: {
             if (!target->isAlive()) break;
+            bool already = std::any_of(enemyEffects_[currentTarget_].begin(),
+                enemyEffects_[currentTarget_].end(),
+                [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Poisoned; });
+            if (already) {
+                logMessage(target->getName() + " ya está envenenado.");
+                break;
+            }
             StatusEffect fx;
             fx.type      = StatusEffect::Type::Poisoned;
             fx.turnsLeft = 3;
@@ -660,10 +683,11 @@ bool CombatSystem::isPlayerAttackBoosted() const {
 }
 
 int CombatSystem::getPlayerAttackBoost() const {
+    int total = 0;
     for (const auto& fx : playerEffects_)
         if (fx.type == StatusEffect::Type::AttackBoosted)
-            return fx.magnitude;
-    return 0;
+            total += fx.magnitude;
+    return total;
 }
 
 int CombatSystem::getEffectiveAttack() const {

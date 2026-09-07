@@ -32,6 +32,7 @@ public:
     int getMaxMana()      const { return maxMana_; }
     int getCoins()        const { return coins_; }
     int getDungeonFloor() const { return dungeonFloor_; }
+    int getIncursions()   const { return incursions_; }
 
     Inventory& getInventory() { return inventory_; }
     const Inventory& getInventory() const { return inventory_; }
@@ -46,6 +47,7 @@ public:
 
     void addCoins(int amount);            // puede ser negativo (compra)
     void descendFloor();                  // incrementa dungeonFloor_
+    void beginIncursion();                // reinicia la profundidad a 1 y suma una incursión
     bool pickupItem(const Item& item);    // auto-equipa si el slot está libre, si no va a la mochila
     void equipItem(int bagIdx);           // intercambia el ítem de la mochila[bagIdx] con el slot equipado
     void unequipWeapon();                 // devuelve el arma equipada a la mochila
@@ -54,6 +56,15 @@ public:
     int  countConsumables() const;
     int  countHpPotions() const;
     int  countManaPotions() const;
+
+    // Entrenamiento del pueblo: mejoras permanentes de la partida
+    void trainHealth(int amount);
+    void trainAttack(int amount);
+    void trainDefense(int amount);
+    void trainMana(int amount);
+    // Forja del pueblo: +1 al bonus del arma/armadura equipada. Retorna false si no hay.
+    bool upgradeEquippedWeapon();
+    bool upgradeEquippedArmor();
 
 private:
     PlayerClass class_;
@@ -64,6 +75,7 @@ private:
     int maxMana_;
     int coins_;
     int dungeonFloor_;
+    int incursions_{0};
     int baseAttack_;
     int baseDefense_;
     std::optional<Item> equippedWeapon_;

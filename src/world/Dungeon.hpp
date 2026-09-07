@@ -14,12 +14,12 @@ class Dungeon {
 public:
     Dungeon() = default;
 
-    void generate(int floor, PlayerClass cls);
+    void generate(int depth, PlayerClass cls, int incursions);
 
     // ── AI thread (locks internally) ──
     // Runs the AI tick for all enemies. Returns enemy index to start combat with,
     // or -1 if no combat triggered.
-    int aiTick(bool playerInShop);
+    int aiTick();
 
     // ── Main-thread queries (lock internally) ──
     bool allEnemiesDead() const;
@@ -51,19 +51,12 @@ public:
 
         // World state
         Position  stairsPos()     const { return self.stairsPos_; }
+        Position  stairsUpPos()   const { return self.stairsUpPos_; }
+        bool      stairsUpExists() const { return self.stairsUpExists_; }
         Position  lockedDoorPos() const { return self.lockedDoorPos_; }
         bool      lockedDoorExists() const { return self.lockedDoorExists_; }
         bool      lockedDoorOpen() const { return self.lockedDoorOpen_; }
-        bool      shopExists()     const { return self.shopExists_; }
-        Position  shopMerchantPos() const { return self.shopMerchantPos_; }
 
-        bool isInShopRoom(Position p) const {
-            if (!self.shopExists_) return false;
-            return p.x >= self.shopRoom_.x && p.x < self.shopRoom_.x + self.shopRoom_.w &&
-                   p.y >= self.shopRoom_.y && p.y < self.shopRoom_.y + self.shopRoom_.h;
-        }
-
-        const auto& shopRoom() const { return self.shopRoom_; }
         void lockedDoorOpen(bool v) { self.lockedDoorOpen_ = v; }
     };
 
@@ -85,10 +78,9 @@ private:
     std::vector<WorldChest> chests_;
     std::vector<WorldTorch> torches_;
     Position               stairsPos_{};
+    Position               stairsUpPos_{};
+    bool                   stairsUpExists_ = false;
     Position               lockedDoorPos_{};
     bool                   lockedDoorExists_ = false;
     bool                   lockedDoorOpen_   = false;
-    BSPDungeon::Room       shopRoom_{};
-    bool                   shopExists_ = false;
-    Position               shopMerchantPos_{};
 };

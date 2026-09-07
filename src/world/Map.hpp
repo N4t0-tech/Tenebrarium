@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <cstdint>
 
 enum class TileType {
     Floor,
@@ -12,9 +13,11 @@ enum class TileType {
 
 struct Tile {
     TileType type;
-    char glyph;      // ASCII character to render
+    char32_t glyph;    // codepoint Unicode a renderizar
     bool explored;
     bool visible;
+    uint8_t fg_r = 0, fg_g = 0, fg_b = 0;  // color propio (village/XP)
+    uint8_t bg_r = 0, bg_g = 0, bg_b = 0;  // fondo propio (village/XP)
 };
 
 struct Position {

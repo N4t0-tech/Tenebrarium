@@ -41,7 +41,7 @@ void GameSerializer::wstr(std::ostream& o, const std::string& s)
 bool GameSerializer::rstr(std::istream& in, std::string& s)
 {
     size_t n;
-    if (!(in >> n)) return false;
+    if (!(in >> n) || n > 100000) return false;
     char sp;
     in.get(sp);
     s.resize(n);
@@ -62,6 +62,8 @@ bool GameSerializer::ritem(std::istream& in, Item& item, int version)
         return false;
     int t;
     if (!(in >> t >> item.value >> item.slots >> item.statBonus))
+        return false;
+    if (t < 0 || t > static_cast<int>(ItemType::Bomb))
         return false;
     item.type = static_cast<ItemType>(t);
     if (version >= 2) {
@@ -92,12 +94,13 @@ void GameSerializer::save(Game& g)
         std::string(GetApplicationDirectory()) + "saves");
 
     std::ofstream f(savePath());
-    if (!f || !g.player_ || !g.dungeon_)
+    if (!f || !g.player_)
         return;
 
-    auto acc = g.dungeon_->lock();
+    const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 4 << '\n'; // version 4 adds bestiary data
+    f << 5 << '\n'; // version 5: pueblo hub (incursiones + lastPlace)
+    f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
     wstr(f, g.player_->name_);
@@ -107,7 +110,8 @@ void GameSerializer::save(Game& g)
       << g.player_->mana_ << ' ' << g.player_->maxMana_ << ' '
       << g.player_->coins_ << ' ' << g.player_->dungeonFloor_ << ' '
       << g.player_->attack_ << ' ' << g.player_->defense_ << ' '
-      << g.player_->baseAttack_ << ' ' << g.player_->baseDefense_ << '\n';
+      << g.player_->baseAttack_ << ' ' << g.player_->baseDefense_ << ' '
+      << g.player_->incursions_ << '\n';
 
     f << (g.player_->equippedWeapon_.has_value() ? 1 : 0) << '\n';
     if (g.player_->equippedWeapon_)
@@ -122,56 +126,62 @@ void GameSerializer::save(Game& g)
     for (const auto& item : invItems)
         witem(f, item);
 
-    // Map
-    f << acc.map().width() << ' ' << acc.map().height() << '\n';
-    Position pp = acc.playerPos();
-    f << pp.x << ' ' << pp.y << '\n';
-    for (int y = 0; y < acc.map().height(); y++) {
-        for (int x = 0; x < acc.map().width(); x++) {
-            const Tile& t = acc.map().at(x, y);
-            f << static_cast<int>(t.type) << ' '
-              << static_cast<int>(t.explored) << ' '
-              << static_cast<int>(t.visible);
-            f << (x < acc.map().width() - 1 ? ' ' : '\n');
+    if (inDungeon)
+    {
+        auto acc = g.dungeon_->lock();
+
+        // Map
+        f << acc.map().width() << ' ' << acc.map().height() << '\n';
+        Position pp = acc.playerPos();
+        f << pp.x << ' ' << pp.y << '\n';
+        for (int y = 0; y < acc.map().height(); y++) {
+            for (int x = 0; x < acc.map().width(); x++) {
+                const Tile& t = acc.map().at(x, y);
+                f << static_cast<int>(t.type) << ' '
+                  << static_cast<int>(t.explored) << ' '
+                  << static_cast<int>(t.visible);
+                f << (x < acc.map().width() - 1 ? ' ' : '\n');
+            }
         }
+
+        // World enemies
+        f << acc.enemies().size() << '\n';
+        for (const auto& we : acc.enemies())
+            f << we.pos.x << ' ' << we.pos.y << ' '
+              << we.spawnPos.x << ' ' << we.spawnPos.y << ' '
+              << static_cast<int>(we.type) << ' '
+              << static_cast<int>(we.alive) << ' '
+              << static_cast<int>(we.isBoss) << '\n';
+
+        // World chests
+        f << acc.chests().size() << '\n';
+        for (const auto& ch : acc.chests()) {
+            f << ch.pos.x << ' ' << ch.pos.y << ' '
+              << static_cast<int>(ch.opened) << ' '
+              << static_cast<int>(ch.isMimic) << ' '
+              << static_cast<int>(ch.loot) << ' '
+              << ch.coins << ' ';
+            witem(f, ch.item);
+        }
+
+        // Locked door
+        f << static_cast<int>(acc.lockedDoorExists()) << ' ';
+        if (acc.lockedDoorExists())
+            f << acc.lockedDoorPos().x << ' ' << acc.lockedDoorPos().y << ' '
+              << static_cast<int>(acc.lockedDoorOpen());
+        f << '\n';
+
+        // Stairs
+        f << acc.stairsPos().x << ' ' << acc.stairsPos().y << '\n';
+
+        // Stairs up (v5)
+        f << static_cast<int>(acc.stairsUpExists()) << ' ';
+        if (acc.stairsUpExists())
+            f << acc.stairsUpPos().x << ' ' << acc.stairsUpPos().y;
+        f << '\n';
     }
 
-    // World enemies
-    f << acc.enemies().size() << '\n';
-    for (const auto& we : acc.enemies())
-        f << we.pos.x << ' ' << we.pos.y << ' '
-          << we.spawnPos.x << ' ' << we.spawnPos.y << ' '
-          << static_cast<int>(we.type) << ' '
-          << static_cast<int>(we.alive) << ' '
-          << static_cast<int>(we.isBoss) << '\n';
-
-    // World chests
-    f << acc.chests().size() << '\n';
-    for (const auto& ch : acc.chests()) {
-        f << ch.pos.x << ' ' << ch.pos.y << ' '
-          << static_cast<int>(ch.opened) << ' '
-          << static_cast<int>(ch.isMimic) << ' '
-          << static_cast<int>(ch.loot) << ' '
-          << ch.coins << ' ';
-        witem(f, ch.item);
-    }
-
-    // Locked door
-    f << static_cast<int>(acc.lockedDoorExists()) << ' ';
-    if (acc.lockedDoorExists())
-        f << acc.lockedDoorPos().x << ' ' << acc.lockedDoorPos().y << ' '
-          << static_cast<int>(acc.lockedDoorOpen());
-    f << '\n';
-
-    // Stairs
-    f << acc.stairsPos().x << ' ' << acc.stairsPos().y << '\n';
-
-    // Shop
-    f << static_cast<int>(acc.shopExists()) << '\n';
-    if (acc.shopExists())
-        f << acc.shopMerchantPos().x << ' ' << acc.shopMerchantPos().y << ' '
-          << acc.shopRoom().x << ' ' << acc.shopRoom().y << ' '
-          << acc.shopRoom().w << ' ' << acc.shopRoom().h << '\n';
+    // Tienda del pueblo
     f << g.shopStock_.size() << '\n';
     for (const auto& s : g.shopStock_) {
         f << static_cast<int>(s.sold) << ' ' << s.price << ' ';
@@ -179,7 +189,8 @@ void GameSerializer::save(Game& g)
     }
 
     // Quests
-    f << g.dungeon_->enemiesKilled << ' ' << g.dungeon_->chestsOpened << '\n';
+    f << (g.dungeon_ ? g.dungeon_->enemiesKilled : 0) << ' '
+      << (g.dungeon_ ? g.dungeon_->chestsOpened : 0) << '\n';
     f << g.quests_.size() << '\n';
     for (const auto& q : g.quests_) {
         f << static_cast<int>(q.status) << ' ' << q.objectives.size();
@@ -206,8 +217,14 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || (version != 1 && version != 2 && version != 3 && version != 4))
+    if (!(f >> version) || version < 1 || version > 5)
         return false;
+
+    // v5: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
+    int inDungeon = 1;
+    if (version >= 5) {
+        if (!(f >> inDungeon)) return false;
+    }
 
     // Player
     std::string name;
@@ -220,6 +237,11 @@ bool GameSerializer::load(Game& g)
     if (!(f >> level >> xp >> xpNext >> hp >> maxHp >> mana >> maxMana
             >> coins >> floor >> atk >> def >> baseAtk >> baseDef))
         return false;
+
+    int incursions = 1; // v1-4 no guardaba incursiones
+    if (version >= 5) {
+        if (!(f >> incursions)) return false;
+    }
 
     PlayerClass playerClass = static_cast<PlayerClass>(cls);
     g.player_ = std::make_unique<Player>(name, playerClass);
@@ -236,6 +258,7 @@ bool GameSerializer::load(Game& g)
     g.player_->defense_        = def;
     g.player_->baseAttack_     = baseAtk;
     g.player_->baseDefense_    = baseDef;
+    g.player_->incursions_     = incursions;
 
     int hasWeapon;
     if (!(f >> hasWeapon)) return false;
@@ -261,107 +284,124 @@ bool GameSerializer::load(Game& g)
         g.player_->getInventory().addItem(item);
     }
 
-    // Recreate dungeon
-    g.dungeon_ = std::make_unique<Dungeon>();
+    // Recreate dungeon (solo si el save estaba en la mazmorra)
+    g.dungeon_.reset();
+    if (inDungeon)
+        g.dungeon_ = std::make_shared<Dungeon>();
 
-    // Map
-    int mapW, mapH, px, py;
-    if (!(f >> mapW >> mapH >> px >> py)) return false;
-
+    if (inDungeon)
     {
-        auto acc = g.dungeon_->lock();
-        auto& map = acc.map();
-        map = Map(mapW, mapH);
-        acc.setPlayerPos(px, py);
-        for (int y = 0; y < mapH; y++) {
-            for (int x = 0; x < mapW; x++) {
-                int type, explored, visible;
-                if (!(f >> type >> explored >> visible)) return false;
-                Tile& t = map.at(x, y);
-                t.type     = static_cast<TileType>(type);
-                t.glyph    = glyphForTile(t.type);
-                t.explored = explored;
-                t.visible  = visible;
+        // Map
+        int mapW, mapH, px, py;
+        if (!(f >> mapW >> mapH >> px >> py)) return false;
+
+        {
+            auto acc = g.dungeon_->lock();
+            auto& map = acc.map();
+            map = Map(mapW, mapH);
+            acc.setPlayerPos(px, py);
+            for (int y = 0; y < mapH; y++) {
+                for (int x = 0; x < mapW; x++) {
+                    int type, explored, visible;
+                    if (!(f >> type >> explored >> visible)) return false;
+                    Tile& t = map.at(x, y);
+                    t.type     = static_cast<TileType>(type);
+                    t.glyph    = glyphForTile(t.type);
+                    t.explored = explored;
+                    t.visible  = visible;
+                }
+            }
+            map.updateFov();
+        }
+
+        // World enemies
+        size_t enemyCount;
+        if (!(f >> enemyCount)) return false;
+        {
+            auto acc = g.dungeon_->lock();
+            auto& enemies = acc.enemies();
+            enemies.resize(enemyCount);
+            for (auto& we : enemies) {
+                int type, alive, boss;
+                if (!(f >> we.pos.x >> we.pos.y >> we.spawnPos.x >> we.spawnPos.y
+                        >> type >> alive >> boss))
+                    return false;
+                we.type   = static_cast<EnemyType>(type);
+                if (type < 0 || type >= kBestiaryEntryCount)
+                    we.type = EnemyType::Goblin;
+                we.alive  = alive;
+                we.isBoss = boss;
             }
         }
-        map.updateFov();
-    }
 
-    // World enemies
-    size_t enemyCount;
-    if (!(f >> enemyCount)) return false;
-    {
-        auto acc = g.dungeon_->lock();
-        auto& enemies = acc.enemies();
-        enemies.resize(enemyCount);
-        for (auto& we : enemies) {
-            int type, alive, boss;
-            if (!(f >> we.pos.x >> we.pos.y >> we.spawnPos.x >> we.spawnPos.y
-                    >> type >> alive >> boss))
-                return false;
-            we.type   = static_cast<EnemyType>(type);
-            we.alive  = alive;
-            we.isBoss = boss;
-        }
-    }
-
-    // World chests
-    size_t chestCount;
-    if (!(f >> chestCount)) return false;
-    {
-        auto acc = g.dungeon_->lock();
-        auto& chests = acc.chests();
-        chests.resize(chestCount);
-        for (auto& ch : chests) {
-            int opened, loot;
-            if (!(f >> ch.pos.x >> ch.pos.y >> opened))
-                return false;
-            ch.opened = opened;
-            if (version >= 3) {
-                int mimic;
-                if (!(f >> mimic)) return false;
-                ch.isMimic = mimic != 0;
+        // World chests
+        size_t chestCount;
+        if (!(f >> chestCount)) return false;
+        {
+            auto acc = g.dungeon_->lock();
+            auto& chests = acc.chests();
+            chests.resize(chestCount);
+            for (auto& ch : chests) {
+                int opened, loot;
+                if (!(f >> ch.pos.x >> ch.pos.y >> opened))
+                    return false;
+                ch.opened = opened;
+                if (version >= 3) {
+                    int mimic;
+                    if (!(f >> mimic)) return false;
+                    ch.isMimic = mimic != 0;
+                }
+                if (!(f >> loot >> ch.coins)) return false;
+                ch.loot   = static_cast<ChestLoot>(loot);
+                if (!ritem(f, ch.item, version)) return false;
             }
-            if (!(f >> loot >> ch.coins)) return false;
-            ch.loot   = static_cast<ChestLoot>(loot);
-            if (!ritem(f, ch.item, version)) return false;
+        }
+
+        // Locked door
+        int ldExists;
+        if (!(f >> ldExists)) return false;
+        {
+            auto acc = g.dungeon_->lock();
+            acc.self.lockedDoorExists_ = ldExists;
+            acc.self.lockedDoorOpen_   = false;
+            if (acc.lockedDoorExists()) {
+                int ldOpen;
+                if (!(f >> acc.self.lockedDoorPos_.x >> acc.self.lockedDoorPos_.y >> ldOpen))
+                    return false;
+                acc.self.lockedDoorOpen_ = ldOpen;
+            }
+        }
+
+        // Stairs
+        Position stairsPos;
+        if (!(f >> stairsPos.x >> stairsPos.y)) return false;
+        {
+            auto acc = g.dungeon_->lock();
+            acc.self.stairsPos_ = stairsPos;
+        }
+
+        // Stairs up (v5)
+        if (version >= 5) {
+            int suExists;
+            if (!(f >> suExists)) return false;
+            auto acc = g.dungeon_->lock();
+            acc.self.stairsUpExists_ = suExists != 0;
+            if (acc.stairsUpExists()) {
+                if (!(f >> acc.self.stairsUpPos_.x >> acc.self.stairsUpPos_.y))
+                    return false;
+            }
         }
     }
 
-    // Locked door
-    int ldExists;
-    if (!(f >> ldExists)) return false;
-    {
-        auto acc = g.dungeon_->lock();
-        acc.self.lockedDoorExists_ = ldExists;
-        acc.self.lockedDoorOpen_   = false;
-        if (acc.lockedDoorExists()) {
-            int ldOpen;
-            if (!(f >> acc.self.lockedDoorPos_.x >> acc.self.lockedDoorPos_.y >> ldOpen))
-                return false;
-            acc.self.lockedDoorOpen_ = ldOpen;
+    // Tienda del pueblo: el bloque "shop del piso" solo existía en v1-4.
+    if (version < 5 && inDungeon) {
+        int shopEx;
+        if (!(f >> shopEx)) return false;
+        if (shopEx) {
+            // Consumir datos del shop del piso (ya no se usa en el pueblo hub).
+            int x, y, rx, ry, rw, rh;
+            if (!(f >> x >> y >> rx >> ry >> rw >> rh)) return false;
         }
-    }
-
-    // Stairs
-    Position stairsPos;
-    if (!(f >> stairsPos.x >> stairsPos.y)) return false;
-    {
-        auto acc = g.dungeon_->lock();
-        acc.self.stairsPos_ = stairsPos;
-    }
-
-    // Shop
-    int shopEx;
-    if (!(f >> shopEx)) return false;
-    {
-        auto acc = g.dungeon_->lock();
-        acc.self.shopExists_ = shopEx;
-        if (acc.shopExists())
-            if (!(f >> acc.self.shopMerchantPos_.x >> acc.self.shopMerchantPos_.y
-                    >> acc.self.shopRoom_.x >> acc.self.shopRoom_.y
-                    >> acc.self.shopRoom_.w >> acc.self.shopRoom_.h))
-                return false;
     }
     size_t shopCount;
     if (!(f >> shopCount)) return false;
@@ -376,13 +416,13 @@ bool GameSerializer::load(Game& g)
     // Quests
     int savedKilled = 0, savedChests = 0;
     if (!(f >> savedKilled >> savedChests)) return false;
-    g.dungeon_->enemiesKilled = savedKilled;
-    g.dungeon_->chestsOpened  = savedChests;
     size_t questCount;
     if (!(f >> questCount)) return false;
     g.initQuests();
-    g.dungeon_->enemiesKilled = savedKilled;
-    g.dungeon_->chestsOpened  = savedChests;
+    if (g.dungeon_) {
+        g.dungeon_->enemiesKilled = savedKilled;
+        g.dungeon_->chestsOpened  = savedChests;
+    }
     for (size_t i = 0; i < std::min(questCount, g.quests_.size()); i++) {
         int status, objCount;
         if (!(f >> status >> objCount)) return false;
@@ -420,8 +460,20 @@ bool GameSerializer::load(Game& g)
     g.combatWorldEnemyIdx_ = -1;
     g.combatEnemyIndices_.clear();
     g.pendingCombatEnemy_  = -1;
-    g.dungeon_->message.clear();
-    g.state_.store(GameState::Exploration);
+    g.village_.reset();
+    g.villageMenu_ = VillageMenu::None;
+    g.villageMessage_.clear();
+    g.villageMessageEndTime_ = 0.0;
+    if (inDungeon) {
+        g.dungeon_->message.clear();
+        g.state_.store(GameState::Exploration);
+    } else {
+        g.dungeon_.reset();
+        g.village_ = std::make_unique<VillageLayout>(buildVillage());
+        if (g.player_)
+            g.village_->map.setPlayerPos(g.village_->spawn.x, g.village_->spawn.y);
+        g.state_.store(GameState::Village);
+    }
 
     return true;
 }
