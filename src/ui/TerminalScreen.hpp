@@ -6,9 +6,11 @@
 #include <cstdint>
 
 // Flags de celda
-static constexpr uint8_t CELL_BOLD     = 1;
-static constexpr uint8_t CELL_DIM      = 2;
-static constexpr uint8_t CELL_INVERTED = 4;
+static constexpr uint8_t CELL_BOLD         = 1;
+static constexpr uint8_t CELL_DIM          = 2;
+static constexpr uint8_t CELL_INVERTED     = 4;
+static constexpr uint8_t CELL_STRIKETHROUGH = 8;
+static constexpr uint8_t CELL_ITALIC       = 16;
 
 struct Cell {
     int      codepoint = ' ';
@@ -21,7 +23,7 @@ struct Cell {
 class TerminalScreen {
 public:
     // fontH: tamaño real de render de la fuente (0 = usar cellH)
-    TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, int fontH = 0);
+    TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, Font fontItalic = {}, int fontH = 0);
 
     int cols()  const { return cols_; }
     int rows()  const { return rows_; }
@@ -42,6 +44,7 @@ public:
 private:
     int   cols_, rows_, cellW_, cellH_, fontH_;
     Font  font_;
+    Font  fontItalic_;
     std::vector<Cell> buf_;
 
     bool inBounds(int col, int row) const {

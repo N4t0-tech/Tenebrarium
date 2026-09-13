@@ -5,9 +5,9 @@
 #include "TerminalScreen.hpp"
 #include <raylib.h>
 
-TerminalScreen::TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, int fontH)
+TerminalScreen::TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, Font fontItalic, int fontH)
     : cols_(cols), rows_(rows), cellW_(cellW), cellH_(cellH),
-      fontH_(fontH > 0 ? fontH : cellH), font_(font), buf_(cols * rows)
+      fontH_(fontH > 0 ? fontH : cellH), font_(font), fontItalic_(fontItalic), buf_(cols * rows)
 {}
 
 void TerminalScreen::clear() {
@@ -93,8 +93,15 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
             if (c.flags & CELL_INVERTED) fg = c.bg;
             if (c.flags & CELL_DIM)      fg = dimColor(fg);
 
-            DrawTextCodepoint(font_, c.codepoint,
-                              { (float)px, (float)(py + padY) }, fs, fg);
+            DrawTextCodepoint(
+                (c.flags & CELL_ITALIC) ? fontItalic_ : font_,
+                c.codepoint,
+                { (float)px, (float)(py + padY) }, fs, fg);
+
+            if (c.flags & CELL_STRIKETHROUGH) {
+                int lineY = py + cellH_ / 2;
+                DrawRectangle(px, lineY, cellW_, 1, fg);
+            }
         }
     }
 }
