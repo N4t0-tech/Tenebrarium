@@ -312,8 +312,14 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 }
 
                 bool drew = false;
+                MapEntity deadFallback{};
+                bool hasDeadFallback = false;
                 for (const auto& ent : entities) {
                     if (ent.pos.x == mx && ent.pos.y == my) {
+                        if (ent.dead) {
+                            if (!hasDeadFallback) { deadFallback = ent; hasDeadFallback = true; }
+                            continue;
+                        }
                         Color ec = applyFactor(colorFromPair(ent.colorPair), f);
                         Color entBg = isVillage
                             ? litBg((ent.glyph == 'i')
@@ -325,6 +331,17 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                         drew = true;
                         break;
                     }
+                }
+                if (!drew && hasDeadFallback) {
+                    Color ec = applyFactor(COL_GRAY, f * 0.85f);
+                    Color entBg = isVillage
+                        ? litBg((deadFallback.glyph == 'i')
+                            ? nightTint(Color{tile.bg_r, tile.bg_g, tile.bg_b, 255})
+                            : colFloor)
+                        : litBg(colFloor);
+                    scr.put(dc, dr, deadFallback.glyph, ec, entBg,
+                            CELL_DIM | CELL_STRIKETHROUGH);
+                    drew = true;
                 }
                 if (drew) continue;
 
@@ -349,9 +366,12 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 bool drewAlwaysVisible = false;
                 for (const auto& ent : entities) {
                     if (ent.alwaysVisible && ent.pos.x == mx && ent.pos.y == my) {
-                        Color ec = colorFromPair(ent.colorPair);
-                        ec = { (uint8_t)(ec.r / 2), (uint8_t)(ec.g / 2), (uint8_t)(ec.b / 2), ec.a };
-                        scr.put(dc, dr, ent.glyph, ec, colDim, ent.bold ? CELL_BOLD : 0);
+                        Color ec = ent.dead
+                            ? Color{COL_GRAY.r / 2, COL_GRAY.g / 2, COL_GRAY.b / 2, COL_GRAY.a}
+                            : Color{(uint8_t)(colorFromPair(ent.colorPair).r / 2),
+                                    (uint8_t)(colorFromPair(ent.colorPair).g / 2),
+                                    (uint8_t)(colorFromPair(ent.colorPair).b / 2), 255};
+                        scr.put(dc, dr, ent.glyph, ec, colDim, ent.dead ? (CELL_DIM | CELL_STRIKETHROUGH) : (ent.bold ? CELL_BOLD : 0));
                         drewAlwaysVisible = true;
                         break;
                     }

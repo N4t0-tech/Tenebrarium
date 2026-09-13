@@ -281,6 +281,13 @@ void Game::run()
         return f;
     };
 
+    auto loadFontItalic = [&](int size) {
+        Font f = LoadFontEx((assetsDir() + "fonts/mono-italic.ttf").c_str(), size,
+                            codepoints.data(), static_cast<int>(codepoints.size()));
+        SetTextureFilter(f.texture, TEXTURE_FILTER_POINT);
+        return f;
+    };
+
     Font refFont = loadFont(kRefFontSize);
     Vector2 refGs = MeasureTextEx(refFont, "M", (float)kRefFontSize, 0);
     float refCellW       = refGs.x;
@@ -296,6 +303,15 @@ void Game::run()
         Font f = loadFont(size);
         fontCache[size] = f;
         return fontCache[size];
+    };
+
+    std::unordered_map<int, Font> fontItalicCache;
+    auto getFontItalic = [&](int size) -> Font& {
+        auto it = fontItalicCache.find(size);
+        if (it != fontItalicCache.end()) return it->second;
+        Font f = loadFontItalic(size);
+        fontItalicCache[size] = f;
+        return fontItalicCache[size];
     };
 
     static constexpr int kPadX = 1;
@@ -368,7 +384,7 @@ void Game::run()
         processInput();
         update();
 
-        TerminalScreen scr(cols, rows, cellW, cellH, font, fontSize);
+        TerminalScreen scr(cols, rows, cellW, cellH, font, getFontItalic(fontSize), fontSize);
         scr.clear();
         render(scr);
 
@@ -439,19 +455,22 @@ void Game::run()
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
             Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
+            Font zFontItalic = (mapZoom_ == 3) ? getFontItalic(fontSize * 3) : getFontItalic(fontSize * 2);
             int  zFontH = fontSize * mapZoom_;
             int innerPixW = mapPixW - 2 * cellW;
             int innerPixH = mapPixH - 2 * cellH;
             TerminalScreen mapScr(innerPixW / zCellW, innerPixH / zCellH,
-                                  zCellW, zCellH, zFont, zFontH);
+                                  zCellW, zCellH, zFont, zFontItalic, zFontH);
             mapScr.clear();
 
             if (dungeon_) {
                 auto acc = dungeon_->lock();
                 std::vector<MapEntity> zEntities;
-                for (const auto& we : acc.enemies())
-                    if (we.alive)
-                        zEntities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
+                for (const auto& we : acc.enemies()) {
+                    bool isDead = !we.alive;
+                    zEntities.push_back({we.pos, glyphForEnemy(we.type),
+                        isDead ? 11 : colorPairForEnemy(we.type), true, false, isDead});
+                }
                 for (const auto& ch : acc.chests())
                     if (!ch.opened)
                         zEntities.push_back({ch.pos, '$', 2, true});
@@ -1358,9 +1377,11 @@ void Game::render(TerminalScreen &scr)
             std::vector<MapEntity> entities;
             {
                 auto acc = dungeon_->lock();
-                for (const auto &we : acc.enemies())
-                    if (we.alive)
-                        entities.push_back({we.pos, glyphForEnemy(we.type), colorPairForEnemy(we.type), true});
+                for (const auto &we : acc.enemies()) {
+                    bool isDead = !we.alive;
+                    entities.push_back({we.pos, glyphForEnemy(we.type),
+                        isDead ? 11 : colorPairForEnemy(we.type), true, false, isDead});
+                }
                 for (const auto &ch : acc.chests())
                     if (!ch.opened)
                         entities.push_back({ch.pos, '$', 2, true});
