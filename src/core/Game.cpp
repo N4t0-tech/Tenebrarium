@@ -765,6 +765,8 @@ void Game::processInput()
             windowedX_ = GetWindowPosition().x;
             windowedY_ = GetWindowPosition().y;
             ToggleFullscreen();
+            int mon = GetCurrentMonitor();
+            SetWindowSize(GetMonitorWidth(mon), GetMonitorHeight(mon));
         }
         fullscreen_ = !fullscreen_;
         saveSettings();
