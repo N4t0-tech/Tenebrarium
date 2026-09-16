@@ -112,6 +112,8 @@ void Game::run()
     if (fullscreen_) {
         windowedW_ = SCREEN_W;
         windowedH_ = SCREEN_H;
+        windowedX_ = monX + (monW - SCREEN_W) / 2;
+        windowedY_ = monY + (monH - SCREEN_H) / 2;
         ToggleFullscreen();
     }
 
@@ -756,9 +758,12 @@ void Game::processInput()
         if (IsWindowFullscreen()) {
             ToggleFullscreen();
             SetWindowSize(windowedW_, windowedH_);
+            SetWindowPosition(windowedX_, windowedY_);
         } else {
             windowedW_ = GetScreenWidth();
             windowedH_ = GetScreenHeight();
+            windowedX_ = GetWindowPosition().x;
+            windowedY_ = GetWindowPosition().y;
             ToggleFullscreen();
         }
         fullscreen_ = !fullscreen_;

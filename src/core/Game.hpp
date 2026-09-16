@@ -81,6 +81,8 @@ private:
     bool wasFullscreen_{false};
     int  windowedW_{1280};
     int  windowedH_{800};
+    int  windowedX_{0};
+    int  windowedY_{0};
     bool victory_{false};
     bool secretEasterEgg_{false};
 
