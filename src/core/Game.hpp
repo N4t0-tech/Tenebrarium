@@ -78,6 +78,9 @@ private:
     int  scrollTick_{0};
     bool shaderEnabled_{true};
     bool fullscreen_{false};
+    bool wasFullscreen_{false};
+    int  windowedW_{1280};
+    int  windowedH_{800};
     bool victory_{false};
     bool secretEasterEgg_{false};
 

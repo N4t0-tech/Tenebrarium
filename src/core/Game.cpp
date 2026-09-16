@@ -109,7 +109,11 @@ void Game::run()
     SetWindowPosition(monX + (monW - SCREEN_W) / 2,
                       monY + (monH - SCREEN_H) / 2);
 
-    if (fullscreen_) ToggleFullscreen();
+    if (fullscreen_) {
+        windowedW_ = SCREEN_W;
+        windowedH_ = SCREEN_H;
+        ToggleFullscreen();
+    }
 
     // Codepoints necesarios: ASCII + dibujo de caja + bloques + algunos CP437
     std::vector<int> codepoints;
@@ -324,13 +328,54 @@ void Game::run()
     // Render texture offscreen
     RenderTexture2D renderTarget = LoadRenderTexture(SCREEN_W, SCREEN_H);
     SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
-    constexpr int rtW = SCREEN_W, rtH = SCREEN_H;
+    int rtW = SCREEN_W, rtH = SCREEN_H;
 
     while (!WindowShouldClose() && !quitRequested_)
     {
-        // Recalcular grid si la ventana cambió de tamaño
-        int screenW = GetScreenWidth();
-        int screenH = GetScreenHeight();
+        // El thread de IA escribe pendingCombatEnemy_ y luego activa pendingRedraw_.
+        // Aquí consumimos ese evento en el hilo principal para disparar el combate
+        // de forma segura (setState no es thread-safe y solo debe llamarse aquí).
+        if (pendingRedraw_.load(std::memory_order_acquire))
+        {
+            pendingRedraw_.store(false, std::memory_order_release);
+            int combatIdx = pendingCombatEnemy_.load();
+            if (combatIdx >= 0 && state_.load() == GameState::Exploration)
+            {
+                combatWorldEnemyIdx_ = combatIdx;
+                pendingCombatEnemy_.store(-1);
+                setState(GameState::Combat);
+            }
+            else if (combatIdx >= 0)
+            {
+                pendingCombatEnemy_.store(-1);
+            }
+        }
+
+        processInput();
+        update();
+
+        // Recalcular grid tras processInput (puede haber cambiado tamaño con F/fullscreen)
+        int screenW, screenH;
+        if (fullscreen_) {
+            int mon = GetCurrentMonitor();
+            screenW = GetMonitorWidth(mon);
+            screenH = GetMonitorHeight(mon);
+        } else {
+            screenW = GetScreenWidth();
+            screenH = GetScreenHeight();
+        }
+        if (screenW != rtW || screenH != rtH || fullscreen_ != wasFullscreen_) {
+            UnloadRenderTexture(renderTarget);
+            renderTarget = LoadRenderTexture(screenW, screenH);
+            SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
+            rtW = screenW;
+            rtH = screenH;
+            wasFullscreen_ = fullscreen_;
+        }
+
+        // Actualizar uniform de resolución (tamaño del RenderTexture dinámico)
+        float res[2] = {(float)rtW, (float)rtH};
+        SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
 
         // Escalar fontSize para mantener ~kTargetCols × kTargetRows
         float cellWideal = (float)screenW / (kTargetCols + 2 * kPadX);
@@ -357,32 +402,6 @@ void Game::run()
         constexpr int kHudBarH  = 13;
         if (cols < 1) cols = 1;
         if (rows < 1) rows = 1;
-
-        // Actualizar uniform de resolución (fijo al tamaño del RenderTexture)
-        float res[2] = {(float)SCREEN_W, (float)SCREEN_H};
-        SetShaderValue(crtShader, resLoc, res, SHADER_UNIFORM_VEC2);
-
-        // El thread de IA escribe pendingCombatEnemy_ y luego activa pendingRedraw_.
-        // Aquí consumimos ese evento en el hilo principal para disparar el combate
-        // de forma segura (setState no es thread-safe y solo debe llamarse aquí).
-        if (pendingRedraw_.load(std::memory_order_acquire))
-        {
-            pendingRedraw_.store(false, std::memory_order_release);
-            int combatIdx = pendingCombatEnemy_.load();
-            if (combatIdx >= 0 && state_.load() == GameState::Exploration)
-            {
-                combatWorldEnemyIdx_ = combatIdx;
-                pendingCombatEnemy_.store(-1);
-                setState(GameState::Combat);
-            }
-            else if (combatIdx >= 0)
-            {
-                pendingCombatEnemy_.store(-1);
-            }
-        }
-
-        processInput();
-        update();
 
         TerminalScreen scr(cols, rows, cellW, cellH, font, getFontItalic(fontSize), fontSize);
         scr.clear();
@@ -733,7 +752,19 @@ void Game::processInput()
     int cp = GetCharPressed();
     if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
     if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
-    if (cp == 'f' || cp == 'F') { ToggleFullscreen(); fullscreen_ = !fullscreen_; saveSettings(); return; }
+    if (cp == 'f' || cp == 'F') {
+        if (IsWindowFullscreen()) {
+            ToggleFullscreen();
+            SetWindowSize(windowedW_, windowedH_);
+        } else {
+            windowedW_ = GetScreenWidth();
+            windowedH_ = GetScreenHeight();
+            ToggleFullscreen();
+        }
+        fullscreen_ = !fullscreen_;
+        saveSettings();
+        return;
+    }
     if (cp > 0)
         dispatchInput(cp);
 }
