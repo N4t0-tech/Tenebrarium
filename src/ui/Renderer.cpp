@@ -1018,7 +1018,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
         if (!message.empty())
             drawCentered(scr, scr.rows() / 2, 1, mapW - 2,
-                         " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
+                         " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED | CELL_ITALIC);
     } else {
         int hudH = 13;
         int mapH = scr.rows() - hudH;
@@ -1028,7 +1028,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 1, scr.cols() - 2,
-                         " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED);
+                         " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED | CELL_ITALIC);
     }
 }
 
