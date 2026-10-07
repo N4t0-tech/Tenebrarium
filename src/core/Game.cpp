@@ -3,6 +3,7 @@
 #include "core/Assets.hpp"
 #include "ai/EnemyAI.hpp"
 #include "ui/Renderer.hpp"
+
 #include "entities/Enemy.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
@@ -114,7 +115,8 @@ void Game::run()
         windowedH_ = SCREEN_H;
         windowedX_ = monX + (monW - SCREEN_W) / 2;
         windowedY_ = monY + (monH - SCREEN_H) / 2;
-        ToggleFullscreen();
+        SetWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
+        SetWindowState(FLAG_WINDOW_MAXIMIZED);
     }
 
     // Codepoints necesarios: ASCII + dibujo de caja + bloques + algunos CP437
@@ -320,7 +322,7 @@ void Game::run()
         return fontItalicCache[size];
     };
 
-    static constexpr int kPadX = 1;
+static constexpr int kPadX = 1;
     static constexpr int kPadY = 1;
 
     // Shader CRT
@@ -357,15 +359,8 @@ void Game::run()
         update();
 
         // Recalcular grid tras processInput (puede haber cambiado tamaño con F/fullscreen)
-        int screenW, screenH;
-        if (fullscreen_) {
-            int mon = GetCurrentMonitor();
-            screenW = GetMonitorWidth(mon);
-            screenH = GetMonitorHeight(mon);
-        } else {
-            screenW = GetScreenWidth();
-            screenH = GetScreenHeight();
-        }
+        int screenW = GetScreenWidth();
+        int screenH = GetScreenHeight();
         if (screenW != rtW || screenH != rtH || fullscreen_ != wasFullscreen_) {
             UnloadRenderTexture(renderTarget);
             renderTarget = LoadRenderTexture(screenW, screenH);
@@ -755,8 +750,8 @@ void Game::processInput()
     if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
     if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
     if (cp == 'f' || cp == 'F') {
-        if (IsWindowFullscreen()) {
-            ToggleFullscreen();
+        if (fullscreen_) {
+            ClearWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
             SetWindowSize(windowedW_, windowedH_);
             SetWindowPosition(windowedX_, windowedY_);
         } else {
@@ -764,9 +759,8 @@ void Game::processInput()
             windowedH_ = GetScreenHeight();
             windowedX_ = GetWindowPosition().x;
             windowedY_ = GetWindowPosition().y;
-            ToggleFullscreen();
-            int mon = GetCurrentMonitor();
-            SetWindowSize(GetMonitorWidth(mon), GetMonitorHeight(mon));
+            SetWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
+            SetWindowState(FLAG_WINDOW_MAXIMIZED);
         }
         fullscreen_ = !fullscreen_;
         saveSettings();
