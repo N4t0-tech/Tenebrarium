@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "ui/XpLoader.hpp"
 #include "core/Assets.hpp"
+#include "entities/SkillTree.hpp"
 #include <raylib.h>
 #include <string>
 #include <vector>
@@ -44,11 +45,14 @@ static constexpr Color COL_COLD_BG = { 8, 10, 16, 255 };  // negro frío sutil
 
 const char* Renderer::className(const Player& p) {
     switch (p.getClass()) {
-        case PlayerClass::Warrior: return "Guerrero";
-        case PlayerClass::Mage:    return "Mago";
-        case PlayerClass::Ranger:  return "Ranger";
-        case PlayerClass::Halley:  return "Halley";
-        case PlayerClass::Nato:    return "Nato";
+        case PlayerClass::Warrior:    return "Guerrero";
+        case PlayerClass::Picaro:     return "Pícaro";
+        case PlayerClass::Mage:       return "Mago";
+        case PlayerClass::Necrofago:  return "Necrófago";
+        case PlayerClass::Ranger:     return "Arquera";
+        case PlayerClass::Ballestero: return "Ballestero";
+        case PlayerClass::Halley:     return "Halley";
+        case PlayerClass::Nato:       return "Nato";
     }
     return "";
 }
@@ -170,22 +174,28 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
 
 Color Renderer::colorForPlayerClass(PlayerClass pc) {
     switch (pc) {
-        case PlayerClass::Warrior: return COL_YELLOW;
-        case PlayerClass::Mage:    return COL_CYAN;
-        case PlayerClass::Ranger:  return COL_GREEN;
-        case PlayerClass::Halley:  return COL_MAGENTA;
-        case PlayerClass::Nato:    return COL_RED;
+        case PlayerClass::Warrior:    return COL_YELLOW;
+        case PlayerClass::Picaro:     return COL_ORANGE;
+        case PlayerClass::Mage:       return COL_CYAN;
+        case PlayerClass::Necrofago:  return COL_MAGENTA;
+        case PlayerClass::Ranger:     return COL_GREEN;
+        case PlayerClass::Ballestero: return COL_DK_GREEN;
+        case PlayerClass::Halley:     return COL_MAGENTA;
+        case PlayerClass::Nato:       return COL_RED;
     }
     return COL_YELLOW;
 }
 
 static const char* portraitForClass(PlayerClass pc) {
     switch (pc) {
-        case PlayerClass::Warrior: return "mini-warrior.xp";
-        case PlayerClass::Mage:    return "mini-wizard.xp";
-        case PlayerClass::Ranger:  return "mini-ranger.xp";
-        case PlayerClass::Halley:  return "mini-halley.xp";
-        case PlayerClass::Nato:    return "mini-nato.xp";
+        case PlayerClass::Warrior:    return "mini-warrior.xp";
+        case PlayerClass::Picaro:     return "mini-warrior.xp";  // placeholder
+        case PlayerClass::Mage:       return "mini-wizard.xp";
+        case PlayerClass::Necrofago:  return "mini-wizard.xp";   // placeholder
+        case PlayerClass::Ranger:     return "mini-ranger.xp";
+        case PlayerClass::Ballestero: return "mini-ranger.xp";   // placeholder
+        case PlayerClass::Halley:     return "mini-halley.xp";
+        case PlayerClass::Nato:       return "mini-nato.xp";
     }
     return "mini-warrior.xp";
 }
@@ -755,23 +765,43 @@ struct ClassInfo {
     const char* name;
     const char* role;
     const char* desc;
-    const char* portrait;
+    const char* portrait;  // archivo .xp para la pantalla de selección
     int hp, atk, def, mana;
-};
-static constexpr ClassInfo kClasses[5] = {
-    {"GUERRERO","Vanguardia","Maestro del combate cuerpo a cuerpo.",
-     "warrior.xp", 120,20,8,100},
-    {"MAGO","Arcano","Domina las artes mágicas. Poder devastador.",
-     "mago.xp", 70,8,3,100},
-    {"RANGER","Explorador","Ágil y versátil. Experto en trampas y arco.",
-     "ranger.xp", 90,12,5,50},
-    {"HALLEY","Equilibrio","La balanza que todo lo iguala.",
-     "halley.xp", 130,18,7,170},
-    {"NATO","Creador","Forjó el Tenebrarium con sus manos.",
-     "nato.xp", 140,22,8,130},
+    PlayerClass cls;
 };
 
-void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUnlocked) {
+// Índices 0-5: clases normales (en 3 categorías de 2 subclases).
+// Índices 6-7: clases secretas (Halley, Nato).
+// category 0 → índices 0,1  (Física)
+// category 1 → índices 2,3  (Mágica)
+// category 2 → índices 4,5  (Distancia)
+static const ClassInfo kClasses[8] = {
+    // Física
+    {"GUERRERO", "Física",    "Maestro del combate cuerpo a cuerpo.",
+     "warrior.xp", 120,20,8,100, PlayerClass::Warrior},
+    {"PÍCARO",   "Física",    "Ágil y veloz. Golpes rápidos y trampas.",
+     "warrior.xp", 120,20,8,100, PlayerClass::Picaro},
+    // Mágica
+    {"MAGO",     "Mágica",    "Domina las artes mágicas. Poder devastador.",
+     "mago.xp",   100,10,3,100, PlayerClass::Mage},
+    {"NECRÓFAGO","Mágica",    "Canaliza la muerte para fortalecerse.",
+     "mago.xp",   100,10,3,100, PlayerClass::Necrofago},
+    // Distancia
+    {"ARQUERA",  "Distancia", "Ágil y versátil. Experta en trampas y arco.",
+     "ranger.xp",  100,12,5,50,  PlayerClass::Ranger},
+    {"BALLESTERO","Distancia","Perforante y preciso. Armadura pesada.",
+     "ranger.xp",  100,12,5,50,  PlayerClass::Ballestero},
+    // Secretas
+    {"HALLEY",   "Secreta",   "La balanza que todo lo iguala.",
+     "halley.xp", 130,18,7,170, PlayerClass::Halley},
+    {"NATO",     "Secreta",   "Forjó el Tenebrarium con sus manos.",
+     "nato.xp",   140,22,8,130, PlayerClass::Nato},
+};
+
+static const char* kCategoryNames[3] = { "Física", "Mágica", "Distancia" };
+
+void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subIdx[3],
+                                bool secretUnlocked) {
     drawCentered(scr, 1, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
     drawCentered(scr, 2, 0, scr.cols(), "Elige tu clase:", COL_WHITE);
 
@@ -786,30 +816,30 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
         int totalW = portW * 2 + gap;
         int startX = (scr.cols() - totalW) / 2;
         int portY = 4;
+        // category reused as 0=Halley 1=Nato in secret mode
+        int secretSel = category;
 
-        auto drawSecretClass = [&](int classIdx, int x, const char* label) {
-            bool sel = (selection == classIdx - 3);
+        auto drawSecretClass = [&](int kIdx, int x, const char* label, bool sel) {
             Color c = sel ? COL_YELLOW : COL_MAGENTA;
             drawBorder(scr, x - 1, portY - 1, portW + 2, portH + 2, c);
             Color tint = sel ? WHITE : Color{100, 100, 100, 255};
-            drawPortrait(scr, x, portY, kClasses[classIdx].portrait, kPortScale, tint);
+            drawPortrait(scr, x, portY, kClasses[kIdx].portrait, kPortScale, tint);
             drawCentered(scr, portY + portH, x - 1, portW + 2,
                          label, c, sel ? CELL_BOLD : 0);
         };
-        drawSecretClass(3, startX,           "HALLEY");
-        drawSecretClass(4, startX + portW + gap, "NATO");
+        drawSecretClass(6, startX,                "HALLEY", secretSel == 0);
+        drawSecretClass(7, startX + portW + gap,  "NATO",   secretSel == 1);
 
-        // Ficha de información debajo de los retratos
+        // Ficha de información
         int cardY = portY + portH + 3;
-        const auto& c = kClasses[3 + selection];
-        std::string stats = "HP:" + std::to_string(c.hp) +
-                            " ATK:" + std::to_string(c.atk) +
-                            " DEF:" + std::to_string(c.def) +
-                            " MP:" + std::to_string(c.mana);
-        std::string nameRole = std::string(c.name) + "  [ " + c.role + " ]";
+        const auto& ci = kClasses[6 + secretSel];
+        std::string stats = "HP:" + std::to_string(ci.hp) +
+                            " ATK:" + std::to_string(ci.atk) +
+                            " DEF:" + std::to_string(ci.def) +
+                            " MP:" + std::to_string(ci.mana);
+        std::string nameRole = std::string(ci.name) + "  [ " + ci.role + " ]";
         int cardW = std::max({ (int)nameRole.size(), (int)stats.size(),
-                               (int)std::string(c.desc).size(),
-                               20 }) + 4;
+                               (int)std::string(ci.desc).size(), 20 }) + 4;
         int cardX = (scr.cols() - cardW) / 2;
         if (cardX < 1) cardX = 1;
         int cardH = 7;
@@ -821,69 +851,77 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int selection, bool secretUn
         scr.put(cardX, cardY + 2, 0x2560, COL_YELLOW);
         scr.put(cardX + cardW - 1, cardY + 2, 0x2563, COL_YELLOW);
         scr.putStr(cardX + 2, cardY + 3, stats, COL_GREEN);
-        scr.putStr(cardX + 2, cardY + 4, c.desc, COL_GRAY, COL_BLACK, CELL_DIM);
+        scr.putStr(cardX + 2, cardY + 4, ci.desc, COL_GRAY, COL_BLACK, CELL_DIM);
         scr.putStr(cardX + 2, cardY + 5, "~~ CLASE SECRETA ~~", COL_MAGENTA, COL_BLACK, CELL_DIM);
 
     } else {
-        // ─── Modo clases normales: lista vertical + retrato a la derecha ────
-        int nClasses = 3;
-        int startIdx = 0;
-
-        int maxContent = 0;
-        for (int i = 0; i < nClasses; i++) {
-            const auto& c = kClasses[startIdx + i];
-            std::string stats = "HP:" + std::to_string(c.hp) +
-                                " ATK:" + std::to_string(c.atk) +
-                                " DEF:" + std::to_string(c.def) +
-                                " MP:" + std::to_string(c.mana);
-            std::string role  = std::string("[ ") + c.role + " ]";
-            int w = std::max({ (int)std::string(c.name).size(),
-                               (int)role.size(),
-                               (int)stats.size(),
-                               (int)std::string(c.desc).size() });
-            maxContent = std::max(maxContent, w);
-        }
-        int boxW = maxContent + 4;
-        int boxH = 7, listCol = 2;
-
-        for (int i = 0; i < nClasses; i++) {
-            const auto& c = kClasses[startIdx + i];
-            bool sel = (i == selection);
-            Color tc = sel ? COL_YELLOW : COL_GRAY;
-            uint8_t tf = sel ? CELL_BOLD : CELL_DIM;
-            int br = 4 + i * (boxH + 1);
-            drawBorder(scr, listCol, br, boxW, boxH, tc);
-            scr.putStr(listCol + 2, br + 1, c.name, tc, COL_BLACK, tf);
-            scr.putStr(listCol + 2, br + 2,
-                       std::string("[ ") + c.role + " ]", tc, COL_BLACK, tf);
-            for (int x = 0; x < boxW - 2; x++)
-                scr.put(listCol + 1 + x, br + 3, 0x2550, tc);
-            scr.put(listCol, br + 3, 0x2560, tc);
-            scr.put(listCol + boxW - 1, br + 3, 0x2563, tc);
-            std::string manaLabel = (i == 0) ? " AG:" : " MP:";
-            scr.putStr(listCol + 2, br + 4,
-                "HP:" + std::to_string(c.hp) +
-                " ATK:" + std::to_string(c.atk) +
-                " DEF:" + std::to_string(c.def) +
-                manaLabel + std::to_string(c.mana), COL_GREEN, COL_BLACK, tf);
-            scr.putStr(listCol + 2, br + 5, c.desc, tc, COL_BLACK, CELL_DIM);
-        }
-
+        // ─── Modo clases normales: 3 filas (Física/Mágica/Distancia) + retrato ─
+        // Cada fila muestra la subclase seleccionada con indicadores ◄ ►
         static constexpr float kPortScale = 1.0f;
         static constexpr int kSrcSize = 60;
         int portW = kSrcSize;
         int portH = kSrcSize / 2;
+
+        int listCol = 2;
+        int boxW = 36;
+        int boxH = 7;
+        int startRow = 4;
+
+        for (int cat = 0; cat < 3; cat++) {
+            int kIdx = cat * 2 + subIdx[cat];  // índice en kClasses
+            const auto& ci = kClasses[kIdx];
+            bool sel = (cat == category);
+            Color tc = sel ? COL_YELLOW : COL_GRAY;
+            uint8_t tf = sel ? CELL_BOLD : CELL_DIM;
+            int br = startRow + cat * (boxH + 1);
+
+            drawBorder(scr, listCol, br, boxW, boxH, tc);
+
+            // Categoría en la esquina
+            scr.putStr(listCol + 2, br + 1,
+                       std::string("[ ") + kCategoryNames[cat] + " ]", tc, COL_BLACK, CELL_DIM);
+
+            // Nombre con flechas A/D si está seleccionado
+            std::string nameLabel;
+            if (sel) {
+                nameLabel = std::string("\xe2\x97\x84 ") + ci.name + " \xe2\x96\xba";
+            } else {
+                nameLabel = std::string("  ") + ci.name + "  ";
+            }
+            scr.putStr(listCol + 2, br + 2, nameLabel, tc, COL_BLACK, tf);
+
+            // Separador
+            for (int x = 0; x < boxW - 2; x++)
+                scr.put(listCol + 1 + x, br + 3, 0x2550, tc);
+            scr.put(listCol, br + 3, 0x2560, tc);
+            scr.put(listCol + boxW - 1, br + 3, 0x2563, tc);
+
+            // Stats
+            std::string manaLabel = (cat == 0) ? " AG:" : " MP:";
+            scr.putStr(listCol + 2, br + 4,
+                "HP:" + std::to_string(ci.hp) +
+                " ATK:" + std::to_string(ci.atk) +
+                " DEF:" + std::to_string(ci.def) +
+                manaLabel + std::to_string(ci.mana),
+                sel ? COL_GREEN : COL_DK_GREEN, COL_BLACK, tf);
+
+            // Descripción
+            scr.putStr(listCol + 2, br + 5, ci.desc, tc, COL_BLACK, CELL_DIM);
+        }
+
+        // Retrato de la subclase activa en la categoría seleccionada
+        int activeKIdx = category * 2 + subIdx[category];
         int spaceStart = listCol + boxW + 2;
         int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
         if (portCol < spaceStart) portCol = spaceStart;
         drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
-        drawPortrait(scr, portCol, 4, kClasses[selection].portrait, kPortScale);
+        drawPortrait(scr, portCol, 4, kClasses[activeKIdx].portrait, kPortScale);
     }
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  secretUnlocked
                      ? "A/D navegar  |  ENTER confirmar  |  ESC volver"
-                     : "W/S navegar  |  ENTER confirmar  |  ESC volver",
+                     : "W/S fila  |  A/D subclase  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -1759,4 +1797,191 @@ void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int select
                    std::to_string(costs[i]) + " $", lc, COL_BLACK, lf);
     }
     scr.putStr(bx + 2, r, "ENTER entrenar  |  ESC salir", COL_GRAY, COL_BLACK, CELL_DIM);
+}
+
+// ─── drawSkillTree ────────────────────────────────────────────────────────────
+
+void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
+                             int /*tierCursor*/, int choiceCursor) {
+    const SkillTreeDef& tree = getSkillTree(player.getClass());
+    const auto& unlocked = player.getUnlockedSkills();
+
+    // Título
+    std::string title = std::string("ARBOL DE HABILIDADES - ") + className(player);
+    int boxW = std::max(52, (int)title.size() + 4);
+    if (boxW > scr.cols() - 4) boxW = scr.cols() - 4;
+    int boxX = (scr.cols() - boxW) / 2;
+    if (boxX < 1) boxX = 1;
+    int boxRow = 1;
+    int innerW = boxW - 2;
+    int innerX = boxX + 1;
+
+    // Determinar tier pendiente (el que el jugador debe elegir)
+    int pendingTier = -1;
+    if (player.hasPendingSkillUnlock()) {
+        for (int t = 0; t < static_cast<int>(tree.tiers.size()); t++) {
+            bool already = false;
+            for (const auto& us : unlocked)
+                if (us.tier == t) { already = true; break; }
+            if (!already) { pendingTier = t; break; }
+        }
+    }
+
+    // Cabecera del cuadro
+    scr.put(boxX, boxRow, 0x2554, COL_YELLOW);
+    scr.put(boxX + boxW - 1, boxRow, 0x2557, COL_YELLOW);
+    for (int x = 1; x < boxW - 1; x++)
+        scr.put(boxX + x, boxRow, 0x2550, COL_YELLOW);
+    boxRow++;
+
+    drawCentered(scr, boxRow, innerX, innerW, title, COL_YELLOW, CELL_BOLD);
+    scr.put(boxX, boxRow, 0x2551, COL_YELLOW);
+    scr.put(boxX + boxW - 1, boxRow, 0x2551, COL_YELLOW);
+    boxRow++;
+
+    // Separador bajo el título
+    scr.put(boxX, boxRow, 0x2560, COL_YELLOW);
+    scr.put(boxX + boxW - 1, boxRow, 0x2563, COL_YELLOW);
+    for (int x = 1; x < boxW - 1; x++)
+        scr.put(boxX + x, boxRow, 0x2550, COL_YELLOW);
+    boxRow++;
+
+    int treeRow = boxRow;
+
+    for (int t = 0; t < static_cast<int>(tree.tiers.size()); t++) {
+        const SkillTier& tier = tree.tiers[t];
+
+        int unlockedChoice = -1;
+        for (const auto& us : unlocked)
+            if (us.tier == t) { unlockedChoice = us.choiceIdx; break; }
+        bool isPending = (t == pendingTier);
+
+        // Fila de nivel requerido
+        Color lvlColor = (unlockedChoice >= 0) ? COL_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
+        std::string lvlLabel = "Lv" + std::to_string(tier.requiredLevel);
+        drawCentered(scr, treeRow, innerX, innerW, lvlLabel, lvlColor);
+        scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+        scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+        treeRow++;
+
+        if (tier.choices.size() == 1) {
+            const SkillChoice& sc = tier.choices[0];
+            std::string label;
+            Color c; uint8_t fl = 0;
+            if (unlockedChoice == 0)  { label = "[" + sc.name + "]"; c = COL_GREEN;   fl = CELL_BOLD; }
+            else if (isPending)       { label = ">" + sc.name + "<"; c = COL_YELLOW;  fl = CELL_BOLD; }
+            else                      { label = "[" + sc.name + "]"; c = COL_DK_GRAY; fl = CELL_DIM;  }
+            drawCentered(scr, treeRow, innerX, innerW, label, c, fl);
+            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            treeRow++;
+        } else {
+            // Bifurcación ┌───┴───┐
+            int midX = innerX + innerW / 2;
+            int nodeW = 10;
+            int leftX  = midX - nodeW - 1;
+            int rightX = midX + 2;
+
+            // Línea fork
+            {
+                Color fkc = (unlockedChoice >= 0) ? COL_DK_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
+                for (int x = leftX + 1; x < midX; x++)
+                    if (x >= innerX && x < innerX + innerW)
+                        scr.put(x, treeRow, 0x2500, fkc);
+                for (int x = midX + 1; x < rightX + nodeW - 1; x++)
+                    if (x >= innerX && x < innerX + innerW)
+                        scr.put(x, treeRow, 0x2500, fkc);
+                if (leftX >= innerX) scr.put(leftX, treeRow, 0x250C, fkc);
+                if (midX >= innerX && midX < innerX + innerW) scr.put(midX, treeRow, 0x2534, fkc);
+                if (rightX + nodeW - 1 < innerX + innerW) scr.put(rightX + nodeW - 1, treeRow, 0x2510, fkc);
+                scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+                scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+                treeRow++;
+            }
+
+            // Dos opciones
+            for (int ci = 0; ci < 2; ci++) {
+                const SkillChoice& sc = tier.choices[ci];
+                int nx = (ci == 0) ? leftX : rightX;
+                std::string label;
+                Color c; uint8_t fl = 0;
+                if (unlockedChoice == ci)      { label = "[" + sc.name + "]"; c = COL_GREEN;   fl = CELL_BOLD; }
+                else if (unlockedChoice >= 0)  { label = " " + sc.name + " "; c = COL_DK_GRAY; fl = CELL_DIM;  }
+                else if (isPending && choiceCursor == ci) { label = ">" + sc.name + "<"; c = COL_YELLOW; fl = CELL_BOLD; }
+                else if (isPending)            { label = "[" + sc.name + "]"; c = COL_ORANGE;  fl = 0;         }
+                else                           { label = "[" + sc.name + "]"; c = COL_DK_GRAY; fl = CELL_DIM;  }
+                // Truncar a nodeW
+                while (utf8Len(label) > nodeW) label.pop_back();
+                if (nx >= innerX && nx + (int)label.size() <= innerX + innerW)
+                    scr.putStr(nx, treeRow, label, c, COL_BLACK, fl);
+            }
+            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            treeRow++;
+
+            // Merge └───┬───┘
+            {
+                Color fkc = (unlockedChoice >= 0) ? COL_DK_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
+                for (int x = leftX + 1; x < midX; x++)
+                    if (x >= innerX && x < innerX + innerW)
+                        scr.put(x, treeRow, 0x2500, fkc);
+                for (int x = midX + 1; x < rightX + nodeW - 1; x++)
+                    if (x >= innerX && x < innerX + innerW)
+                        scr.put(x, treeRow, 0x2500, fkc);
+                if (leftX >= innerX) scr.put(leftX, treeRow, 0x2514, fkc);
+                if (midX >= innerX && midX < innerX + innerW) scr.put(midX, treeRow, 0x252C, fkc);
+                if (rightX + nodeW - 1 < innerX + innerW) scr.put(rightX + nodeW - 1, treeRow, 0x2518, fkc);
+                scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+                scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+                treeRow++;
+            }
+        }
+
+        // Conector vertical hacia el siguiente tier
+        if (t < static_cast<int>(tree.tiers.size()) - 1) {
+            Color connC = (unlockedChoice >= 0) ? COL_DK_GREEN : COL_DK_GRAY;
+            drawCentered(scr, treeRow, innerX, innerW, "|", connC);
+            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            treeRow++;
+        }
+    }
+
+    // Separador inferior antes de la descripción
+    scr.put(boxX, treeRow, 0x2560, COL_YELLOW);
+    scr.put(boxX + boxW - 1, treeRow, 0x2563, COL_YELLOW);
+    for (int x = 1; x < boxW - 1; x++)
+        scr.put(boxX + x, treeRow, 0x2550, COL_YELLOW);
+    treeRow++;
+
+    // Descripción de la habilidad destacada
+    std::string descLine;
+    if (pendingTier >= 0 && pendingTier < static_cast<int>(tree.tiers.size())) {
+        const SkillTier& tier = tree.tiers[pendingTier];
+        int ci2 = std::min(choiceCursor, static_cast<int>(tier.choices.size()) - 1);
+        const SkillChoice& sc = tier.choices[ci2];
+        descLine = sc.name + ": " + sc.desc +
+                   "  (PA:" + std::to_string(sc.apCost) +
+                   " MP:" + std::to_string(sc.manaCost) + ")";
+    } else {
+        descLine = "Habilidades de este nivel ya desbloqueadas.";
+    }
+    scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
+    scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+    while (utf8Len(descLine) > innerW - 2) descLine.pop_back();
+    scr.putStr(innerX + 1, treeRow, descLine, COL_CYAN);
+    treeRow++;
+
+    // Pie del cuadro
+    scr.put(boxX, treeRow, 0x255A, COL_YELLOW);
+    scr.put(boxX + boxW - 1, treeRow, 0x255D, COL_YELLOW);
+    for (int x = 1; x < boxW - 1; x++)
+        scr.put(boxX + x, treeRow, 0x2550, COL_YELLOW);
+    treeRow++;
+
+    drawCentered(scr, treeRow, 0, scr.cols(),
+                 pendingTier >= 0
+                     ? "A/D elegir habilidad  |  ENTER confirmar"
+                     : "ENTER o ESC para cerrar",
+                 COL_GRAY, CELL_DIM);
 }

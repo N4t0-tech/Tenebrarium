@@ -99,7 +99,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 5 << '\n'; // version 5: pueblo hub (incursiones + lastPlace)
+    f << 6 << '\n'; // version 6: árbol de habilidades (unlockedSkills)
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -207,6 +207,13 @@ void GameSerializer::save(Game& g)
 
     // HUD layout
     f << static_cast<int>(g.hudLayout_) << '\n';
+
+    // Árbol de habilidades desbloqueadas (v6)
+    const auto& skills = g.player_->getUnlockedSkills();
+    f << skills.size() << '\n';
+    for (const auto& us : skills)
+        f << us.tier << ' ' << us.choiceIdx << '\n';
+    f << static_cast<int>(g.player_->hasPendingSkillUnlock()) << '\n';
 }
 
 // ─── load ─────────────────────────────────────────────────────────────────────
@@ -217,10 +224,10 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 5)
+    if (!(f >> version) || version < 1 || version > 6)
         return false;
 
-    // v5: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
+    // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
     int inDungeon = 1;
     if (version >= 5) {
         if (!(f >> inDungeon)) return false;
@@ -454,6 +461,20 @@ bool GameSerializer::load(Game& g)
     int hud;
     if (!(f >> hud)) return false;
     g.hudLayout_ = static_cast<HudLayout>(hud);
+
+    // Árbol de habilidades (v6)
+    if (version >= 6 && g.player_) {
+        size_t skillCount;
+        if (!(f >> skillCount)) return false;
+        for (size_t i = 0; i < skillCount; i++) {
+            int tier, choiceIdx;
+            if (!(f >> tier >> choiceIdx)) return false;
+            g.player_->unlockSkill(tier, choiceIdx);
+        }
+        int pending;
+        if (!(f >> pending)) return false;
+        g.player_->setPendingSkillUnlock(pending != 0);
+    }
 
     // Restore runtime state
     g.combat_.reset();

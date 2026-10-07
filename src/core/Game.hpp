@@ -46,6 +46,8 @@ private:
     int           menuSelection_;
     std::string   playerName_;
     int           classSelection_;
+    int           classSelectCategory_{0};          // 0=Física 1=Mágica 2=Distancia
+    int           classSelectSubIdx_[3]{0, 0, 0};   // subclase seleccionada en cada categoría
     int           hudSelection_;
     int           settingsSelection_{0};
 
@@ -85,6 +87,11 @@ private:
     int  windowedY_{0};
     bool victory_{false};
     bool secretEasterEgg_{false};
+
+    // Árbol de habilidades
+    GameState     preSkillTreeState_{GameState::Exploration};
+    int           skillTreeTierCursor_{0};
+    int           skillTreeChoiceCursor_{0};
 
     bool   shovelDigging_{false};
     double shovelDigEndTime_{0.0};
@@ -138,7 +145,8 @@ private:
     void inputQuestLog(int key);
     void inputBestiary(int key);
     void inputSettings(int key);
-void inputVillage(int key);
+    void inputVillage(int key);
+    void inputSkillTree(int key);
     void generateShopStock();
     void useShovel();
     // Enruta un mensaje transitorio al mapa activo (mazmorra o pueblo).
