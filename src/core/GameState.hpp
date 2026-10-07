@@ -19,4 +19,5 @@ enum class GameState {
     GameOver,    // derrota o victoria (victory_ distingue cuál)
     Shop,        // tienda del pueblo
     QuitDialog,  // confirmación de salida (ESC cancela sin regenerar el mapa)
+    SkillTree,   // árbol de habilidades — se abre al subir nivel múltiplo de 5
 };

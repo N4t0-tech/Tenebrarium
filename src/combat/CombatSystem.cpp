@@ -14,7 +14,8 @@ CombatSystem::CombatSystem(Player& player, std::vector<std::unique_ptr<Enemy>> e
     : player_(player),
       enemies_(std::move(enemies)),
       currentTarget_(0),
-      maxAp_(player.getClass() == PlayerClass::Ranger ? 4 : 3),
+      maxAp_((player.getClass() == PlayerClass::Ranger ||
+               player.getClass() == PlayerClass::Ballestero) ? 4 : 3),
       currentAp_(maxAp_),
       phase_(CombatPhase::PlayerTurn),
       fled_(false)
@@ -663,15 +664,179 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             }
             break;
         }
+
+        // ─── Nuevos efectos del árbol de habilidades ──────────────────────────
+        case ArtEffect::BerserkWarrior: {
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::AttackBoosted;
+            fx.turnsLeft = 3;
+            fx.magnitude = player_.getAttack() / 2;
+            playerEffects_.push_back(fx);
+            // Reducción temporal de defensa: la simulamos con un log (mecánica stub)
+            logMessage("Berserk! ATK +" + ts(fx.magnitude) + " por 3 turnos (DEF reducida).");
+            break;
+        }
+
+        case ArtEffect::Fortaleza: {
+            // Regen: aplicamos el 10% del HP máximo directamente (stub simple)
+            int heal = std::max(1, player_.getMaxHp() / 10);
+            player_.heal(heal);
+            logMessage("Fortaleza! Recuperas " + ts(heal) + " HP (regen).");
+            break;
+        }
+
+        case ArtEffect::Rayo: {
+            if (!target->isAlive()) break;
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.8f));
+            target->takeDamageRaw(dmg);
+            logMessage("Rayo! " + ts(dmg) + " daño devastador (ignora DEF).");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
+
+        case ArtEffect::TormentaArcana: {
+            int dmg = std::max(1, player_.getAttack() / 2);
+            logMessage("Tormenta Arcana! " + ts(dmg) + " daño a todos + congelados!");
+            for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
+                if (enemies_[i]->isAlive()) {
+                    enemies_[i]->takeDamageRaw(dmg);
+                    StatusEffect fx;
+                    fx.type      = StatusEffect::Type::Frozen;
+                    fx.turnsLeft = 1;
+                    fx.magnitude = 1;
+                    enemyEffects_[i].push_back(fx);
+                    if (!enemies_[i]->isAlive())
+                        logMessage("  " + enemies_[i]->getName() + " derrotado!");
+                }
+            }
+            advanceTarget();
+            break;
+        }
+
+        case ArtEffect::EscudoArcano: {
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::DefendingHeavy;
+            fx.turnsLeft = 1;
+            fx.magnitude = 100; // absorbe completamente el golpe
+            playerEffects_.push_back(fx);
+            logMessage("Escudo Arcano! El próximo golpe será absorbido.");
+            break;
+        }
+
+        case ArtEffect::LluviaFlechas: {
+            if (!target->isAlive()) break;
+            int hits = 3;
+            logMessage("Lluvia de Flechas! " + ts(hits) + " impactos aleatorios!");
+            for (int h = 0; h < hits; h++) {
+                // Elegir objetivo aleatorio entre los vivos
+                std::vector<int> alive;
+                for (int i = 0; i < static_cast<int>(enemies_.size()); i++)
+                    if (enemies_[i]->isAlive()) alive.push_back(i);
+                if (alive.empty()) break;
+                int idx = alive[std::rand() % alive.size()];
+                int dmg = std::max(1, static_cast<int>(player_.getAttack() * 0.6f) - enemies_[idx]->getDefense());
+                enemies_[idx]->takeDamageRaw(dmg);
+                logMessage("  Flecha " + ts(h + 1) + ": " + ts(dmg) + " a " + enemies_[idx]->getName());
+                if (!enemies_[idx]->isAlive())
+                    logMessage("  " + enemies_[idx]->getName() + " derrotado!");
+            }
+            advanceTarget();
+            break;
+        }
+
+        case ArtEffect::GolpeCritico: {
+            if (!target->isAlive()) break;
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 2.5f) - target->getDefense());
+            target->takeDamageRaw(dmg);
+            logMessage("Golpe Crítico! " + ts(dmg) + " daño devastador.");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
+
+        case ArtEffect::Sombra: {
+            // Stub: esquiva y contraataca — por ahora aplica daño + efecto defensivo
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::Defending;
+            fx.turnsLeft = 1;
+            fx.magnitude = 50;
+            playerEffects_.push_back(fx);
+            if (target->isAlive()) {
+                int dmg = std::max(1, player_.getAttack() - target->getDefense());
+                target->takeDamageRaw(dmg);
+                logMessage("Sombra! " + ts(dmg) + " daño y postura evasiva.");
+                if (!target->isAlive()) {
+                    logMessage("  " + target->getName() + " derrotado!");
+                    advanceTarget();
+                }
+            }
+            break;
+        }
+
+        case ArtEffect::AbsorbVida: {
+            if (!target->isAlive()) break;
+            int stolen = std::max(1, target->getHp() * 30 / 100);
+            target->takeDamageRaw(stolen);
+            player_.heal(stolen);
+            logMessage("Absorber Vida! Robas " + ts(stolen) + " HP a " + target->getName() + ".");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
+
+        case ArtEffect::CampoEquilibrio: {
+            // Iguala HP entre jugador y objetivo (promedio)
+            if (!target->isAlive()) break;
+            int avg = (player_.getHp() + target->getHp()) / 2;
+            int playerDiff = avg - player_.getHp();
+            if (playerDiff > 0) player_.heal(playerDiff);
+            else player_.takeDamageRaw(-playerDiff);
+            // El enemigo recibe la diferencia inversa como daño
+            int enemyDmg = std::max(0, target->getHp() - avg);
+            if (enemyDmg > 0) target->takeDamageRaw(enemyDmg);
+            logMessage("Campo de Equilibrio! HP promedio = " + ts(avg) + ".");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
+
+        case ArtEffect::ColapsoDimensional: {
+            if (!target->isAlive()) break;
+            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.5f));
+            target->takeDamageRaw(dmg);
+            // Congela como debuff de stats
+            StatusEffect fx;
+            fx.type      = StatusEffect::Type::Frozen;
+            fx.turnsLeft = 2;
+            fx.magnitude = 1;
+            enemyEffects_[currentTarget_].push_back(fx);
+            logMessage("Colapso Dimensional! " + ts(dmg) + " daño + stats reducidos.");
+            if (!target->isAlive()) {
+                logMessage("  " + target->getName() + " derrotado!");
+                advanceTarget();
+            }
+            break;
+        }
     }
 }
 
 bool CombatSystem::rollCritical() const {
     int chance = 15;
     switch (player_.getClass()) {
-        case PlayerClass::Ranger: chance = 20; break;
-        case PlayerClass::Halley: chance = 18; break;
-        case PlayerClass::Nato:   chance = 20; break;
+        case PlayerClass::Ranger:     chance = 20; break;
+        case PlayerClass::Ballestero: chance = 22; break;
+        case PlayerClass::Halley:     chance = 18; break;
+        case PlayerClass::Nato:       chance = 20; break;
+        case PlayerClass::Picaro:     chance = 18; break;
         default: break;
     }
     return (std::rand() % 100) < chance;
@@ -692,7 +857,8 @@ int CombatSystem::getPlayerAttackBoost() const {
 
 int CombatSystem::getEffectiveAttack() const {
     int atk = player_.getAttack();
-    if (player_.getClass() == PlayerClass::Warrior) {
+    if (player_.getClass() == PlayerClass::Warrior ||
+        player_.getClass() == PlayerClass::Picaro) {
         int pct = player_.getMana() * 100 / std::max(1, player_.getMaxMana());
         int factor = std::max(70, pct);
         atk = atk * factor / 100;

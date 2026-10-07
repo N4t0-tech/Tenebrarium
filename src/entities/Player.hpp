@@ -11,11 +11,18 @@
 #include <optional>
 
 enum class PlayerClass {
-    Warrior,  // alta vida y defensa, artes de cuerpo a cuerpo
-    Mage,     // baja vida, mucho mana, artes de área y control
-    Ranger,   // equilibrado, artes de DoT y múltiples golpes
-    Halley,   // clase secreta — Creador del Tenebrarium
-    Nato,     // clase secreta — Equilibrio del Tenebrarium
+    // Física
+    Warrior,   // alta vida y defensa, artes de cuerpo a cuerpo
+    Picaro,    // ágil, trampas y golpes rápidos
+    // Mágica
+    Mage,      // baja vida, mucho mana, artes de área y control
+    Necrofago, // magia oscura, drenaje de vida
+    // Distancia
+    Ranger,    // equilibrado, artes de DoT y múltiples golpes (Arquera en UI)
+    Ballestero,// distancia pesada, ataques perforantes
+    // Secretas
+    Halley,    // clase secreta — Creador del Tenebrarium
+    Nato,      // clase secreta — Equilibrio del Tenebrarium
 };
 
 class Player : public Entity {
@@ -43,7 +50,18 @@ public:
     void gainXp(int amount);               // acumula XP; llama levelUp() si supera el umbral
     bool useMana(int amount);             // retorna false y no descuenta si no hay mana suficiente
     void restoreMana(int amount);
-    std::vector<Art> getAvailableArts() const;  // lista de habilidades según la clase
+    std::vector<Art> getAvailableArts() const;  // lista de habilidades desbloqueadas
+
+    // ── Árbol de habilidades ─────────────────────────────────────────────────
+    struct UnlockedSkill {
+        int tier;       // índice del tier (0-indexed)
+        int choiceIdx;  // qué opción eligió (0 o 1)
+    };
+
+    bool hasPendingSkillUnlock() const { return pendingSkillUnlock_; }
+    void setPendingSkillUnlock(bool v) { pendingSkillUnlock_ = v; }
+    bool unlockSkill(int tier, int choiceIdx); // false si ya desbloqueado o inválido
+    const std::vector<UnlockedSkill>& getUnlockedSkills() const { return unlockedSkills_; }
 
     void addCoins(int amount);            // puede ser negativo (compra)
     void descendFloor();                  // incrementa dungeonFloor_
@@ -81,6 +99,9 @@ private:
     std::optional<Item> equippedWeapon_;
     std::optional<Item> equippedArmor_;
     Inventory inventory_;
+
+    std::vector<UnlockedSkill> unlockedSkills_;
+    bool pendingSkillUnlock_ = false;
 
     void levelUp();
 

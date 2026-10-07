@@ -844,7 +844,8 @@ void Game::dispatchInput(int key)
                     int restored = player_->getMaxMana() / 2;
                     player_->restoreMana(restored);
                     player_->getInventory().removeItem(item.name);
-                    std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
+                    std::string label = (player_->getClass() == PlayerClass::Warrior ||
+                                        player_->getClass() == PlayerClass::Picaro) ? "Aguante" : "MP";
                     dungeon_->message = "Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!";
                     dungeon_->messageEndTime = GetTime() + 2.0;
                     used = true;
@@ -852,7 +853,8 @@ void Game::dispatchInput(int key)
                 }
             }
             if (!used)
-                dungeon_->message = player_->getClass() == PlayerClass::Warrior
+                dungeon_->message = (player_->getClass() == PlayerClass::Warrior ||
+                                     player_->getClass() == PlayerClass::Picaro)
                     ? "No tienes cerveza." : "No tienes poción de mana.";
             dungeon_->messageEndTime = GetTime() + 2.0;
             break;
@@ -1061,6 +1063,9 @@ void Game::dispatchInput(int key)
     case GameState::QuitDialog:
         inputQuitDialog(key);
         break;
+    case GameState::SkillTree:
+        inputSkillTree(key);
+        break;
     }
 }
 
@@ -1212,6 +1217,8 @@ void Game::inputNameInput(int key)
             secretEasterEgg_ = (playerName_ == "halley" || playerName_ == "nato"
                                 || playerName_ == "halley&nato");
             classSelection_ = 0;
+            classSelectCategory_ = 0;
+            classSelectSubIdx_[0] = classSelectSubIdx_[1] = classSelectSubIdx_[2] = 0;
             menuPhase_ = MenuPhase::ClassSelect;
         }
         return;
@@ -1234,9 +1241,10 @@ void Game::inputNameInput(int key)
 void Game::inputClassSelect(int key)
 {
     if (secretEasterEgg_) {
+        // Modo secreto: A/D navega entre Halley y Nato
         switch (key) {
-        case 'a': classSelection_ = 0; break;
-        case 'd': classSelection_ = 1; break;
+        case 'a': classSelectCategory_ = 0; break;
+        case 'd': classSelectCategory_ = 1; break;
         case 27:
             secretEasterEgg_ = false;
             menuPhase_ = MenuPhase::NameInput;
@@ -1248,8 +1256,19 @@ void Game::inputClassSelect(int key)
         }
     } else {
         switch (key) {
-        case 'w': case 's':
-            navV(key, classSelection_, 3);
+        case 'w':
+            classSelectCategory_ = (classSelectCategory_ - 1 + 3) % 3;
+            break;
+        case 's':
+            classSelectCategory_ = (classSelectCategory_ + 1) % 3;
+            break;
+        case 'a':
+            classSelectSubIdx_[classSelectCategory_] =
+                (classSelectSubIdx_[classSelectCategory_] + 1) % 2;
+            break;
+        case 'd':
+            classSelectSubIdx_[classSelectCategory_] =
+                (classSelectSubIdx_[classSelectCategory_] + 1) % 2;
             break;
         case 27:
             menuPhase_ = MenuPhase::NameInput;
@@ -1278,14 +1297,17 @@ void Game::inputHudSelect(int key)
         hudLayout_ = (hudSelection_ == 0) ? HudLayout::Sidebar : HudLayout::Bottom;
         PlayerClass cls;
         if (secretEasterEgg_) {
-            cls = (classSelection_ == 0) ? PlayerClass::Halley : PlayerClass::Nato;
+            cls = (classSelectCategory_ == 0) ? PlayerClass::Halley : PlayerClass::Nato;
         } else {
-            switch (classSelection_)
-            {
-            case 0:  cls = PlayerClass::Warrior; break;
-            case 1:  cls = PlayerClass::Mage;    break;
-            default: cls = PlayerClass::Ranger;  break;
-            }
+            // Mapear (categoría, subíndice) → PlayerClass
+            // categoría 0 (Física):    subIdx 0 → Warrior,    subIdx 1 → Picaro
+            // categoría 1 (Mágica):    subIdx 0 → Mage,       subIdx 1 → Necrofago
+            // categoría 2 (Distancia): subIdx 0 → Ranger,     subIdx 1 → Ballestero
+            int cat = classSelectCategory_;
+            int sub = classSelectSubIdx_[cat];
+            if (cat == 0) cls = (sub == 0) ? PlayerClass::Warrior    : PlayerClass::Picaro;
+            else if (cat == 1) cls = (sub == 0) ? PlayerClass::Mage  : PlayerClass::Necrofago;
+            else cls = (sub == 0) ? PlayerClass::Ranger : PlayerClass::Ballestero;
         }
         player_ = std::make_unique<Player>(playerName_, cls);
         // Dar 2 bombas iniciales (como 1 item con quantity=2)
@@ -1304,9 +1326,59 @@ void Game::inputHudSelect(int key)
     }
 }
 
+void Game::inputSkillTree(int key)
+{
+    if (!player_) return;
+    const auto& unlocked = player_->getUnlockedSkills();
+
+    // Encontrar tier pendiente
+    int pendingTier = -1;
+    if (player_->hasPendingSkillUnlock()) {
+        // Importar getSkillTree aquí — necesitamos conocer cuántos tiers hay
+        // Usamos el número de habilidades ya desbloqueadas como índice de tier pendiente
+        int nextTierIdx = static_cast<int>(unlocked.size());
+        pendingTier = nextTierIdx; // el siguiente tier sin desbloquear
+    }
+
+    switch (key) {
+    case 'a':
+        if (pendingTier >= 0)
+            skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % 2;
+        break;
+    case 'd':
+        if (pendingTier >= 0)
+            skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % 2;
+        break;
+    case '\n':
+        if (pendingTier >= 0) {
+            player_->unlockSkill(pendingTier, skillTreeChoiceCursor_);
+        }
+        // Volver al estado anterior
+        state_.store(preSkillTreeState_);
+        break;
+    case 27: // ESC — cerrar sin elegir (solo si no es obligatorio)
+        if (!player_->hasPendingSkillUnlock()) {
+            state_.store(preSkillTreeState_);
+        }
+        break;
+    }
+}
+
 void Game::update()
 {
     checkQuestProgress();
+
+    // Abrir árbol de habilidades cuando hay un desbloqueo pendiente
+    if (player_ && player_->hasPendingSkillUnlock()
+        && state_.load() != GameState::SkillTree
+        && state_.load() != GameState::MainMenu)
+    {
+        preSkillTreeState_ = state_.load();
+        skillTreeChoiceCursor_ = 0;
+        // Determinar el tier que se va a desbloquear
+        skillTreeTierCursor_ = static_cast<int>(player_->getUnlockedSkills().size());
+        state_.store(GameState::SkillTree);
+    }
 
     // Abrir puerta bloqueada cuando todos los enemigos del piso estén muertos
     if (dungeon_ && state_.load() == GameState::Exploration && dungeon_->allEnemiesDead())
@@ -1399,7 +1471,8 @@ void Game::render(TerminalScreen &scr)
                                     std::fmod(GetTime(), 0.8) < 0.4);
             break;
         case MenuPhase::ClassSelect:
-            Renderer::drawClassSelect(scr, classSelection_, secretEasterEgg_);
+            Renderer::drawClassSelect(scr, classSelectCategory_, classSelectSubIdx_,
+                                      secretEasterEgg_);
             break;
         case MenuPhase::HudSelect:
             Renderer::drawHudSelect(scr, hudSelection_);
@@ -1498,6 +1571,11 @@ void Game::render(TerminalScreen &scr)
     case GameState::QuitDialog:
         Renderer::drawQuitDialog(scr, menuSelection_);
         break;
+    case GameState::SkillTree:
+        if (player_)
+            Renderer::drawSkillTree(scr, *player_,
+                                    skillTreeTierCursor_, skillTreeChoiceCursor_);
+        break;
     }
 }
 
@@ -1562,6 +1640,8 @@ void Game::setState(GameState newState)
         menuSelection_ = 0;
         secretEasterEgg_ = false;
         classSelection_ = 0;
+        classSelectCategory_ = 0;
+        classSelectSubIdx_[0] = classSelectSubIdx_[1] = classSelectSubIdx_[2] = 0;
         hudSelection_ = 0;
         playerName_.clear();
         player_.reset();

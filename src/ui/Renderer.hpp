@@ -28,7 +28,10 @@ public:
     static void drawTitle(TerminalScreen& scr);
     static void drawCredits(TerminalScreen& scr);
     static void drawNameInput(TerminalScreen& scr, const std::string& name, bool blink);
-    static void drawClassSelect(TerminalScreen& scr, int selection, bool secretUnlocked = false);
+    static void drawClassSelect(TerminalScreen& scr, int category, const int subIdx[3],
+                                bool secretUnlocked = false);
+    static void drawSkillTree(TerminalScreen& scr, const Player& player,
+                              int tierCursor, int choiceCursor);
     static void drawHudSelect(TerminalScreen& scr, int selection);
     static void drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
                              int mapZoom, bool shaderOn);

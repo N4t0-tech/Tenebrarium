@@ -22,6 +22,18 @@ enum class ArtEffect {
     DistorsionTemporal, // Nato: enemigo pierde TODOS sus PA este turno
     VinculoEterno,   // Nato: daño ATK + cura 150% del daño infligido
     JuicioFinal,     // Nato: ATK*2.0 raw dmg ignora DEF
+    // Nuevos efectos para el árbol de habilidades
+    BerserkWarrior,      // +ATK masivo -DEF temporal
+    Fortaleza,           // regen HP por turno
+    Rayo,                // daño alto ignora DEF
+    TormentaArcana,      // daño AoE + congela
+    EscudoArcano,        // absorbe golpe
+    LluviaFlechas,       // multi-hit aleatorio
+    GolpeCritico,        // ATK*2.5
+    Sombra,              // esquiva+contraataca
+    AbsorbVida,          // roba HP
+    CampoEquilibrio,     // iguala HP
+    ColapsoDimensional,  // debuff + daño
 };
 
 struct Art {
