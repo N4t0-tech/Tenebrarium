@@ -747,9 +747,10 @@ void Game::processInput()
 
     // Carácter Unicode — interceptar +, - y F antes de dispatch
     int cp = GetCharPressed();
+    if (cp > 0 && cp < 128) cp = std::tolower(cp);
     if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
     if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
-    if (cp == 'f' || cp == 'F') {
+    if (cp == 'f') {
         if (fullscreen_) {
             ClearWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
             SetWindowSize(windowedW_, windowedH_);
