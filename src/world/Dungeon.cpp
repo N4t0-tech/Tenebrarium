@@ -27,6 +27,8 @@ void Dungeon::generate(int depth, PlayerClass cls, int incursions) {
 
     // Reset runtime state
     lockedDoorOpen_ = false;
+    traps_.clear();
+    triggeredTraps_.clear();
     enemiesKilled = 0;
     chestsOpened  = 0;
     explosionActive = false;
@@ -60,8 +62,15 @@ int Dungeon::aiTick() {
                 break;
             }
         }
-        if (!occupied && (next.x != we.pos.x || next.y != we.pos.y))
+        if (!occupied && (next.x != we.pos.x || next.y != we.pos.y)) {
             we.pos = next;
+            auto trap = std::find_if(traps_.begin(), traps_.end(),
+                [&](const WorldTrap& t) { return t.pos.x == next.x && t.pos.y == next.y; });
+            if (trap != traps_.end()) {
+                triggeredTraps_.push_back(trap->pos);
+                traps_.erase(trap);
+            }
+        }
     }
 
     return -1;

@@ -258,6 +258,14 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
             int mx = camX + sx, my = camY + sy;
             int dc = col + sx, dr = row + sy;
             if (mx < 0 || mx >= map.width() || my < 0 || my >= map.height()) continue;
+            auto cur = std::find_if(entities.begin(), entities.end(), [&](const MapEntity& e) {
+                return e.cursor && e.pos.x == mx && e.pos.y == my;
+            });
+            if (cur != entities.end()) {
+                scr.put(dc, dr, cur->glyph, colorFromPair(cur->colorPair), COL_BLACK,
+                        CELL_BOLD | CELL_INVERTED);
+                continue;
+            }
             const Tile& tile = map.at(mx, my);
             if (!tile.explored) continue;
 
@@ -497,6 +505,8 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     drawHSep(scr, col, r++, sepW);
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
+     if (player.getClass() == PlayerClass::Ranger)
+         put("  T   trampa",   COL_GRAY, CELL_DIM);
       put("  P   poción",   COL_GRAY, CELL_DIM);
      put("  R   tomar",   COL_GRAY, CELL_DIM);
       put("  I   mochila",  COL_GRAY, CELL_DIM);
@@ -585,7 +595,8 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     // row 6-7: controls
     scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
                COL_GRAY, COL_BLACK, CELL_DIM);
-    scr.putStr(rpC, row + 7, "[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla",
+    scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
+               + (player.getClass() == PlayerClass::Ranger ? "  [T]Trampa" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
 

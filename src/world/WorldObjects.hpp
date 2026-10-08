@@ -32,3 +32,8 @@ struct WorldChest {
 struct WorldTorch {
     Position pos;
 };
+
+// Trampa colocada por la Arquera. Se consume al primer enemigo que la pisa.
+struct WorldTrap {
+    Position pos;
+};

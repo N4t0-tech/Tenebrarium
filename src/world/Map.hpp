@@ -33,6 +33,7 @@ struct MapEntity {
     bool     bold = true;
     bool     alwaysVisible = false;
     bool     dead = false;
+    bool     cursor = false;   // se dibuja invertido encima de todo (apuntado de trampas)
 };
 
 // Represents a dungeon floor or overworld map as a 2D tile grid.

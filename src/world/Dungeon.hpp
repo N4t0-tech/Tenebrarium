@@ -43,6 +43,12 @@ public:
         auto&       torches()       { return self.torches_; }
         const auto& torches() const { return self.torches_; }
 
+        auto&       traps()       { return self.traps_; }
+        const auto& traps() const { return self.traps_; }
+
+        // Trampas que la IA vio activarse; el hilo principal las resuelve.
+        auto&       triggeredTraps() { return self.triggeredTraps_; }
+
         // Convenience
         Position  playerPos()     const { return self.map_.getPlayerPos(); }
         void      setPlayerPos(int x, int y) { self.map_.setPlayerPos(x, y); }
@@ -77,6 +83,8 @@ private:
     std::vector<WorldEnemy> enemies_;
     std::vector<WorldChest> chests_;
     std::vector<WorldTorch> torches_;
+    std::vector<WorldTrap>  traps_;
+    std::vector<Position>   triggeredTraps_;
     Position               stairsPos_{};
     Position               stairsUpPos_{};
     bool                   stairsUpExists_ = false;

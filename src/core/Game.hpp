@@ -93,6 +93,18 @@ private:
     int           skillTreeTierCursor_{0};
     int           skillTreeChoiceCursor_{0};
 
+    // Trampas de la Arquera: mientras se apunta, la IA queda en pausa.
+    std::atomic<bool> trapAiming_{false};
+    Position          trapCursor_{};
+
+    // Geometría del mapa en pantalla (píxeles), recalculada cada frame en run().
+    // Sirve para convertir entre casillas del mapa y píxeles (mouse, explosiones).
+    struct MapViewport {
+        int originX{0}, originY{0};   // píxel de la esquina superior izquierda del mapa
+        int cellW{1}, cellH{1};       // tamaño de casilla (incluye zoom)
+        int viewW{0}, viewH{0};       // casillas visibles
+    } mapViewport_;
+
     bool   shovelDigging_{false};
     double shovelDigEndTime_{0.0};
 
@@ -149,6 +161,16 @@ private:
     void inputSkillTree(int key);
     void generateShopStock();
     void useShovel();
+    void inputTrapAiming(int key);
+    void inputTrapMouse();
+    // Píxel de pantalla → casilla del mapa. false si cae fuera del mapa.
+    bool screenToMap(Vector2 px, Position& out) const;
+    std::string trapPlacementError(const Dungeon::Lock& acc, Position p) const;
+    void resolveTrapTriggers();
+    void appendTrapEntities(const Dungeon::Lock& acc, std::vector<MapEntity>& out) const;
+    // Aplica XP, bestiario y botín por un enemigo del mapa abatido. Devuelve el
+    // nombre del objeto obtenido o "" si no hubo botín.
+    std::string rewardEnemyKill(WorldEnemy& we);
     // Enruta un mensaje transitorio al mapa activo (mazmorra o pueblo).
     void showMessage(const std::string& msg, double duration = 2.0);
 

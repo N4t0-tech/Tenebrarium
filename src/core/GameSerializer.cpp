@@ -99,7 +99,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 6 << '\n'; // version 6: árbol de habilidades (unlockedSkills)
+    f << 7 << '\n'; // version 7: trampas y HP restante de enemigos del mapa
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -214,6 +214,17 @@ void GameSerializer::save(Game& g)
     for (const auto& us : skills)
         f << us.tier << ' ' << us.choiceIdx << '\n';
     f << static_cast<int>(g.player_->hasPendingSkillUnlock()) << '\n';
+
+    // Trampas y HP restante de enemigos (v7)
+    if (inDungeon) {
+        auto acc = g.dungeon_->lock();
+        f << acc.traps().size() << '\n';
+        for (const auto& t : acc.traps())
+            f << t.pos.x << ' ' << t.pos.y << '\n';
+        for (const auto& we : acc.enemies())
+            f << we.remainingHp << ' ';
+        f << '\n';
+    }
 }
 
 // ─── load ─────────────────────────────────────────────────────────────────────
@@ -224,7 +235,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 6)
+    if (!(f >> version) || version < 1 || version > 7)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -474,6 +485,18 @@ bool GameSerializer::load(Game& g)
         int pending;
         if (!(f >> pending)) return false;
         g.player_->setPendingSkillUnlock(pending != 0);
+    }
+
+    // Trampas y HP restante de enemigos (v7)
+    if (version >= 7 && g.dungeon_) {
+        auto acc = g.dungeon_->lock();
+        size_t trapCount;
+        if (!(f >> trapCount)) return false;
+        acc.traps().resize(trapCount);
+        for (auto& t : acc.traps())
+            if (!(f >> t.pos.x >> t.pos.y)) return false;
+        for (auto& we : acc.enemies())
+            if (!(f >> we.remainingHp)) return false;
     }
 
     // Restore runtime state
