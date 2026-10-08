@@ -1848,101 +1848,109 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
 
     int treeRow = boxRow;
 
-    for (int t = 0; t < static_cast<int>(tree.tiers.size()); t++) {
-        const SkillTier& tier = tree.tiers[t];
+    // Todo el árbol cuelga de una columna central; las ramas caen en
+    // columnas fijas a cada lado para que esquinas y nodos queden alineados.
+    const int midX      = innerX + innerW / 2;
+    const int branchOff = std::max(7, std::min(12, innerW / 2 - 8));
+    const int leftC     = midX - branchOff;
+    const int rightC    = midX + branchOff;
 
-        int unlockedChoice = -1;
+    auto sideBorders = [&](int row) {
+        scr.put(boxX, row, 0x2551, COL_YELLOW);
+        scr.put(boxX + boxW - 1, row, 0x2551, COL_YELLOW);
+    };
+    auto hLine = [&](int x0, int x1, int row, Color c) {
+        for (int x = x0; x <= x1; x++) scr.put(x, row, 0x2500, c);
+    };
+    // Centra el texto sobre una columna (no sobre un ancho)
+    auto putAt = [&](int col, int row, const std::string& s, Color c, uint8_t fl) {
+        scr.putStr(col - utf8Len(s) / 2, row, s, c, COL_BLACK, fl);
+    };
+
+    auto tierUnlockedChoice = [&](int t) {
         for (const auto& us : unlocked)
-            if (us.tier == t) { unlockedChoice = us.choiceIdx; break; }
-        bool isPending = (t == pendingTier);
+            if (us.tier == t) return us.choiceIdx;
+        return -1;
+    };
+    auto trunkColor = [&](int t) {
+        if (tierUnlockedChoice(t) >= 0) return COL_DK_GREEN;
+        if (t == pendingTier)           return COL_YELLOW;
+        return COL_DK_GRAY;
+    };
 
-        // Fila de nivel requerido
-        Color lvlColor = (unlockedChoice >= 0) ? COL_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
-        std::string lvlLabel = "Lv" + std::to_string(tier.requiredLevel);
-        drawCentered(scr, treeRow, innerX, innerW, lvlLabel, lvlColor);
-        scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-        scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+    // Raíz del árbol
+    putAt(midX, treeRow, "◆", COL_YELLOW, CELL_BOLD);
+    sideBorders(treeRow);
+    treeRow++;
+
+    const int tierCount = static_cast<int>(tree.tiers.size());
+    for (int t = 0; t < tierCount; t++) {
+        const SkillTier& tier = tree.tiers[t];
+        const int  unlockedChoice = tierUnlockedChoice(t);
+        const bool isPending      = (t == pendingTier);
+        const Color inC  = trunkColor(t);
+        const Color outC = (t + 1 < tierCount) ? trunkColor(t + 1) : inC;
+
+        // Tronco entrante
+        scr.put(midX, treeRow, 0x2502, inC);
+        sideBorders(treeRow);
         treeRow++;
 
+        auto nodeStyle = [&](int ci, std::string& label, Color& c, uint8_t& fl) {
+            const std::string& n = tier.choices[ci].name;
+            if (unlockedChoice == ci)                 { label = "[" + n + "]"; c = COL_GREEN;   fl = CELL_BOLD; }
+            else if (unlockedChoice >= 0)             { label = " " + n + " "; c = COL_DK_GRAY; fl = CELL_DIM;  }
+            else if (isPending && choiceCursor == ci) { label = "►" + n + "◄"; c = COL_YELLOW; fl = CELL_BOLD; }
+            else if (isPending)                       { label = "[" + n + "]"; c = COL_ORANGE;  fl = 0;         }
+            else                                      { label = "[" + n + "]"; c = COL_DK_GRAY; fl = CELL_DIM;  }
+        };
+        auto branchColor = [&](int ci) {
+            if (unlockedChoice >= 0) return unlockedChoice == ci ? COL_DK_GREEN : COL_DK_GRAY;
+            if (isPending)           return choiceCursor == ci ? COL_YELLOW : COL_DK_GRAY;
+            return COL_DK_GRAY;
+        };
+
+        Color lvlColor = (unlockedChoice >= 0) ? COL_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
+        std::string lvlLabel = "Lv" + std::to_string(tier.requiredLevel);
+
         if (tier.choices.size() == 1) {
-            const SkillChoice& sc = tier.choices[0];
-            std::string label;
-            Color c; uint8_t fl = 0;
-            if (unlockedChoice == 0)  { label = "[" + sc.name + "]"; c = COL_GREEN;   fl = CELL_BOLD; }
-            else if (isPending)       { label = ">" + sc.name + "<"; c = COL_YELLOW;  fl = CELL_BOLD; }
-            else                      { label = "[" + sc.name + "]"; c = COL_DK_GRAY; fl = CELL_DIM;  }
-            drawCentered(scr, treeRow, innerX, innerW, label, c, fl);
-            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            std::string label; Color c; uint8_t fl;
+            nodeStyle(0, label, c, fl);
+            if (unlockedChoice < 0 && isPending) {
+                label = "►" + tier.choices[0].name + "◄";
+                c = COL_YELLOW; fl = CELL_BOLD;
+            }
+            putAt(midX, treeRow, label, c, fl);
+            scr.putStr(innerX + 2, treeRow, lvlLabel, lvlColor);
+            sideBorders(treeRow);
             treeRow++;
         } else {
-            // Bifurcación ┌───┴───┐
-            int midX = innerX + innerW / 2;
-            int nodeW = 10;
-            int leftX  = midX - nodeW - 1;
-            int rightX = midX + 2;
-
-            // Línea fork
-            {
-                Color fkc = (unlockedChoice >= 0) ? COL_DK_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
-                for (int x = leftX + 1; x < midX; x++)
-                    if (x >= innerX && x < innerX + innerW)
-                        scr.put(x, treeRow, 0x2500, fkc);
-                for (int x = midX + 1; x < rightX + nodeW - 1; x++)
-                    if (x >= innerX && x < innerX + innerW)
-                        scr.put(x, treeRow, 0x2500, fkc);
-                if (leftX >= innerX) scr.put(leftX, treeRow, 0x250C, fkc);
-                if (midX >= innerX && midX < innerX + innerW) scr.put(midX, treeRow, 0x2534, fkc);
-                if (rightX + nodeW - 1 < innerX + innerW) scr.put(rightX + nodeW - 1, treeRow, 0x2510, fkc);
-                scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-                scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
-                treeRow++;
-            }
-
-            // Dos opciones
-            for (int ci = 0; ci < 2; ci++) {
-                const SkillChoice& sc = tier.choices[ci];
-                int nx = (ci == 0) ? leftX : rightX;
-                std::string label;
-                Color c; uint8_t fl = 0;
-                if (unlockedChoice == ci)      { label = "[" + sc.name + "]"; c = COL_GREEN;   fl = CELL_BOLD; }
-                else if (unlockedChoice >= 0)  { label = " " + sc.name + " "; c = COL_DK_GRAY; fl = CELL_DIM;  }
-                else if (isPending && choiceCursor == ci) { label = ">" + sc.name + "<"; c = COL_YELLOW; fl = CELL_BOLD; }
-                else if (isPending)            { label = "[" + sc.name + "]"; c = COL_ORANGE;  fl = 0;         }
-                else                           { label = "[" + sc.name + "]"; c = COL_DK_GRAY; fl = CELL_DIM;  }
-                // Truncar a nodeW
-                while (utf8Len(label) > nodeW) label.pop_back();
-                if (nx >= innerX && nx + (int)label.size() <= innerX + innerW)
-                    scr.putStr(nx, treeRow, label, c, COL_BLACK, fl);
-            }
-            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            // ┌────┴────┐
+            Color lc = branchColor(0), rc = branchColor(1);
+            scr.put(leftC, treeRow, 0x250C, lc);
+            hLine(leftC + 1, midX - 1, treeRow, lc);
+            scr.put(midX, treeRow, 0x2534, inC);
+            hLine(midX + 1, rightC - 1, treeRow, rc);
+            scr.put(rightC, treeRow, 0x2510, rc);
+            sideBorders(treeRow);
             treeRow++;
 
-            // Merge └───┬───┘
-            {
-                Color fkc = (unlockedChoice >= 0) ? COL_DK_GREEN : (isPending ? COL_YELLOW : COL_DK_GRAY);
-                for (int x = leftX + 1; x < midX; x++)
-                    if (x >= innerX && x < innerX + innerW)
-                        scr.put(x, treeRow, 0x2500, fkc);
-                for (int x = midX + 1; x < rightX + nodeW - 1; x++)
-                    if (x >= innerX && x < innerX + innerW)
-                        scr.put(x, treeRow, 0x2500, fkc);
-                if (leftX >= innerX) scr.put(leftX, treeRow, 0x2514, fkc);
-                if (midX >= innerX && midX < innerX + innerW) scr.put(midX, treeRow, 0x252C, fkc);
-                if (rightX + nodeW - 1 < innerX + innerW) scr.put(rightX + nodeW - 1, treeRow, 0x2518, fkc);
-                scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-                scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
-                treeRow++;
+            for (int ci = 0; ci < 2; ci++) {
+                std::string label; Color c; uint8_t fl;
+                nodeStyle(ci, label, c, fl);
+                putAt(ci == 0 ? leftC : rightC, treeRow, label, c, fl);
             }
-        }
+            scr.putStr(innerX + 2, treeRow, lvlLabel, lvlColor);
+            sideBorders(treeRow);
+            treeRow++;
 
-        // Conector vertical hacia el siguiente tier
-        if (t < static_cast<int>(tree.tiers.size()) - 1) {
-            Color connC = (unlockedChoice >= 0) ? COL_DK_GREEN : COL_DK_GRAY;
-            drawCentered(scr, treeRow, innerX, innerW, "|", connC);
-            scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
-            scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
+            // └────┬────┘
+            scr.put(leftC, treeRow, 0x2514, lc);
+            hLine(leftC + 1, midX - 1, treeRow, lc);
+            scr.put(midX, treeRow, (t + 1 < tierCount) ? 0x252C : 0x2500, outC);
+            hLine(midX + 1, rightC - 1, treeRow, rc);
+            scr.put(rightC, treeRow, 0x2518, rc);
+            sideBorders(treeRow);
             treeRow++;
         }
     }
@@ -1968,7 +1976,7 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
     }
     scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
     scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
-    while (utf8Len(descLine) > innerW - 2) descLine.pop_back();
+    if (utf8Len(descLine) > innerW - 2) descLine = utf8Substr(descLine, 0, innerW - 2);
     scr.putStr(innerX + 1, treeRow, descLine, COL_CYAN);
     treeRow++;
 

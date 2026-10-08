@@ -5,6 +5,7 @@
 #include "ui/Renderer.hpp"
 
 #include "entities/Enemy.hpp"
+#include "entities/SkillTree.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
 #include <chrono>
@@ -1335,14 +1336,15 @@ void Game::inputSkillTree(int key)
         pendingTier = nextTierIdx; // el siguiente tier sin desbloquear
     }
 
+    const auto& tiers = getSkillTree(player_->getClass()).tiers;
+    int choiceCount = (pendingTier >= 0 && pendingTier < static_cast<int>(tiers.size()))
+                          ? static_cast<int>(tiers[pendingTier].choices.size()) : 0;
+
     switch (key) {
     case 'a':
-        if (pendingTier >= 0)
-            skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % 2;
-        break;
     case 'd':
-        if (pendingTier >= 0)
-            skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % 2;
+        if (choiceCount > 1)
+            skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % choiceCount;
         break;
     case '\n':
         if (pendingTier >= 0) {
