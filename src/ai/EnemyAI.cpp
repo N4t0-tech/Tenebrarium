@@ -12,7 +12,7 @@ void EnemyAI::run(Game& g)
         GameState s = g.state_.load(std::memory_order_acquire);
         if ((s != GameState::Exploration && s != GameState::Shop))
             continue;
-        if (g.trapAiming_.load(std::memory_order_acquire))
+        if (g.aiming_.load(std::memory_order_acquire))
             continue;
 
         auto dungeon = g.dungeon_;

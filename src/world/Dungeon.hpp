@@ -74,6 +74,8 @@ public:
     bool    explosionActive   = false;
     double  explosionEndTime  = 0.0;
     int     explosionX = 0, explosionY = 0;
+    int     explosionRadius = 0;   // 0 = una casilla; 1 = 3×3
+    int     explosionStyle  = 0;   // MapFxStyle: 0 fuego, 1 hielo, 2 rayo, 3 drenaje
     std::string message;
     double      messageEndTime = 0.0;
 

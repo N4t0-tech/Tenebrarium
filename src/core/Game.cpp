@@ -6,6 +6,7 @@
 
 #include "entities/Enemy.hpp"
 #include "entities/SkillTree.hpp"
+#include "combat/MapSpells.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
 #include <chrono>
@@ -52,6 +53,13 @@ static constexpr int kTrapManaCost  = 10;
 static constexpr int kTrapMaxActive = 3;
 static constexpr int kTrapRange     = 5;   // distancia Chebyshev desde el jugador
 static constexpr int kTrapRadius    = 1;   // la explosión alcanza las 8 casillas vecinas
+
+// Cadáveres que lanza el Guerrero
+static constexpr int   kCorpseRange = 6;
+static constexpr float kCorpseSpeed = 12.0f;
+
+// Regeneración de maná del Mago: % del MP máximo por segundo al explorar
+static constexpr float kMageManaRegenPctPerSec = 1.0f;
 
 Game::Game()
     : menuPhase_(MenuPhase::Title),
@@ -505,8 +513,10 @@ static constexpr int kPadX = 1;
                 std::vector<MapEntity> zEntities;
                 for (const auto& we : acc.enemies()) {
                     bool isDead = !we.alive;
+                    if (we.carried) continue;
                     zEntities.push_back({we.pos, glyphForEnemy(we.type),
-                        isDead ? 11 : colorPairForEnemy(we.type), true, false, isDead});
+                        isDead ? 11 : (we.frozenTicks > 0 ? 3 : colorPairForEnemy(we.type)),
+                        true, false, isDead});
                 }
                 for (const auto& ch : acc.chests())
                     if (!ch.opened)
@@ -517,7 +527,7 @@ static constexpr int kPadX = 1;
                     zEntities.push_back({acc.stairsPos(), '>', 3, true, true});
                 if (acc.stairsUpExists() && (acc.lockedDoorOpen() || !acc.lockedDoorExists()))
                     zEntities.push_back({acc.stairsUpPos(), '^', 4, true, true});
-                appendTrapEntities(acc, zEntities);
+                appendAimEntities(acc, zEntities);
 
                 std::vector<Position> zTorchPos;
                 for (const auto& t : acc.torches()) {
@@ -566,43 +576,90 @@ static constexpr int kPadX = 1;
         {0, 0}, 0.0f, WHITE);
     if (shaderEnabled_) EndShaderMode();
 
-        // 3) Efecto de explosión de bomba (sobre el tile destruido)
+        // 3) Destello de explosión (bomba, trampa o impacto de hechizo)
+        const MapViewport& vp = mapViewport_;
+        Font& mapFont      = (mapZoom_ == 3) ? font3x : (mapZoom_ == 2) ? font2x : font;
+        float mapFontSize  = (float)(fontSize * std::max(1, mapZoom_));
         if (dungeon_ && dungeon_->explosionActive && GetTime() < dungeon_->explosionEndTime) {
-            // Convertir coordenadas del mapa a píxeles
             Position pp = dungeon_->lock().playerPos();
-            const MapViewport& vp = mapViewport_;
-            int pixelX = vp.originX + (dungeon_->explosionX - (pp.x - vp.viewW / 2)) * vp.cellW;
-            int pixelY = vp.originY + (dungeon_->explosionY - (pp.y - vp.viewH / 2)) * vp.cellH;
-            int drawCellW = vp.cellW;
-            int drawCellH = vp.cellH;
+            int camX = pp.x - vp.viewW / 2;
+            int camY = pp.y - vp.viewH / 2;
 
-            // Efecto de flash: blanco → naranja → rojo
+            // Degradado blanco → color medio → color final, según el estilo
             float progress = (GetTime() - (dungeon_->explosionEndTime - 0.5)) / 0.5f;
-            Color expColor;
-            if (progress < 0.5f) {
-                // Blanco a naranja
-                float t = progress * 2.0f;
-                expColor = {255, (uint8_t)(255 * (1 - t) + 165 * t), (uint8_t)(255 * (1 - t)), 255};
-            } else {
-                // Naranja a rojo
-                float t = (progress - 0.5f) * 2.0f;
-                expColor = {255, (uint8_t)(165 * (1 - t)), 0, 255};
+            Color mid, end;
+            switch (static_cast<MapFxStyle>(dungeon_->explosionStyle)) {
+            case MapFxStyle::Ice:       mid = { 90, 220, 255, 255}; end = { 40,  90, 255, 255}; break;
+            case MapFxStyle::Lightning: mid = {255, 240, 120, 255}; end = {255, 255, 255, 255}; break;
+            case MapFxStyle::Drain:     mid = {220,  80, 255, 255}; end = { 90,   0, 140, 255}; break;
+            case MapFxStyle::Impact:    mid = {190, 170, 150, 255}; end = {110,  70,  40, 255}; break;
+            default:                    mid = {255, 165,   0, 255}; end = {255,   0,   0, 255}; break;
             }
+            auto lerpC = [](Color a, Color b, float t) {
+                return Color{ (uint8_t)(a.r + (b.r - a.r) * t), (uint8_t)(a.g + (b.g - a.g) * t),
+                              (uint8_t)(a.b + (b.b - a.b) * t), 255 };
+            };
+            Color expColor = progress < 0.5f ? lerpC(WHITE, mid, progress * 2.0f)
+                                             : lerpC(mid, end, (progress - 0.5f) * 2.0f);
 
-            // Dibujar un rectángulo que cubra el tile completo
-            DrawRectangle(pixelX, pixelY, drawCellW, drawCellH, expColor);
-
-            // Dibujar glifos animados
             const char glyphs[] = {'*', '+', '~', '#', '^', 'X'};
             int frame = (int)(GetTime() * 20) % 6;
-            int glyphPixelW = (int)MeasureTextEx(font, "X", (float)fontSize, 0).x;
-            int glyphPixelH = drawCellH;
-            int glyphX = pixelX + (drawCellW - glyphPixelW) / 2;
-            int glyphY = pixelY + (drawCellH - glyphPixelH) / 2;
-            DrawTextEx(font, std::string(1, glyphs[frame]).c_str(),
-                      {(float)glyphX, (float)glyphY}, (float)fontSize, 0, BLACK);
+            int r = dungeon_->explosionRadius;
+            BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    int pixelX = vp.originX + (dungeon_->explosionX + dx - camX) * vp.cellW;
+                    int pixelY = vp.originY + (dungeon_->explosionY + dy - camY) * vp.cellH;
+                    // El anillo exterior es más tenue que el centro
+                    Color c = expColor;
+                    if (dx != 0 || dy != 0) c.a = 150;
+                    DrawRectangle(pixelX, pixelY, vp.cellW, vp.cellH, c);
+                    int gw = (int)MeasureTextEx(mapFont, "X", mapFontSize, 0).x;
+                    DrawTextEx(mapFont, std::string(1, glyphs[(frame + dx * 3 + dy) & 3]).c_str(),
+                               {(float)(pixelX + (vp.cellW - gw) / 2), (float)pixelY},
+                               mapFontSize, 0, BLACK);
+                }
+            }
+            EndScissorMode();
         } else if (dungeon_) {
             dungeon_->explosionActive = false;
+        }
+
+        // 3b) Proyectiles de hechizos: interpolados entre casillas, con halo y estela
+        if (dungeon_ && !projectiles_.empty() && state_.load() == GameState::Exploration) {
+            Position pp = dungeon_->lock().playerPos();
+            float camX = (float)(pp.x - vp.viewW / 2);
+            float camY = (float)(pp.y - vp.viewH / 2);
+            double now = GetTime();
+            BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
+            for (const auto& pr : projectiles_) {
+                const int n = static_cast<int>(pr.path.size());
+                // Punto a 'dist' casillas a lo largo de from → path[0] → … → path[n-1]
+                auto pointAt = [&](float dist) {
+                    dist = std::clamp(dist, 0.0f, (float)n);
+                    int i = std::min((int)dist, n - 1);
+                    float t = dist - i;
+                    Position a = (i == 0) ? pr.from : pr.path[i - 1];
+                    Position b = pr.path[i];
+                    float x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+                    return Vector2{ vp.originX + (x - camX + 0.5f) * vp.cellW,
+                                    vp.originY + (y - camY + 0.5f) * vp.cellH };
+                };
+                float d = (float)((now - pr.start) * pr.speed);
+                for (int k = 5; k >= 1; k--) {
+                    Color tc = pr.color;
+                    tc.a = (uint8_t)(200 * (1.0f - k / 6.0f));
+                    DrawCircleV(pointAt(d - k * 0.3f), vp.cellW * (0.35f - k * 0.04f), tc);
+                }
+                Vector2 head = pointAt(d);
+                Color glow = pr.color;
+                glow.a = 70;
+                DrawCircleV(head, vp.cellW * 0.9f, glow);
+                Vector2 gs2 = MeasureTextEx(mapFont, "M", mapFontSize, 0);
+                DrawTextCodepoint(mapFont, pr.glyph, {head.x - gs2.x / 2, head.y - gs2.y / 2},
+                                  mapFontSize, pr.color);
+            }
+            EndScissorMode();
         }
 
         // 4) Dibujar mensaje con Raylib directo (encima de todo, sin shader)
@@ -719,8 +776,8 @@ void Game::processInput()
     if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
     if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
 
-    if (trapAiming_.load() && state_.load() == GameState::Exploration)
-        inputTrapMouse();
+    if (aiming_.load() && state_.load() == GameState::Exploration)
+        inputAimMouse();
 
     // Detectar F12 por el archivo screenshot que crea Raylib automaticamente
     {
@@ -800,9 +857,9 @@ void Game::dispatchInput(int key)
         break;
     case GameState::Exploration:
     {
-        if (trapAiming_.load() && dungeon_ && player_)
+        if (aiming_.load() && dungeon_ && player_)
         {
-            inputTrapAiming(key);
+            inputAiming(key);
             break;
         }
         // No limpiar mensaje aquí, se oculta solo tras 2 segundos
@@ -857,23 +914,57 @@ void Game::dispatchInput(int key)
             break;
         }
 
-        // Colocar trampa (solo Arquera)
+        // Colocar trampa (habilidad "Trampa" del árbol)
         if (key == 't')
         {
-            if (player_->getClass() != PlayerClass::Ranger) {
-                dungeon_->message = "Solo la Arquera sabe colocar trampas.";
+            if (!canUseMapAbility(*player_, ArtEffect::Trampa)) {
+                dungeon_->message = player_->getClass() == PlayerClass::Ranger
+                    ? "Aprende Trampa en el árbol de habilidades (Nv 5)."
+                    : "No sabes colocar trampas.";
             } else if (static_cast<int>(dungeon_->lock().traps().size()) >= kTrapMaxActive) {
                 dungeon_->message = "Ya tienes " + std::to_string(kTrapMaxActive) + " trampas activas.";
             } else if (player_->getMana() < kTrapManaCost) {
                 dungeon_->message = "Necesitas " + std::to_string(kTrapManaCost) + " MP para una trampa.";
             } else {
-                trapCursor_ = pos;
-                trapAiming_.store(true);
-                dungeon_->message = "Trampa: apunta con el mouse  |  clic colocar  |  clic der. cancelar";
-                dungeon_->messageEndTime = GetTime() + 3600.0;
+                beginAim(AimKind::Trap);
                 break;
             }
             dungeon_->messageEndTime = GetTime() + 2.0;
+            break;
+        }
+
+        // Levantar / lanzar cadáveres (Guerrero)
+        if (key == 'g')
+        {
+            pickUpOrAimCorpse();
+            break;
+        }
+
+        // Lanzar hechizo en el mapa (habilidades del árbol del Mago)
+        if (key == 'q')
+        {
+            auto spells = unlockedMapSpells();
+            if (spells.empty()) {
+                PlayerClass c = player_->getClass();
+                dungeon_->message = (c == PlayerClass::Ranger || c == PlayerClass::Ballestero)
+                    ? "Tu habilidad de mapa es la trampa: usa T."
+                    : "Desbloquea tu habilidad de mapa en el árbol (Nv 5).";
+                dungeon_->messageEndTime = GetTime() + 2.0;
+                break;
+            }
+            if (std::find(spells.begin(), spells.end(), spellSelection_) == spells.end())
+                spellSelection_ = spells.front();
+            if (spells.size() == 1 && kMapSpells[spellSelection_].selfCast) {
+                std::string err = spellTargetError(dungeon_->lock(), pos);
+                if (err.empty()) {
+                    castSpell(pos);
+                } else {
+                    dungeon_->message = err;
+                    dungeon_->messageEndTime = GetTime() + 2.0;
+                }
+                break;
+            }
+            beginAim(AimKind::Spell);
             break;
         }
 
@@ -921,10 +1012,7 @@ void Game::dispatchInput(int key)
                         acc.map().destroyTile(ax, ay);
                         player_->getInventory().removeItem("Bomba");
                         // Activar efecto visual de explosión
-                        dungeon_->explosionActive = true;
-                        dungeon_->explosionEndTime = GetTime() + 0.5;
-                        dungeon_->explosionX = ax;
-                        dungeon_->explosionY = ay;
+                        triggerExplosion({ax, ay}, 0, static_cast<int>(MapFxStyle::Fire));
                         acc.map().updateFov();
                         dungeon_->message = "BOOM! La pared se hace polvo!";
                     } else {
@@ -1384,11 +1472,16 @@ void Game::inputSkillTree(int key)
 
 void Game::update()
 {
-    if (trapAiming_.load() && state_.load() != GameState::Exploration) {
-        trapAiming_.store(false);
-        if (dungeon_) dungeon_->message.clear();
+    if (state_.load() != GameState::Exploration) {
+        if (aiming_.load()) {
+            aiming_.store(false);
+            if (dungeon_) dungeon_->message.clear();
+        }
+        projectiles_.clear();
     }
+    updateProjectiles();
     resolveTrapTriggers();
+    updateManaRegen();
     checkQuestProgress();
 
     // Abrir árbol de habilidades cuando hay un desbloqueo pendiente
@@ -1513,8 +1606,10 @@ void Game::render(TerminalScreen &scr)
                 auto acc = dungeon_->lock();
                 for (const auto &we : acc.enemies()) {
                     bool isDead = !we.alive;
+                    if (we.carried) continue;
                     entities.push_back({we.pos, glyphForEnemy(we.type),
-                        isDead ? 11 : colorPairForEnemy(we.type), true, false, isDead});
+                        isDead ? 11 : (we.frozenTicks > 0 ? 3 : colorPairForEnemy(we.type)),
+                        true, false, isDead});
                 }
                 for (const auto &ch : acc.chests())
                     if (!ch.opened)
@@ -1525,7 +1620,7 @@ void Game::render(TerminalScreen &scr)
                     entities.push_back({acc.stairsPos(), '>', 3, true, true});
                 if (acc.stairsUpExists() && (acc.lockedDoorOpen() || !acc.lockedDoorExists()))
                     entities.push_back({acc.stairsUpPos(), '^', 4, true, true});
-                appendTrapEntities(acc, entities);
+                appendAimEntities(acc, entities);
 
                 std::vector<Position> torchPos;
                 for (const auto& t : acc.torches()) {
@@ -1652,6 +1747,8 @@ void Game::aiLoop() { EnemyAI::run(*this); }
 // NOTA: returnToExploration() NO pasa por aquí — vuelve al mapa existente.
 void Game::setState(GameState newState)
 {
+    aiming_.store(false);
+    projectiles_.clear();
     if (newState == GameState::MainMenu)
     {
         // Guardar antes de limpiar (permitir continuar después)
@@ -2267,12 +2364,25 @@ std::string Game::rewardEnemyKill(WorldEnemy& we)
     return "";
 }
 
-// ─── Trampas de la Arquera ───────────────────────────────────────────────────
+// ─── Habilidades en el mapa: trampas y hechizos ──────────────────────────────
+
+static int chebyshev(Position a, Position b)
+{
+    return std::max(std::abs(a.x - b.x), std::abs(a.y - b.y));
+}
+
+static int skillManaCost(PlayerClass cls, ArtEffect effect)
+{
+    for (const auto& tier : getSkillTree(cls).tiers)
+        for (const auto& c : tier.choices)
+            if (c.effect == effect) return c.manaCost;
+    return 0;
+}
 
 std::string Game::trapPlacementError(const Dungeon::Lock& acc, Position p) const
 {
     Position pp = acc.playerPos();
-    if (std::max(std::abs(p.x - pp.x), std::abs(p.y - pp.y)) > kTrapRange)
+    if (chebyshev(p, pp) > kTrapRange)
         return "Fuera de alcance.";
     const Map& map = acc.map();
     if (p.x < 0 || p.y < 0 || p.x >= map.width() || p.y >= map.height()
@@ -2293,48 +2403,154 @@ std::string Game::trapPlacementError(const Dungeon::Lock& acc, Position p) const
     return "";
 }
 
-void Game::inputTrapAiming(int key)
+std::vector<int> Game::unlockedMapSpells() const
 {
-    const char* hint = "Trampa: apunta con el mouse  |  clic colocar  |  clic der. cancelar";
+    std::vector<int> out;
+    if (!player_) return out;
+    for (int i = 0; i < kMapSpellCount; i++)
+        if (canUseMapAbility(*player_, kMapSpells[i].effect)) out.push_back(i);
+    return out;
+}
+
+// Línea de Bresenham desde el jugador (excluido) hasta el objetivo, cortada en
+// la primera pared: el proyectil impacta en la última casilla transitable.
+std::vector<Position> Game::spellPath(const Dungeon::Lock& acc, Position target) const
+{
+    std::vector<Position> path;
+    Position p = acc.playerPos();
+    int dx = std::abs(target.x - p.x), dy = -std::abs(target.y - p.y);
+    int sx = p.x < target.x ? 1 : -1, sy = p.y < target.y ? 1 : -1;
+    int err = dx + dy;
+    while (p.x != target.x || p.y != target.y) {
+        int e2 = 2 * err;
+        if (e2 >= dy) { err += dy; p.x += sx; }
+        if (e2 <= dx) { err += dx; p.y += sy; }
+        if (!acc.isWalkable(p.x, p.y)) break;
+        path.push_back(p);
+    }
+    return path;
+}
+
+std::string Game::spellTargetError(const Dungeon::Lock& acc, Position p) const
+{
+    const MapSpellDef& sp = kMapSpells[spellSelection_];
+    if (player_->getMana() < skillManaCost(player_->getClass(), sp.effect))
+        return "No tienes suficiente MP.";
+    if (sp.selfCast)
+        return "";
+    Position pp = acc.playerPos();
+    if (p.x == pp.x && p.y == pp.y)
+        return "Apunta lejos de ti.";
+    if (chebyshev(p, pp) > sp.range)
+        return "Fuera de alcance.";
+    if (spellPath(acc, p).empty())
+        return "No hay línea de tiro.";
+    return "";
+}
+
+std::string Game::aimHint() const
+{
+    if (aimKind_ == AimKind::Trap)
+        return "Trampa: apunta con el mouse  |  clic colocar  |  clic der. cancelar";
+    if (aimKind_ == AimKind::Throw)
+        return "Lanzar cadáver: apunta con el mouse  |  clic lanzar  |  clic der. cancelar";
+    const MapSpellDef& sp = kMapSpells[spellSelection_];
+    std::string s = std::string(sp.name) + " ("
+                  + std::to_string(skillManaCost(player_->getClass(), sp.effect))
+                  + (sp.selfCast ? " MP)  |  clic usar" : " MP)  |  clic lanzar");
+    if (unlockedMapSpells().size() > 1) s += "  |  Q cambiar";
+    return s + "  |  clic der. cancelar";
+}
+
+void Game::beginAim(AimKind kind)
+{
+    aimKind_   = kind;
+    aimCursor_ = dungeon_->lock().playerPos();
+    aiming_.store(true);
+    dungeon_->message = aimHint();
+    dungeon_->messageEndTime = GetTime() + 3600.0;
+}
+
+void Game::endAim(const std::string& msg, double duration)
+{
+    aiming_.store(false);
+    dungeon_->message = msg;
+    dungeon_->messageEndTime = GetTime() + duration;
+}
+
+void Game::inputAiming(int key)
+{
+    auto showError = [&](const std::string& err) {
+        dungeon_->message = err;
+        dungeon_->messageEndTime = GetTime() + 3600.0;
+    };
+
+    if (aimKind_ == AimKind::Spell && (key == 'q' || (key >= '1' && key <= '4'))) {
+        auto spells = unlockedMapSpells();
+        if (spells.empty()) return;
+        auto it  = std::find(spells.begin(), spells.end(), spellSelection_);
+        int  cur = it == spells.end() ? 0 : static_cast<int>(it - spells.begin());
+        int  next = key == 'q' ? (cur + 1) % static_cast<int>(spells.size()) : key - '1';
+        if (next < static_cast<int>(spells.size()))
+            spellSelection_ = spells[next];
+        showError(aimHint());
+        return;
+    }
+
     switch (key) {
     case 'w': case 'a': case 's': case 'd': {
-        Position next = trapCursor_;
+        Position next = aimCursor_;
         if (key == 'w') next.y--;
         if (key == 's') next.y++;
         if (key == 'a') next.x--;
         if (key == 'd') next.x++;
-        Position pp = dungeon_->lock().playerPos();
-        if (std::max(std::abs(next.x - pp.x), std::abs(next.y - pp.y)) <= kTrapRange)
-            trapCursor_ = next;
-        dungeon_->message = hint;
-        dungeon_->messageEndTime = GetTime() + 3600.0;
+        int range = aimKind_ == AimKind::Trap  ? kTrapRange
+                  : aimKind_ == AimKind::Throw ? kCorpseRange
+                  : kMapSpells[spellSelection_].range;
+        if (chebyshev(next, dungeon_->lock().playerPos()) <= range)
+            aimCursor_ = next;
+        showError(aimHint());
         break;
     }
     case '\n':
-    case 't': {
-        std::string err;
-        {
-            auto acc = dungeon_->lock();
-            err = trapPlacementError(acc, trapCursor_);
-            if (err.empty()) {
-                acc.traps().push_back({trapCursor_});
-                player_->useMana(kTrapManaCost);
+    case 't':
+        if (key == 't' && aimKind_ != AimKind::Trap) break;
+        if (aimKind_ == AimKind::Trap) {
+            std::string err;
+            {
+                auto acc = dungeon_->lock();
+                err = trapPlacementError(acc, aimCursor_);
+                if (err.empty()) {
+                    acc.traps().push_back({aimCursor_});
+                    player_->useMana(kTrapManaCost);
+                }
             }
-        }
-        if (err.empty()) {
-            trapAiming_.store(false);
-            dungeon_->message = "Trampa colocada. (-" + std::to_string(kTrapManaCost) + " MP)";
-            dungeon_->messageEndTime = GetTime() + 2.0;
+            if (err.empty())
+                endAim("Trampa colocada. (-" + std::to_string(kTrapManaCost) + " MP)", 2.0);
+            else
+                showError(err);
+        } else if (aimKind_ == AimKind::Throw) {
+            std::string err = throwTargetError(dungeon_->lock(), aimCursor_);
+            if (err.empty())
+                throwCorpse(aimCursor_);
+            else
+                showError(err);
         } else {
-            dungeon_->message = err;
-            dungeon_->messageEndTime = GetTime() + 3600.0;
+            std::string err;
+            {
+                auto acc = dungeon_->lock();
+                err = spellTargetError(acc, aimCursor_);
+            }
+            if (err.empty())
+                castSpell(aimCursor_);
+            else
+                showError(err);
         }
         break;
-    }
     case 27:
-        trapAiming_.store(false);
-        dungeon_->message = "Cancelas la trampa.";
-        dungeon_->messageEndTime = GetTime() + 1.5;
+        endAim(aimKind_ == AimKind::Trap  ? "Cancelas la trampa."
+             : aimKind_ == AimKind::Throw ? "Sigues cargando el cadáver."
+             : "Cancelas el hechizo.");
         break;
     }
 }
@@ -2363,7 +2579,7 @@ bool Game::screenToMap(Vector2 px, Position& out) const
     return true;
 }
 
-void Game::inputTrapMouse()
+void Game::inputAimMouse()
 {
     if (!dungeon_) return;
     Position tile;
@@ -2371,12 +2587,283 @@ void Game::inputTrapMouse()
     Vector2 d = GetMouseDelta();
     // Solo sigue al mouse cuando se mueve, así WASD sigue funcionando
     if (over && (d.x != 0.0f || d.y != 0.0f))
-        trapCursor_ = tile;
+        aimCursor_ = tile;
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && over) {
-        trapCursor_ = tile;
-        inputTrapAiming('\n');
+        aimCursor_ = tile;
+        inputAiming('\n');
     } else if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-        inputTrapAiming(27);
+        inputAiming(27);
+    }
+}
+
+Game::AreaHit Game::damageEnemiesAround(Dungeon::Lock& acc, Position c, int radius,
+                                        int pctNormal, int pctBoss, int flat, int freezeTicks)
+{
+    AreaHit hit;
+    const int fl  = player_->getDungeonFloor();
+    const int inc = player_->getIncursions();
+    for (auto& we : acc.enemies()) {
+        if (!we.alive || chebyshev(we.pos, c) > radius) continue;
+        // Daño por % de vida para que siga siendo útil en pisos altos;
+        // los jefes resisten mucho más.
+        auto e = DungeonPopulator::makeEnemy(we.type, fl, inc, we.isBoss);
+        int maxHp = e->getMaxHp();
+        int hp    = we.remainingHp > 0 ? we.remainingHp : maxHp;
+        int dmg   = maxHp * (we.isBoss ? pctBoss : pctNormal) / 100 + flat;
+        hit.hits++;
+        hit.damage += std::min(hp, dmg);
+        hp -= dmg;
+        if (hp <= 0) {
+            hit.killed.push_back(e->getName());
+            std::string loot = rewardEnemyKill(we);
+            if (!loot.empty()) {
+                if (!hit.loot.empty()) hit.loot += ", ";
+                hit.loot += loot;
+            }
+        } else {
+            we.remainingHp = hp;
+            if (freezeTicks > 0) {
+                we.frozenTicks = we.isBoss ? freezeTicks / 2 : freezeTicks;
+                hit.frozen++;
+            }
+        }
+    }
+    return hit;
+}
+
+std::string Game::describeHit(const std::string& prefix, const AreaHit& hit)
+{
+    std::string msg = prefix;
+    if (hit.killed.size() == 1)
+        msg += " " + hit.killed[0] + " cae.";
+    else if (hit.killed.size() > 1)
+        msg += " " + std::to_string(hit.killed.size()) + " enemigos caen.";
+    else if (hit.hits > 0 && hit.frozen == 0)
+        msg += " " + std::to_string(hit.hits) + " enemigo(s) herido(s).";
+    if (hit.frozen > 0)
+        msg += " " + std::to_string(hit.frozen) + " congelado(s).";
+    if (!hit.loot.empty())
+        msg += " Botín: " + hit.loot + ".";
+    return msg;
+}
+
+void Game::triggerExplosion(Position c, int radius, int style)
+{
+    dungeon_->explosionActive  = true;
+    dungeon_->explosionEndTime = GetTime() + 0.5;
+    dungeon_->explosionX       = c.x;
+    dungeon_->explosionY       = c.y;
+    dungeon_->explosionRadius  = radius;
+    dungeon_->explosionStyle   = style;
+}
+
+void Game::castSpell(Position target)
+{
+    const MapSpellDef& sp = kMapSpells[spellSelection_];
+    if (sp.selfCast) {
+        player_->useMana(skillManaCost(player_->getClass(), sp.effect));
+        aiming_.store(false);
+        resolveSpellImpact(spellSelection_, dungeon_->lock().playerPos(), true);
+        return;
+    }
+    Projectile pr;
+    {
+        auto acc = dungeon_->lock();
+        pr.from = acc.playerPos();
+        pr.path = spellPath(acc, target);
+    }
+    pr.start    = GetTime();
+    pr.speed    = sp.speed;
+    pr.glyph    = sp.glyph;
+    pr.color    = sp.color;
+    pr.spellIdx = spellSelection_;
+    player_->useMana(skillManaCost(player_->getClass(), sp.effect));
+    projectiles_.push_back(std::move(pr));
+    endAim(std::string("¡") + sp.name + "!", 1.0);
+}
+
+bool Game::canThrowCorpses() const
+{
+    return player_ && (player_->getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities);
+}
+
+int Game::carriedCorpse(const Dungeon::Lock& acc) const
+{
+    const auto& enemies = acc.enemies();
+    for (int i = 0; i < static_cast<int>(enemies.size()); i++)
+        if (enemies[i].carried) return i;
+    return -1;
+}
+
+void Game::pickUpOrAimCorpse()
+{
+    if (!canThrowCorpses()) {
+        dungeon_->message = "No tienes fuerza para cargar cadáveres.";
+        dungeon_->messageEndTime = GetTime() + 2.0;
+        return;
+    }
+
+    std::string msg;
+    {
+        auto acc = dungeon_->lock();
+        if (carriedCorpse(acc) >= 0) {
+            // Ya carga uno: G pasa a apuntar el lanzamiento
+            msg.clear();
+        } else {
+            // El más cercano entre la casilla propia y las 8 vecinas
+            Position pp = acc.playerPos();
+            int best = -1, bestDist = 2;
+            auto& enemies = acc.enemies();
+            for (int i = 0; i < static_cast<int>(enemies.size()); i++) {
+                const auto& we = enemies[i];
+                int d = chebyshev(we.pos, pp);
+                if (!we.alive && !we.carried && d < bestDist) { best = i; bestDist = d; }
+            }
+            if (best < 0) {
+                msg = "No hay cadáveres a tu alcance.";
+            } else {
+                auto& we = enemies[best];
+                we.carried = true;
+                auto e = DungeonPopulator::makeEnemy(we.type, player_->getDungeonFloor(),
+                                                     player_->getIncursions(), we.isBoss);
+                msg = "Levantas el cadáver de " + e->getName() + ". G para lanzarlo.";
+            }
+        }
+    }
+    if (msg.empty()) {
+        beginAim(AimKind::Throw);
+    } else {
+        dungeon_->message = msg;
+        dungeon_->messageEndTime = GetTime() + 2.5;
+    }
+}
+
+std::string Game::throwTargetError(const Dungeon::Lock& acc, Position p) const
+{
+    Position pp = acc.playerPos();
+    if (p.x == pp.x && p.y == pp.y)
+        return "Apunta lejos de ti.";
+    if (chebyshev(p, pp) > kCorpseRange)
+        return "Fuera de alcance.";
+    if (spellPath(acc, p).empty())
+        return "No hay línea de tiro.";
+    return "";
+}
+
+void Game::throwCorpse(Position target)
+{
+    Projectile pr;
+    {
+        auto acc = dungeon_->lock();
+        int idx = carriedCorpse(acc);
+        if (idx < 0) { endAim(); return; }
+        const auto& we = acc.enemies()[idx];
+        pr.from      = acc.playerPos();
+        pr.path      = spellPath(acc, target);
+        pr.glyph     = glyphForEnemy(we.type);
+        pr.color     = Renderer::colorFromPair(colorPairForEnemy(we.type));
+        pr.corpseIdx = idx;
+    }
+    pr.start = GetTime();
+    pr.speed = kCorpseSpeed;
+    projectiles_.push_back(std::move(pr));
+    endAim("¡Allá va!", 1.0);
+}
+
+void Game::resolveCorpseImpact(int corpseIdx, Position at)
+{
+    AreaHit hit;
+    std::string name;
+    int radius = 0;
+    {
+        auto acc = dungeon_->lock();
+        auto& enemies = acc.enemies();
+        if (corpseIdx < 0 || corpseIdx >= static_cast<int>(enemies.size())) return;
+        auto& corpse = enemies[corpseIdx];
+        // Los cuerpos grandes golpean también alrededor del impacto
+        bool heavy = corpse.isBoss || corpse.type == EnemyType::Orc
+                  || corpse.type == EnemyType::Zombie || corpse.type == EnemyType::Demon;
+        radius = heavy ? 1 : 0;
+        name = DungeonPopulator::makeEnemy(corpse.type, player_->getDungeonFloor(),
+                                           player_->getIncursions(), corpse.isBoss)->getName();
+        // El cadáver queda tirado donde cae y se puede volver a levantar
+        corpse.carried = false;
+        corpse.pos     = at;
+        hit = damageEnemiesAround(acc, at, radius, heavy ? 25 : 15, heavy ? 10 : 5,
+                                  player_->getAttack());
+    }
+    triggerExplosion(at, radius, static_cast<int>(MapFxStyle::Impact));
+    dungeon_->message = describeHit("¡El cadáver de " + name + " se estrella!", hit);
+    dungeon_->messageEndTime = GetTime() + 2.5;
+}
+
+void Game::updateManaRegen()
+{
+    if (!player_ || player_->getClass() != PlayerClass::Mage
+        || state_.load() != GameState::Exploration
+        || player_->getMana() >= player_->getMaxMana()) {
+        manaRegenAcc_ = 0.0f;
+        return;
+    }
+    manaRegenAcc_ += GetFrameTime() * player_->getMaxMana() * kMageManaRegenPctPerSec / 100.0f;
+    int whole = static_cast<int>(manaRegenAcc_);
+    if (whole > 0) {
+        player_->restoreMana(whole);
+        manaRegenAcc_ -= whole;
+    }
+}
+
+void Game::updateProjectiles()
+{
+    if (projectiles_.empty() || !dungeon_ || !player_) return;
+    const double now = GetTime();
+
+    for (auto it = projectiles_.begin(); it != projectiles_.end(); ) {
+        int target = std::min(static_cast<int>(it->path.size()),
+                              static_cast<int>((now - it->start) * it->speed) + 1);
+        bool impact = false;
+        Position at = it->path.back();
+        {
+            auto acc = dungeon_->lock();
+            while (!impact && it->reached < target) {
+                Position c = it->path[it->reached++];
+                for (const auto& we : acc.enemies())
+                    if (we.alive && we.pos.x == c.x && we.pos.y == c.y) { impact = true; at = c; break; }
+            }
+            if (!impact && it->reached >= static_cast<int>(it->path.size()))
+                impact = true;
+        }
+        if (!impact) { ++it; continue; }
+
+        if (it->corpseIdx >= 0)
+            resolveCorpseImpact(it->corpseIdx, at);
+        else
+            resolveSpellImpact(it->spellIdx, at, false);
+        it = projectiles_.erase(it);
+    }
+}
+
+void Game::resolveSpellImpact(int spellIdx, Position at, bool alwaysReport)
+{
+    const MapSpellDef& sp = kMapSpells[spellIdx];
+    AreaHit hit;
+    {
+        auto acc = dungeon_->lock();
+        hit = damageEnemiesAround(acc, at, sp.radius, sp.pctNormal, sp.pctBoss,
+                                  player_->getAttack() * sp.atkMult2 / 2, sp.freezeTicks);
+    }
+    triggerExplosion(at, sp.radius, static_cast<int>(sp.style));
+    std::string msg = describeHit(std::string(sp.name) + ":", hit);
+    if (sp.drainPct > 0 && hit.damage > 0) {
+        int healed = hit.damage * sp.drainPct / 100;
+        player_->heal(healed);
+        msg += " +" + std::to_string(healed) + " HP.";
+    }
+    if (hit.hits == 0 && alwaysReport)
+        msg = std::string("¡") + sp.name + "! No hay nadie cerca.";
+    if (hit.hits > 0 || alwaysReport) {
+        dungeon_->message = msg;
+        dungeon_->messageEndTime = GetTime() + 2.5;
     }
 }
 
@@ -2384,73 +2871,53 @@ void Game::resolveTrapTriggers()
 {
     if (!dungeon_ || !player_) return;
 
-    std::vector<std::string> killed;
-    std::string lootMsg;
-    int hits = 0;
+    std::string msg;
     {
         auto acc = dungeon_->lock();
         auto& triggered = acc.triggeredTraps();
         if (triggered.empty()) return;
-
-        const int fl  = player_->getDungeonFloor();
-        const int inc = player_->getIncursions();
         for (Position tp : triggered) {
-            dungeon_->explosionActive  = true;
-            dungeon_->explosionEndTime = GetTime() + 0.5;
-            dungeon_->explosionX = tp.x;
-            dungeon_->explosionY = tp.y;
-
-            for (auto& we : acc.enemies()) {
-                if (!we.alive) continue;
-                if (std::max(std::abs(we.pos.x - tp.x), std::abs(we.pos.y - tp.y)) > kTrapRadius)
-                    continue;
-                auto e = DungeonPopulator::makeEnemy(we.type, fl, inc, we.isBoss);
-                int maxHp = e->getMaxHp();
-                int hp    = we.remainingHp > 0 ? we.remainingHp : maxHp;
-                // Daño fijo por % de vida para que la trampa siga siendo útil en pisos altos;
-                // los jefes resisten mucho más.
-                int pct = we.isBoss ? 15 : 40;
-                hp -= maxHp * pct / 100 + player_->getAttack();
-                hits++;
-                if (hp <= 0) {
-                    killed.push_back(e->getName());
-                    std::string loot = rewardEnemyKill(we);
-                    if (!loot.empty()) {
-                        if (!lootMsg.empty()) lootMsg += ", ";
-                        lootMsg += loot;
-                    }
-                } else {
-                    we.remainingHp = hp;
-                }
-            }
+            triggerExplosion(tp, kTrapRadius, static_cast<int>(MapFxStyle::Fire));
+            AreaHit hit = damageEnemiesAround(acc, tp, kTrapRadius, 40, 15, player_->getAttack());
+            msg = describeHit("¡Una trampa estalla!", hit);
         }
         triggered.clear();
     }
-
-    std::string msg;
-    if (hits == 0)
-        msg = "¡Una trampa estalla!";
-    else if (killed.empty())
-        msg = "¡Una trampa estalla! " + std::to_string(hits) + " enemigo(s) herido(s).";
-    else if (killed.size() == 1)
-        msg = "¡Una trampa estalla! " + killed[0] + " cae.";
-    else
-        msg = "¡Una trampa estalla! " + std::to_string(killed.size()) + " enemigos caen.";
-    if (!lootMsg.empty())
-        msg += " Botín: " + lootMsg + ".";
     dungeon_->message = msg;
     dungeon_->messageEndTime = GetTime() + 2.5;
 }
 
-void Game::appendTrapEntities(const Dungeon::Lock& acc, std::vector<MapEntity>& out) const
+void Game::appendAimEntities(const Dungeon::Lock& acc, std::vector<MapEntity>& out) const
 {
     for (const auto& t : acc.traps())
         out.push_back({t.pos, 0x25CA, 9, true, true});
-    if (trapAiming_.load()) {
-        // Amarillo si se puede colocar, rojo si no
-        bool ok = trapPlacementError(acc, trapCursor_).empty();
-        out.push_back({trapCursor_, 'X', ok ? 2 : 6, true, true, false, true});
+    if (!aiming_.load()) return;
+
+    bool ok;
+    if (aimKind_ == AimKind::Trap) {
+        ok = trapPlacementError(acc, aimCursor_).empty();
+    } else if (aimKind_ == AimKind::Throw) {
+        ok = throwTargetError(acc, aimCursor_).empty();
+        for (Position p : spellPath(acc, aimCursor_))
+            out.push_back({p, 0x00B7, ok ? 7 : 6, false});
+    } else {
+        const MapSpellDef& sp = kMapSpells[spellSelection_];
+        ok = spellTargetError(acc, aimCursor_).empty();
+        if (sp.selfCast) {
+            // Área alrededor del jugador; no hay cursor que mover
+            Position pp = acc.playerPos();
+            for (int dy = -sp.radius; dy <= sp.radius; dy++)
+                for (int dx = -sp.radius; dx <= sp.radius; dx++)
+                    if ((dx || dy) && acc.isWalkable(pp.x + dx, pp.y + dy))
+                        out.push_back({{pp.x + dx, pp.y + dy}, 0x00B7, ok ? sp.colorPair : 6, false});
+            return;
+        }
+        // Vista previa de la trayectoria (los enemigos y objetos se dibujan encima)
+        for (Position p : spellPath(acc, aimCursor_))
+            out.push_back({p, 0x00B7, ok ? sp.colorPair : 6, false});
     }
+    // Amarillo si se puede, rojo si no
+    out.push_back({aimCursor_, 'X', ok ? 2 : 6, true, true, false, true});
 }
 
 void Game::inputCombat(int key)

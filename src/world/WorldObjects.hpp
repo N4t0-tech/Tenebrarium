@@ -17,7 +17,9 @@ struct WorldEnemy {
     EnemyType type;
     bool      alive;      // false = eliminado, no se dibuja ni mueve
     bool      isBoss = false;
-    int       remainingHp{-1};  // -1 = HP completo; >0 = HP guardado al huir del combate
+    int       remainingHp{-1};  // -1 = HP completo; >0 = HP tras daño en el mapa (trampas, hechizos)
+    int       frozenTicks{0};   // ticks de IA que no se mueve (hechizo Congelar)
+    bool      carried{false};   // cadáver en brazos del Guerrero: no se dibuja en el mapa
 };
 
 struct WorldChest {

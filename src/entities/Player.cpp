@@ -38,7 +38,14 @@ void Player::levelUp() {
     maxMana_ += 5;
     mana_ = maxMana_;
     // Desbloqueo de habilidad cada 5 niveles
-    if (level_ % 5 == 0) pendingSkillUnlock_ = true;
+    refreshPendingSkillUnlock();
+}
+
+void Player::refreshPendingSkillUnlock() {
+    // Un tier por cada 5 niveles; si se sube varios niveles de golpe quedan
+    // pendientes todos los tiers ganados y el árbol se abre una vez por cada uno.
+    int earned = std::min(level_ / 5, static_cast<int>(getSkillTree(class_).tiers.size()));
+    pendingSkillUnlock_ = static_cast<int>(unlockedSkills_.size()) < earned;
 }
 
 int Player::baseHp(PlayerClass c) {
@@ -211,6 +218,18 @@ void Player::restoreMana(int amount) {
     mana_ = std::min(maxMana_, mana_ + amount);
 }
 
+bool Player::hasSkill(ArtEffect effect) const {
+    const SkillTreeDef& tree = getSkillTree(class_);
+    for (const auto& us : unlockedSkills_) {
+        if (us.tier >= static_cast<int>(tree.tiers.size())) continue;
+        const SkillTier& tier = tree.tiers[us.tier];
+        if (us.choiceIdx < static_cast<int>(tier.choices.size())
+            && tier.choices[us.choiceIdx].effect == effect)
+            return true;
+    }
+    return false;
+}
+
 std::vector<Art> Player::getAvailableArts() const {
     // Si hay habilidades desbloqueadas del árbol, usarlas
     if (!unlockedSkills_.empty()) {
@@ -276,7 +295,7 @@ bool Player::unlockSkill(int tier, int choiceIdx) {
     if (tier < 0 || tier >= static_cast<int>(tree.tiers.size())) return false;
     if (choiceIdx < 0 || choiceIdx >= static_cast<int>(tree.tiers[tier].choices.size())) return false;
     unlockedSkills_.push_back({ tier, choiceIdx });
-    pendingSkillUnlock_ = false;
+    refreshPendingSkillUnlock();
     return true;
 }
 

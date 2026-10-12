@@ -44,6 +44,7 @@ int Dungeon::aiTick() {
     for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
         auto& we = enemies_[i];
         if (!we.alive) continue;
+        if (we.frozenTicks > 0) { we.frozenTicks--; continue; }
 
         int dist = std::max(std::abs(we.pos.x - player.x),
                             std::abs(we.pos.y - player.y));

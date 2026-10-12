@@ -1,4 +1,5 @@
 #include "Renderer.hpp"
+#include "combat/MapSpells.hpp"
 #include "ui/XpLoader.hpp"
 #include "core/Assets.hpp"
 #include "entities/SkillTree.hpp"
@@ -505,8 +506,12 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
     drawHSep(scr, col, r++, sepW);
      put("WASD  mover",    COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
-     if (player.getClass() == PlayerClass::Ranger)
+     if (canUseMapAbility(player, ArtEffect::Trampa))
          put("  T   trampa",   COL_GRAY, CELL_DIM);
+     if (hasAnyMapSpell(player))
+         put("  Q   hechizo",  COL_GRAY, CELL_DIM);
+     if (player.getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities)
+         put("  G   cadáver",  COL_GRAY, CELL_DIM);
       put("  P   poción",   COL_GRAY, CELL_DIM);
      put("  R   tomar",   COL_GRAY, CELL_DIM);
       put("  I   mochila",  COL_GRAY, CELL_DIM);
@@ -593,10 +598,13 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     scr.put(rpX + rpW - 1, row + 5, 0x2563, COL_WHITE);
 
     // row 6-7: controls
-    scr.putStr(rpC, row + 6, "[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv",
+    scr.putStr(rpC, row + 6, std::string("[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv")
+               + (player.getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities
+                  ? "  [G]Cadáver" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
     scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
-               + (player.getClass() == PlayerClass::Ranger ? "  [T]Trampa" : ""),
+               + (canUseMapAbility(player, ArtEffect::Trampa) ? "  [T]Trampa" : "")
+               + (hasAnyMapSpell(player) ? "  [Q]Hechizo" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
 }
 

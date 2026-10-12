@@ -45,6 +45,7 @@ public:
                                 int mapZoom = 1, int scrollTick = 0,
                                 bool isVillage = false, float nightFactor = 0.0f);
     static Color colorForPlayerClass(PlayerClass pc);
+    static Color colorFromPair(int pair);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
                          const Map& map, const std::vector<MapEntity>& entities,
                          const std::vector<Position>& torches,
@@ -78,7 +79,6 @@ private:
     static void drawStatBar(TerminalScreen& scr, int col, int row,
                             int value, int max, int barW, Color c);
 
-    static Color colorFromPair(int pair);
     static void  drawHudPanel(TerminalScreen& scr, int col, int row,
                                const Player& player, int mapZoom = 1,
                                int scrollTick = 0);

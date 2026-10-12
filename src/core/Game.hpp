@@ -93,9 +93,32 @@ private:
     int           skillTreeTierCursor_{0};
     int           skillTreeChoiceCursor_{0};
 
-    // Trampas de la Arquera: mientras se apunta, la IA queda en pausa.
-    std::atomic<bool> trapAiming_{false};
-    Position          trapCursor_{};
+    // Apuntado en el mapa (trampas de la Arquera, hechizos del Mago).
+    // Mientras se apunta, la IA queda en pausa.
+    enum class AimKind { Trap, Spell, Throw };
+    std::atomic<bool> aiming_{false};
+    AimKind           aimKind_{AimKind::Trap};
+    Position          aimCursor_{};
+    int               spellSelection_{0};   // índice en kMapSpells
+
+    // Hechizos en vuelo: avanzan por casillas y se resuelven al chocar con un
+    // enemigo o al llegar al final de la trayectoria. Solo hilo principal.
+    struct Projectile {
+        Position              from;
+        std::vector<Position> path;      // casillas tras el jugador hasta el impacto
+        double                start;
+        float                 speed;     // casillas por segundo
+        int                   glyph;
+        Color                 color;
+        int                   spellIdx{-1};  // índice en kMapSpells, o -1
+        int                   corpseIdx{-1}; // cadáver lanzado (índice en enemies), o -1
+        int                   reached{0};    // casillas ya comprobadas
+    };
+    std::vector<Projectile> projectiles_;
+
+    // Regeneración de maná del Mago al explorar; acumula fracciones entre frames.
+    float manaRegenAcc_{0.0f};
+    void updateManaRegen();
 
     // Geometría del mapa en pantalla (píxeles), recalculada cada frame en run().
     // Sirve para convertir entre casillas del mapa y píxeles (mouse, explosiones).
@@ -161,13 +184,41 @@ private:
     void inputSkillTree(int key);
     void generateShopStock();
     void useShovel();
-    void inputTrapAiming(int key);
-    void inputTrapMouse();
+    void beginAim(AimKind kind);
+    void endAim(const std::string& msg = "", double duration = 1.5);
+    void inputAiming(int key);
+    void inputAimMouse();
+    std::string aimHint() const;
+    std::vector<int> unlockedMapSpells() const;
     // Píxel de pantalla → casilla del mapa. false si cae fuera del mapa.
     bool screenToMap(Vector2 px, Position& out) const;
     std::string trapPlacementError(const Dungeon::Lock& acc, Position p) const;
+    std::string spellTargetError(const Dungeon::Lock& acc, Position p) const;
+    std::vector<Position> spellPath(const Dungeon::Lock& acc, Position target) const;
+    void castSpell(Position target);
+    void updateProjectiles();
+    void resolveSpellImpact(int spellIdx, Position at, bool alwaysReport);
+
+    // Cadáveres del Guerrero: G levanta uno cercano; con uno en brazos, G apunta y lo lanza.
+    bool canThrowCorpses() const;
+    int  carriedCorpse(const Dungeon::Lock& acc) const;   // índice en enemies o -1
+    void pickUpOrAimCorpse();
+    std::string throwTargetError(const Dungeon::Lock& acc, Position p) const;
+    void throwCorpse(Position target);
+    void resolveCorpseImpact(int corpseIdx, Position at);
     void resolveTrapTriggers();
-    void appendTrapEntities(const Dungeon::Lock& acc, std::vector<MapEntity>& out) const;
+    void appendAimEntities(const Dungeon::Lock& acc, std::vector<MapEntity>& out) const;
+
+    // Daño en área a enemigos del mapa: % de vida máxima + daño plano.
+    struct AreaHit {
+        int hits{0}, frozen{0}, damage{0};
+        std::vector<std::string> killed;
+        std::string loot;
+    };
+    AreaHit damageEnemiesAround(Dungeon::Lock& acc, Position c, int radius,
+                                int pctNormal, int pctBoss, int flat, int freezeTicks = 0);
+    static std::string describeHit(const std::string& prefix, const AreaHit& hit);
+    void triggerExplosion(Position c, int radius, int style);
     // Aplica XP, bestiario y botín por un enemigo del mapa abatido. Devuelve el
     // nombre del objeto obtenido o "" si no hubo botín.
     std::string rewardEnemyKill(WorldEnemy& we);

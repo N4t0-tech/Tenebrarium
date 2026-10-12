@@ -99,7 +99,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 7 << '\n'; // version 7: trampas y HP restante de enemigos del mapa
+    f << 8 << '\n'; // version 8: árboles reordenados (Lv5 = habilidad de mapa)
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -235,7 +235,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 7)
+    if (!(f >> version) || version < 1 || version > 8)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -480,12 +480,16 @@ bool GameSerializer::load(Game& g)
         for (size_t i = 0; i < skillCount; i++) {
             int tier, choiceIdx;
             if (!(f >> tier >> choiceIdx)) return false;
-            g.player_->unlockSkill(tier, choiceIdx);
+            // Antes de v8 los árboles tenían otro orden: esas elecciones se
+            // descartan y el jugador vuelve a elegir con el árbol nuevo.
+            if (version >= 8)
+                g.player_->unlockSkill(tier, choiceIdx);
         }
         int pending;
         if (!(f >> pending)) return false;
-        g.player_->setPendingSkillUnlock(pending != 0);
     }
+    if (g.player_)
+        g.player_->refreshPendingSkillUnlock();
 
     // Trampas y HP restante de enemigos (v7)
     if (version >= 7 && g.dungeon_) {
