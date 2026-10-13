@@ -55,8 +55,19 @@ else()
     add_executable(tenebrarium ${SOURCES})
 endif()
 
+add_custom_target(game_version
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/generated/Version.hpp
+        -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/Version.hpp
+    COMMENT "Generando versión desde git"
+)
+add_dependencies(tenebrarium game_version)
+
 target_include_directories(tenebrarium PRIVATE
     src
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 target_link_libraries(tenebrarium PRIVATE

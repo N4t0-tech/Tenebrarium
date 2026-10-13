@@ -3,14 +3,14 @@
 
 // ─── Árboles de habilidades por clase ────────────────────────────────────────
 // Cada árbol tiene 4 tiers: Lv5, Lv10, Lv15, Lv20, alternando 1 → 2 → 1 → 2.
-// Lv5 es siempre la habilidad de mapa de la clase ([Q] hechizo / [T] trampa),
-// obligatoria. Tiers con 2 opciones: el jugador elige una.
+// Lv5 es la habilidad de mapa de la clase ([Q] hechizo / [T] trampa), obligatoria;
+// el Guerrero no la necesita: su [Q] (cadáveres) es innata. Tiers con 2 opciones: el jugador elige una.
 
 static const SkillTreeDef kWarriorTree = {
     PlayerClass::Warrior,
     {
         { 5, {
-            { ArtEffect::GritoDeGuerra,  "GritoG",    "+ATK 2t / aturde cerca [Q]", 1, 10 },
+            { ArtEffect::GritoDeGuerra,  "GritoG",    "+ATK 2 turnos", 1, 10 },
         }},
         { 10, {
             { ArtEffect::GolpeDemoledor, "GolpeD",    "ATK*1.4 ignora mitad DEF", 2, 0 },

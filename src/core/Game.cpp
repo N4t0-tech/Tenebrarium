@@ -429,6 +429,7 @@ static constexpr int kPadX = 1;
             mapViewport_.viewW   = (mapCols - 2) * cellW / mapViewport_.cellW;
             mapViewport_.viewH   = (mapRows - 2) * cellH / mapViewport_.cellH;
         }
+        updateCamera(GetFrameTime());
 
         TerminalScreen scr(cols, rows, cellW, cellH, font, getFontItalic(fontSize), fontSize);
         scr.clear();
@@ -480,7 +481,7 @@ static constexpr int kPadX = 1;
         }
 
         GameState curState = state_.load();
-        if (mapZoom_ > 1 && player_
+        if (player_
             && (curState == GameState::Exploration || curState == GameState::Village)
             && (dungeon_ || village_)
             && villageMenu_ == VillageMenu::None) {
@@ -500,12 +501,17 @@ static constexpr int kPadX = 1;
 
             int zCellW = cellW * mapZoom_;
             int zCellH = cellH * mapZoom_;
-            Font zFont  = (mapZoom_ == 3) ? font3x : font2x;
-            Font zFontItalic = (mapZoom_ == 3) ? getFontItalic(fontSize * 3) : getFontItalic(fontSize * 2);
+            Font zFont  = (mapZoom_ == 3) ? font3x : (mapZoom_ == 2) ? font2x : font;
+            Font zFontItalic = getFontItalic(fontSize * mapZoom_);
             int  zFontH = fontSize * mapZoom_;
             int innerPixW = mapPixW - 2 * cellW;
             int innerPixH = mapPixH - 2 * cellH;
-            TerminalScreen mapScr(innerPixW / zCellW, innerPixH / zCellH,
+            // Una casilla extra por lado para cubrir el hueco que deja el desplazamiento subcasilla
+            float camFX = std::floor(mapViewport_.camX), camFY = std::floor(mapViewport_.camY);
+            Position cam{ (int)camFX, (int)camFY };
+            int shiftX = (int)std::lround((mapViewport_.camX - camFX) * zCellW);
+            int shiftY = (int)std::lround((mapViewport_.camY - camFY) * zCellH);
+            TerminalScreen mapScr(innerPixW / zCellW + 1, innerPixH / zCellH + 1,
                                   zCellW, zCellH, zFont, zFontItalic, zFontH);
             mapScr.clear();
 
@@ -540,17 +546,19 @@ static constexpr int kPadX = 1;
                                    mapScr.cols(), mapScr.rows(),
                                    acc.map(), zEntities, zTorchPos,
                                    Renderer::colorForPlayerClass(player_->getClass()),
-                                   player_->getDungeonFloor());
+                                   player_->getDungeonFloor(), false, DayLight{}, cam);
             } else if (village_) {
                 Renderer::drawMap(mapScr, 0, 0,
                                    mapScr.cols(), mapScr.rows(),
                                    village_->map, villageEntities(*village_),
                                    villageTorches(*village_),
                                    Renderer::colorForPlayerClass(player_->getClass()),
-                                   player_->getDungeonFloor(), true, dayLight(villageHour_));
+                                   player_->getDungeonFloor(), true, dayLight(villageHour_), cam);
             }
 
-            mapScr.render(offX + cellW, offY + cellH);
+            BeginScissorMode(offX + cellW, offY + cellH, innerPixW, innerPixH);
+            mapScr.render(offX + cellW - shiftX, offY + cellH - shiftY);
+            EndScissorMode();
         }
 
         EndTextureMode();
@@ -581,9 +589,7 @@ static constexpr int kPadX = 1;
         Font& mapFont      = (mapZoom_ == 3) ? font3x : (mapZoom_ == 2) ? font2x : font;
         float mapFontSize  = (float)(fontSize * std::max(1, mapZoom_));
         if (dungeon_ && dungeon_->explosionActive && GetTime() < dungeon_->explosionEndTime) {
-            Position pp = dungeon_->lock().playerPos();
-            int camX = pp.x - vp.viewW / 2;
-            int camY = pp.y - vp.viewH / 2;
+            float camX = vp.camX, camY = vp.camY;
 
             // Degradado blanco → color medio → color final, según el estilo
             float progress = (GetTime() - (dungeon_->explosionEndTime - 0.5)) / 0.5f;
@@ -608,8 +614,8 @@ static constexpr int kPadX = 1;
             BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
             for (int dy = -r; dy <= r; dy++) {
                 for (int dx = -r; dx <= r; dx++) {
-                    int pixelX = vp.originX + (dungeon_->explosionX + dx - camX) * vp.cellW;
-                    int pixelY = vp.originY + (dungeon_->explosionY + dy - camY) * vp.cellH;
+                    int pixelX = (int)std::lround(vp.originX + (dungeon_->explosionX + dx - camX) * vp.cellW);
+                    int pixelY = (int)std::lround(vp.originY + (dungeon_->explosionY + dy - camY) * vp.cellH);
                     // El anillo exterior es más tenue que el centro
                     Color c = expColor;
                     if (dx != 0 || dy != 0) c.a = 150;
@@ -627,9 +633,7 @@ static constexpr int kPadX = 1;
 
         // 3b) Proyectiles de hechizos: interpolados entre casillas, con halo y estela
         if (dungeon_ && !projectiles_.empty() && state_.load() == GameState::Exploration) {
-            Position pp = dungeon_->lock().playerPos();
-            float camX = (float)(pp.x - vp.viewW / 2);
-            float camY = (float)(pp.y - vp.viewH / 2);
+            float camX = vp.camX, camY = vp.camY;
             double now = GetTime();
             BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
             for (const auto& pr : projectiles_) {
@@ -695,8 +699,7 @@ static constexpr int kPadX = 1;
         if (village_ && state_.load() == GameState::Village && villageMenu_ == VillageMenu::None) {
             const MapViewport& vp = mapViewport_;
             Position pp = village_->map.getPlayerPos();
-            int camX = pp.x - vp.viewW / 2;
-            int camY = pp.y - vp.viewH / 2;
+            float camX = vp.camX, camY = vp.camY;
             // Mismo tinte que el mapa; cerca de la puerta recuperan la mitad del brillo
             const DayLight light = dayLight(villageHour_);
             auto shade = [&](Color c, bool near) {
@@ -713,8 +716,8 @@ static constexpr int kPadX = 1;
                 bool near = std::max(std::abs(pp.x - sign.door.x), std::abs(pp.y - sign.door.y)) <= 4;
                 std::string text = " " + sign.text + " ";
                 Vector2 sz = MeasureTextEx(font, text.c_str(), (float)fontSize, 0);
-                int px = vp.originX + (sign.pos.x - camX) * vp.cellW + vp.cellW / 2 - (int)sz.x / 2;
-                int py = vp.originY + (sign.pos.y - camY) * vp.cellH + (vp.cellH - cellH) / 2;
+                int px = (int)std::lround(vp.originX + (sign.pos.x - camX) * vp.cellW) + vp.cellW / 2 - (int)sz.x / 2;
+                int py = (int)std::lround(vp.originY + (sign.pos.y - camY) * vp.cellH) + (vp.cellH - cellH) / 2;
                 Color board  = shade(near ? Color{120, 82, 40, 255}  : Color{70, 48, 26, 230}, near);
                 Color frame  = shade(near ? Color{220, 170, 90, 255} : Color{110, 80, 45, 230}, near);
                 Color letter = shade(near ? Color{255, 236, 180, 255} : Color{170, 150, 115, 255}, near);
@@ -834,9 +837,18 @@ void Game::processInput()
         }
     }
 
+    if (processHeldMovement())
+        return;
+
     // Carácter Unicode — interceptar +, - y F antes de dispatch
+    GameState st = state_.load();
+    bool moveState = st == GameState::Exploration || st == GameState::Village;
     int cp = GetCharPressed();
     if (cp > 0 && cp < 128) cp = std::tolower(cp);
+    while (moveState && (cp == 'w' || cp == 'a' || cp == 's' || cp == 'd')) {
+        cp = GetCharPressed();
+        if (cp > 0 && cp < 128) cp = std::tolower(cp);
+    }
     if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
     if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
     if (cp == 'f') {
@@ -858,6 +870,61 @@ void Game::processInput()
     }
     if (cp > 0)
         dispatchInput(cp);
+}
+
+bool Game::processHeldMovement()
+{
+    static constexpr double kMoveFirstRepeat = 0.18;
+    static constexpr double kMoveRepeat      = 0.10;
+    static constexpr struct { int rl; int g; } kMoveKeys[] = {
+        {87, 'w'}, {65, 'a'}, {83, 's'}, {68, 'd'},
+    };
+
+    GameState st = state_.load();
+    if (st != GameState::Exploration && st != GameState::Village) {
+        heldMoveKey_ = 0;
+        return false;
+    }
+
+    double now = GetTime();
+    int key = 0;
+    for (auto &k : kMoveKeys) {
+        if (IsKeyPressed(k.rl)) {
+            heldMoveKey_ = k.g;
+            heldMoveRl_ = k.rl;
+            nextMoveTime_ = now + kMoveFirstRepeat;
+            key = k.g;
+            break;
+        }
+    }
+
+    if (!key && heldMoveKey_) {
+        if (!IsKeyDown(heldMoveRl_)) {
+            heldMoveKey_ = 0;
+            for (auto &k : kMoveKeys) {
+                if (IsKeyDown(k.rl)) {
+                    heldMoveKey_ = k.g;
+                    heldMoveRl_ = k.rl;
+                    break;
+                }
+            }
+        }
+        if (heldMoveKey_ && now >= nextMoveTime_) {
+            nextMoveTime_ = now + kMoveRepeat;
+            key = heldMoveKey_;
+        }
+    }
+
+    if (!key)
+        return false;
+
+    // Vaciar la cola de caracteres para que la pulsación no llegue al estado siguiente
+    // (p. ej. tienda o combate) si este movimiento provoca una transición.
+    while (GetCharPressed() > 0) {}
+    dispatchInput(key);
+    if (state_.load() != st)
+        heldMoveKey_ = 0;
+    return true;
 }
 
 void Game::dispatchInput(int key)
@@ -968,14 +1035,13 @@ void Game::dispatchInput(int key)
             break;
         }
 
-        // Levantar / lanzar cadáveres (Guerrero)
-        if (key == 'g')
+        // Habilidad de mapa: el Guerrero levanta y lanza cadáveres; el resto lanza hechizos
+        if (key == 'q' && canThrowCorpses())
         {
             pickUpOrAimCorpse();
             break;
         }
 
-        // Lanzar hechizo en el mapa (habilidades del árbol del Mago)
         if (key == 'q')
         {
             auto spells = unlockedMapSpells();
@@ -2608,6 +2674,47 @@ void Game::inputAiming(int key)
     }
 }
 
+void Game::updateCamera(float dt)
+{
+    static constexpr float kCamSpeed    = 14.0f;
+    static constexpr float kCamSnapDist = 4.0f;
+
+    const Map* map = nullptr;
+    Position pp{};
+    GameState st = state_.load();
+    if (st == GameState::Village && village_) {
+        map = &village_->map;
+        pp = village_->map.getPlayerPos();
+    } else if (dungeon_) {
+        auto acc = dungeon_->lock();
+        map = &acc.map();
+        pp = acc.playerPos();
+    } else {
+        camMap_ = nullptr;
+        return;
+    }
+
+    MapViewport& vp = mapViewport_;
+    float tx = (float)(pp.x - vp.viewW / 2);
+    float ty = (float)(pp.y - vp.viewH / 2);
+    bool snap = map != camMap_ || vp.viewW != camViewW_ || vp.viewH != camViewH_
+             || std::abs(tx - vp.camX) > kCamSnapDist || std::abs(ty - vp.camY) > kCamSnapDist;
+    camMap_ = map;
+    camViewW_ = vp.viewW;
+    camViewH_ = vp.viewH;
+    if (snap) {
+        vp.camX = tx;
+        vp.camY = ty;
+        return;
+    }
+
+    float k = 1.0f - std::exp(-kCamSpeed * dt);
+    vp.camX += (tx - vp.camX) * k;
+    vp.camY += (ty - vp.camY) * k;
+    if (std::abs(tx - vp.camX) < 0.01f) vp.camX = tx;
+    if (std::abs(ty - vp.camY) < 0.01f) vp.camY = ty;
+}
+
 bool Game::screenToMap(Vector2 px, Position& out) const
 {
     if (!dungeon_) return false;
@@ -2624,11 +2731,10 @@ bool Game::screenToMap(Vector2 px, Position& out) const
         v += (cv - v) * 0.25f;
         px = { (u + 1.0f) * 0.5f * sw, (v + 1.0f) * 0.5f * sh };
     }
-    int sx = static_cast<int>(std::floor((px.x - vp.originX) / vp.cellW));
-    int sy = static_cast<int>(std::floor((px.y - vp.originY) / vp.cellH));
-    if (sx < 0 || sy < 0 || sx >= vp.viewW || sy >= vp.viewH) return false;
-    Position pp = dungeon_->lock().playerPos();
-    out = { pp.x - vp.viewW / 2 + sx, pp.y - vp.viewH / 2 + sy };
+    float fx = (px.x - vp.originX) / vp.cellW;
+    float fy = (px.y - vp.originY) / vp.cellH;
+    if (fx < 0 || fy < 0 || fx >= vp.viewW || fy >= vp.viewH) return false;
+    out = { static_cast<int>(std::floor(vp.camX + fx)), static_cast<int>(std::floor(vp.camY + fy)) };
     return true;
 }
 
@@ -2737,7 +2843,7 @@ void Game::castSpell(Position target)
 
 bool Game::canThrowCorpses() const
 {
-    return player_ && (player_->getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities);
+    return player_ && player_->getClass() == PlayerClass::Warrior;
 }
 
 int Game::carriedCorpse(const Dungeon::Lock& acc) const
@@ -2760,7 +2866,7 @@ void Game::pickUpOrAimCorpse()
     {
         auto acc = dungeon_->lock();
         if (carriedCorpse(acc) >= 0) {
-            // Ya carga uno: G pasa a apuntar el lanzamiento
+            // Ya carga uno: Q pasa a apuntar el lanzamiento
             msg.clear();
         } else {
             // El más cercano entre la casilla propia y las 8 vecinas
@@ -2779,7 +2885,7 @@ void Game::pickUpOrAimCorpse()
                 we.carried = true;
                 auto e = DungeonPopulator::makeEnemy(we.type, player_->getDungeonFloor(),
                                                      player_->getIncursions(), we.isBoss);
-                msg = "Levantas el cadáver de " + e->getName() + ". G para lanzarlo.";
+                msg = "Levantas el cadáver de " + e->getName() + ". Q para lanzarlo.";
             }
         }
     }

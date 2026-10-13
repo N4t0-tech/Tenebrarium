@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 // Renderer — todos los métodos son estáticos y reciben un TerminalScreen& donde dibujar.
 // No llaman a Raylib directamente; usan scr.putStr/put/putCell para llenar el buffer.
 // Esto permite testar el layout sin ventana y hace el renderer stateless (fácil de extender).
@@ -51,7 +53,8 @@ public:
                          const Map& map, const std::vector<MapEntity>& entities,
                          const std::vector<Position>& torches,
                          Color playerColor, int floor = 1,
-                         bool isVillage = false, const DayLight& light = DayLight{});
+                         bool isVillage = false, const DayLight& light = DayLight{},
+                         std::optional<Position> cam = std::nullopt);
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);

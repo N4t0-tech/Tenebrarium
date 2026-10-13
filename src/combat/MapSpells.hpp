@@ -7,15 +7,24 @@
 
 #include "Art.hpp"
 #include "entities/Player.hpp"
+#include "entities/SkillTree.hpp"
 #include <raylib.h>
 
-// DEPURACIÓN: true desbloquea todas las habilidades del mapa (hechizos y trampas)
-// para cualquier clase y nivel. Dejar en false para jugar normal.
+// DEPURACIÓN: true desbloquea, sin importar el nivel, las habilidades del mapa
+// (hechizos y trampas) del árbol de la clase del jugador. Dejar en false para jugar normal.
 inline constexpr bool kDebugUnlockMapAbilities = true;
+
+inline bool classTreeHasSkill(PlayerClass cls, ArtEffect effect) {
+    for (const auto& tier : getSkillTree(cls).tiers)
+        for (const auto& choice : tier.choices)
+            if (choice.effect == effect) return true;
+    return false;
+}
 
 // true si el jugador puede usar en el mapa la habilidad con ese efecto.
 inline bool canUseMapAbility(const Player& p, ArtEffect effect) {
-    return kDebugUnlockMapAbilities || p.hasSkill(effect);
+    if (kDebugUnlockMapAbilities && classTreeHasSkill(p.getClass(), effect)) return true;
+    return p.hasSkill(effect);
 }
 
 enum class MapFxStyle { Fire, Ice, Lightning, Drain, Impact };
@@ -47,8 +56,6 @@ inline constexpr MapSpellDef kMapSpells[] = {
       MapFxStyle::Drain,     30, 10, 2, 0, 50 },
     { ArtEffect::Rayo,        "Rayo",          10, 0, 60.0f, '+',    2, {255, 240, 120, 255},
       MapFxStyle::Lightning, 50, 20, 4, 0,  0 },
-    { ArtEffect::GritoDeGuerra, "Grito de guerra", 0, 2, 0.0f, '!',  2, {255, 220,  90, 255},
-      MapFxStyle::Lightning,  5,  2, 1, 5,  0, true },
     { ArtEffect::LluviaEstelar, "Lluvia estelar",  8, 1, 14.0f, '*', 5, {255, 255, 200, 255},
       MapFxStyle::Lightning, 30, 10, 2, 0,  0 },
     { ArtEffect::DistorsionTemporal, "Distorsión temporal", 8, 1, 10.0f, 0x25CE, 8, {170, 120, 255, 255},

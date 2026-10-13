@@ -129,13 +129,24 @@ private:
         int originX{0}, originY{0};   // píxel de la esquina superior izquierda del mapa
         int cellW{1}, cellH{1};       // tamaño de casilla (incluye zoom)
         int viewW{0}, viewH{0};       // casillas visibles
+        float camX{0}, camY{0};       // casilla del mapa en la esquina superior izquierda (suavizada)
     } mapViewport_;
+
+    // Cámara suavizada: persigue al jugador en lugar de saltar casilla a casilla.
+    const Map* camMap_{nullptr};
+    int        camViewW_{0}, camViewH_{0};
+    void updateCamera(float dt);
 
     bool   shovelDigging_{false};
     double shovelDigEndTime_{0.0};
 
     double screenshotMsgEndTime_{0.0};
     int screenshotCounter_{0};
+
+    // Movimiento con tecla mantenida: ritmo propio en lugar de la repetición del SO.
+    int    heldMoveKey_{0};
+    int    heldMoveRl_{0};
+    double nextMoveTime_{0.0};
 
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
@@ -161,6 +172,7 @@ private:
     // dispatchInput() enruta al handler del estado actual.
     void dispatchInput(int key);
     void processInput();
+    bool processHeldMovement();
     void update();
     void render(TerminalScreen& scr);
 

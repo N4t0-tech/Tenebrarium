@@ -3,6 +3,7 @@
 #include "ui/XpLoader.hpp"
 #include "core/Assets.hpp"
 #include "entities/SkillTree.hpp"
+#include "Version.hpp"
 #include <raylib.h>
 #include <string>
 #include <vector>
@@ -238,10 +239,11 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
                        const std::vector<Position>& torches,
-                       Color playerColor, int floor, bool isVillage, const DayLight& light) {
+                       Color playerColor, int floor, bool isVillage, const DayLight& light,
+                       std::optional<Position> cam) {
     Position pp = map.getPlayerPos();
-    int camX = pp.x - viewW / 2;
-    int camY = pp.y - viewH / 2;
+    int camX = cam ? cam->x : pp.x - viewW / 2;
+    int camY = cam ? cam->y : pp.y - viewH / 2;
 
     auto applyFactor = [](Color c, float f) -> Color {
         return { (uint8_t)(c.r * f), (uint8_t)(c.g * f),
@@ -546,8 +548,8 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
          put("  T   trampa",   COL_GRAY, CELL_DIM);
      if (hasAnyMapSpell(player))
          put("  Q   hechizo",  COL_GRAY, CELL_DIM);
-     if (player.getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities)
-         put("  G   cadáver",  COL_GRAY, CELL_DIM);
+     if (player.getClass() == PlayerClass::Warrior)
+         put("  Q   cadáver",  COL_GRAY, CELL_DIM);
       put("  P   poción",   COL_GRAY, CELL_DIM);
      put("  R   tomar",   COL_GRAY, CELL_DIM);
       put("  I   mochila",  COL_GRAY, CELL_DIM);
@@ -635,8 +637,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
 
     // row 6-7: controls
     scr.putStr(rpC, row + 6, std::string("[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv")
-               + (player.getClass() == PlayerClass::Warrior || kDebugUnlockMapAbilities
-                  ? "  [G]Cadáver" : ""),
+               + (player.getClass() == PlayerClass::Warrior ? "  [Q]Cadáver" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
     scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
                + (canUseMapAbility(player, ArtEffect::Trampa) ? "  [T]Trampa" : "")
@@ -762,6 +763,9 @@ void Renderer::drawTitle(TerminalScreen& scr) {
 
     // ── Subtitle ──
     scr.putStr(cx - 16, cy + 1, "~ Un RPG de mazmorra y sombras ~", COL_WHITE);
+
+    std::string version = kGameVersion;
+    scr.putStr(scr.cols() - (int)version.size() - 1, scr.rows() - 1, version, COL_DK_GRAY, COL_BLACK, CELL_DIM);
 }
 
 // ─── drawCredits ─────────────────────────────────────────────────────────────
