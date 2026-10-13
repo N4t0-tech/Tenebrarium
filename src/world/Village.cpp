@@ -1,5 +1,8 @@
 #include "Village.hpp"
 #include "ui/XpLoader.hpp"
+#include <raylib.h>
+#include <algorithm>
+#include <exception>
 
 // La aldea se construye desde el arte REXPaint assets/maps/aldea.xp.
 // Celdas del arte → tiles:
@@ -18,17 +21,66 @@ bool isTileFloor(char32_t g)
            g == 'T' || g == 'F' || g == 'E' || g == 'v' || g == 'i';
 }
 
+// Plaza amurallada usada cuando el arte no se puede cargar: el juego sigue
+// siendo jugable y los puntos funcionales caen en sus posiciones por defecto.
+void buildFallback(VillageLayout& v)
+{
+    v.map = Map(60, 60);
+    for (int y = 0; y < v.map.height(); y++) {
+        for (int x = 0; x < v.map.width(); x++) {
+            bool border = x == 0 || y == 0 || x == v.map.width() - 1 || y == v.map.height() - 1;
+            v.map.at(x, y) = border
+                ? Tile{ TileType::Wall,  U'#',    true, true, 140, 140, 140, 0, 0, 0 }
+                : Tile{ TileType::Floor, 0x2591, true, true,  50,  50,  50, 0, 0, 0 };
+        }
+    }
+}
+
 } // namespace
+
+int forgeCost(int statBonus, int incursions)
+{
+    return 50 + 25 * statBonus + 20 * (std::max(1, incursions) - 1);
+}
+
+int trainingCost(int option, int incursions)
+{
+    const int inc = std::max(1, incursions);
+    switch (option) {
+    case 0:  return 60 + 20 * inc;
+    case 1:  return 80 + 30 * inc;
+    case 2:  return 70 + 25 * inc;
+    default: return 50 + 20 * inc;
+    }
+}
 
 VillageLayout buildVillage()
 {
     VillageLayout v;
 
-    std::string path = "assets/maps/aldea.xp";
-    const XpFile& xp = loadXpCached(path);
-    const XpLayer& layer = xp.layers[0];
+    const std::string path = "assets/maps/aldea.xp";
+    const XpLayer* layer = nullptr;
+    try {
+        const XpFile& xp = loadXpCached(path);
+        if (!xp.layers.empty()) {
+            const XpLayer& l = xp.layers[0];
+            if (l.width > 0 && l.height > 0
+                && l.cells.size() >= static_cast<size_t>(l.width) * l.height)
+                layer = &l;
+        }
+    } catch (const std::exception& e) {
+        TraceLog(LOG_WARNING, "Aldea: %s", e.what());
+    }
 
-    int w = layer.width, h = layer.height;
+    if (!layer) {
+        TraceLog(LOG_WARNING, "Aldea: arte no disponible, usando mapa de respaldo");
+        buildFallback(v);
+    }
+
+    const int w = layer ? layer->width : 0;
+    const int h = layer ? layer->height : 0;
+    if (layer)
+        v.map = Map(w, h);
 
     auto set = [&](int x, int y, TileType t, char32_t g, const XpCell& c) {
         bool empty = (g == U' '); // celdas vacías del arte (fondo magenta REXPaint)
@@ -40,7 +92,7 @@ VillageLayout buildVillage()
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-            const XpCell& c = layer.cells[y * w + x];
+            const XpCell& c = layer->cells[y * w + x];
             char32_t g = c.glyph;
 
             switch (g) {
@@ -78,6 +130,20 @@ VillageLayout buildVillage()
         for (int i = 0; i < 2; i++)
             v.lanterns.push_back(lanternDefaults[i]);
     }
+
+    // Un arte más pequeño que los valores por defecto no debe dejar puntos fuera del mapa
+    auto clampPos = [&](Position& p) {
+        p.x = std::clamp(p.x, 0, v.map.width() - 1);
+        p.y = std::clamp(p.y, 0, v.map.height() - 1);
+    };
+    clampPos(v.spawn);
+    clampPos(v.shop);
+    clampPos(v.forge);
+    clampPos(v.training);
+    clampPos(v.stairsDown);
+    v.lanterns.erase(std::remove_if(v.lanterns.begin(), v.lanterns.end(), [&](Position p) {
+        return p.x < 0 || p.y < 0 || p.x >= v.map.width() || p.y >= v.map.height();
+    }), v.lanterns.end());
 
     v.map.setPlayerPos(v.spawn.x, v.spawn.y);
     return v;

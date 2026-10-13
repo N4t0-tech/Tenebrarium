@@ -510,6 +510,7 @@ bool GameSerializer::load(Game& g)
     g.pendingCombatEnemy_  = -1;
     g.village_.reset();
     g.villageMenu_ = VillageMenu::None;
+    g.villageConfirmDescend_ = false;
     g.villageMessage_.clear();
     g.villageMessageEndTime_ = 0.0;
     if (inDungeon) {

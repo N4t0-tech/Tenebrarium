@@ -15,6 +15,7 @@
 #include <cmath>
 #include <fstream>
 #include <filesystem>
+#include <limits>
 #include <unordered_map>
 
 // Keycode interno del juego (evita conflicto con KeyboardKey de Raylib)
@@ -1779,6 +1780,7 @@ void Game::setState(GameState newState)
         combat_.reset();
         dungeon_.reset();
         villageMenu_ = VillageMenu::None;
+        villageConfirmDescend_ = false;
         villageMessage_.clear();
         villageMessageEndTime_ = 0.0;
         village_ = std::make_unique<VillageLayout>(buildVillage());
@@ -2013,7 +2015,24 @@ void Game::inputVillage(int key)
 {
     if (!player_ || !village_) return;
 
-    const int inc = std::max(1, player_->getIncursions());
+    const int inc = player_->getIncursions();
+
+    // Confirmación de la escalera: ENTER desciende; cualquier otra tecla cancela
+    // y, si es de movimiento, se procesa con normalidad más abajo.
+    if (villageConfirmDescend_) {
+        villageConfirmDescend_ = false;
+        villageMessage_.clear();
+        if (key == '\n') {
+            player_->beginIncursion();
+            setState(GameState::Exploration);
+            dungeon_->message = "Incursión " + std::to_string(player_->getIncursions()) +
+                                ": desciendes al Tenebrarium...";
+            dungeon_->messageEndTime = GetTime() + 2.0;
+            saveGame();
+            return;
+        }
+        if (key == 27 || key == 'n' || key == 'q') return;
+    }
 
     // Submenú de forja: mejorar arma/armadura equipada
     if (villageMenu_ == VillageMenu::Forge)
@@ -2034,7 +2053,7 @@ void Game::inputVillage(int key)
                                        : "No tienes armadura equipada.");
                 break;
             }
-            int cost = 50 + 25 * opt->statBonus + 20 * (inc - 1);
+            int cost = forgeCost(opt->statBonus, inc);
             if (player_->getCoins() < cost) {
                 showMessage("No tienes suficiente oro para forjar.");
                 break;
@@ -2059,21 +2078,21 @@ void Game::inputVillage(int key)
     // Submenú de entrenamiento: gastar oro en mejoras permanentes
     if (villageMenu_ == VillageMenu::Training)
     {
-        const int costs[4] = {60 + 20 * inc, 80 + 30 * inc, 70 + 25 * inc, 50 + 20 * inc};
         switch (key)
         {
         case 'w':
         case 's':
-            navV(key, villageSelection_, 4);
+            navV(key, villageSelection_, kTrainingOptions);
             break;
         case '\n':
         {
             int sel = villageSelection_;
-            if (player_->getCoins() < costs[sel]) {
+            int cost = trainingCost(sel, inc);
+            if (player_->getCoins() < cost) {
                 showMessage("No tienes suficiente oro para entrenar.");
                 break;
             }
-            player_->addCoins(-costs[sel]);
+            player_->addCoins(-cost);
             switch (sel) {
             case 0: player_->trainHealth(10); showMessage("Entrenas: +10 de vida maxima!"); break;
             case 1: player_->trainAttack(2);  showMessage("Entrenas: +2 de ataque!");       break;
@@ -2158,12 +2177,9 @@ void Game::inputVillage(int key)
         return;
     }
     if (nx == village_->stairsDown.x && ny == village_->stairsDown.y) {
-        player_->beginIncursion();
-        setState(GameState::Exploration);
-        dungeon_->message = "Incursión " + std::to_string(player_->getIncursions()) +
-                            ": desciendes al Tenebrarium...";
-        dungeon_->messageEndTime = GetTime() + 2.0;
-        saveGame();
+        villageConfirmDescend_ = true;
+        villageMessage_ = "¿Descender al Tenebrarium?  [ENTER] Sí   [ESC] No";
+        villageMessageEndTime_ = std::numeric_limits<double>::infinity();
         return;
     }
 }

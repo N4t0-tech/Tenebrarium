@@ -14,7 +14,7 @@ enum class VillageMenu {
 };
 
 struct VillageLayout {
-    Map      map{60, 60};
+    Map      map{60, 60};        // se redimensiona al tamaño del arte
     Position spawn{0, 0};        // posición inicial del jugador
     Position shop{0, 0};         // casilla que abre la tienda (estado Shop)
     Position forge{0, 0};        // casilla que abre el submenú de forja
@@ -23,4 +23,11 @@ struct VillageLayout {
     std::vector<Position> lanterns;    // farolas decorativas (luz cálida)
 };
 
+// Si assets/maps/aldea.xp falta o está corrupto, construye una plaza de respaldo.
 VillageLayout buildVillage();
+
+// Costes de la forja y el entrenamiento. Única fuente de verdad para lo que se
+// muestra y lo que se cobra. Antes de la primera incursión cuenta como la 1.
+inline constexpr int kTrainingOptions = 4;
+int forgeCost(int statBonus, int incursions);
+int trainingCost(int option, int incursions);

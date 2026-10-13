@@ -61,6 +61,7 @@ private:
     // (forja / entrenamiento) mientras el jugador camina por el mapa.
     std::unique_ptr<VillageLayout> village_;
     VillageMenu  villageMenu_{VillageMenu::None};
+    bool         villageConfirmDescend_{false};  // pisó la escalera, espera ENTER
     int          villageSelection_{0};
     std::string  villageMessage_;
     double       villageMessageEndTime_{0.0};
