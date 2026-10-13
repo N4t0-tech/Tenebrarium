@@ -988,8 +988,8 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  secretUnlocked
-                     ? "A/D navegar  |  ENTER confirmar  |  ESC volver"
-                     : "W/S fila  |  A/D subclase  |  ENTER confirmar  |  ESC volver",
+                     ? "A/D ◄► navegar  |  ENTER confirmar  |  ESC volver"
+                     : "W/S ▲▼ fila  |  A/D ◄► subclase  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -1062,7 +1062,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
     }
 
     drawCentered(scr, cy + 4, 0, scr.cols(),
-                 "A/D navegar  |  ENTER confirmar  |  ESC volver",
+                 "A/D ◄► navegar  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -1108,7 +1108,7 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     drawFitBox(scr, cy - 2, lines, COL_GRAY, 34);
 
     drawCentered(scr, cy + 7, 0, scr.cols(),
-                 "W/S navegar  |  ENTER cambiar  |  ESC volver",
+                 "W/S ▲▼ navegar  |  ENTER cambiar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 
@@ -1380,7 +1380,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             if (sel && canAfford) rc = COL_YELLOW;
             scr.putStr(1, br++, line, rc, COL_BLACK, rf);
         }
-        scr.putStr(1, br, "W/S  |  ENTER confirmar",
+        scr.putStr(1, br, "W/S ▲▼  |  ENTER confirmar",
                    COL_GRAY, COL_BLACK, CELL_DIM);
     }
 }
@@ -1424,7 +1424,7 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
         "  $" + std::to_string(player.getCoins()) +
         "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
         "/" + std::to_string(player.getInventory().totalSlots());
-    const std::string helpLine = "[W/S] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar";
+    const std::string helpLine = "[W/S ▲▼] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar";
 
     // Ancho según la línea más larga; mínimo 60 para que la ventana no salte
     // de tamaño con cada objeto que entra o sale
@@ -1575,7 +1575,7 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
 
     // Anchos según el contenido de todas las misiones: la ventana no cambia
     // de tamaño al moverse por la lista. La descripción se ajusta por palabras.
-    const std::string footer = " W/S navegar  |  ESC volver ";
+    const std::string footer = " W/S ▲▼ navegar  |  ESC volver ";
     int listContent = 0, detailContent = 30;
     for (const auto& q : quests) {
         std::string icon, label; Color c;
@@ -1684,7 +1684,7 @@ void Renderer::drawBestiary(TerminalScreen& scr,
         detailContent = std::max(detailContent, std::min(utf8Len(info.special), 44));
     int detailW = detailContent + 3;
 
-    const std::string footer = " W/S navegar  |  ESC volver ";
+    const std::string footer = " W/S ▲▼ navegar  |  ESC volver ";
     int w = std::min(cols - 4, std::max(listW + detailW + 1, utf8Len(footer) + 2));
     detailW = std::max(10, w - listW - 1);
     int textW = detailW - 3;
@@ -1915,8 +1915,8 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     lines.push_back(BoxLine::separator());
     // Línea de mensaje siempre reservada: la ventana no cambia de alto al comprar
     lines.push_back({ message, COL_GREEN, CELL_BOLD });
-    lines.push_back({ sellMode ? "W/S navegar  |  ENTER vender  |  V comprar  |  ESC salir"
-                               : "W/S navegar  |  ENTER comprar  |  V vender  |  ESC salir",
+    lines.push_back({ sellMode ? "W/S ▲▼ navegar  |  ENTER vender  |  V comprar  |  ESC salir"
+                               : "W/S ▲▼ navegar  |  ENTER comprar  |  V vender  |  ESC salir",
                       COL_GRAY, CELL_DIM });
     drawFitBox(scr, 1, lines, COL_ORANGE);
 }
@@ -2177,7 +2177,7 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
 
     drawCentered(scr, treeRow, 0, scr.cols(),
                  pendingTier >= 0
-                     ? "A/D elegir habilidad  |  ENTER confirmar"
+                     ? "A/D ◄► elegir habilidad  |  ENTER confirmar"
                      : "ENTER o ESC para cerrar",
                  COL_GRAY, CELL_DIM);
 }

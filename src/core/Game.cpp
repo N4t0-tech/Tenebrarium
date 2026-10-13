@@ -475,7 +475,7 @@ static constexpr int kPadX = 1;
                 }
             }
             int hintY = baseY + n * optH + 10;
-            const char* hint = "W/S navegar  |  ENTER para confirmar";
+            const char* hint = "W/S ▲▼ navegar  |  ENTER para confirmar";
             Vector2 hintSz = MeasureTextEx(font, hint, (float)fontSize, 0);
             DrawTextEx(font, hint, {(float)((screenW - (int)hintSz.x) / 2), (float)hintY}, (float)fontSize, 0, Color{160, 160, 160, 255});
         }
@@ -834,6 +834,25 @@ void Game::processInput()
         {
             dispatchInput(m.g);
             return;
+        }
+    }
+
+    // Flechas en menús: equivalen a W/A/S/D. En el mapa las gestiona processHeldMovement().
+    {
+        GameState st = state_.load();
+        bool onMap = st == GameState::Exploration
+                  || (st == GameState::Village && (arrowMovement_ || villageMenu_ == VillageMenu::None));
+        bool typing = st == GameState::MainMenu && menuPhase_ == MenuPhase::NameInput;
+        if (!onMap && !typing) {
+            static constexpr struct { int rl; int g; } kMenuArrows[] = {
+                {265, 'w'}, {263, 'a'}, {264, 's'}, {262, 'd'}, // KEY_UP, KEY_LEFT, KEY_DOWN, KEY_RIGHT
+            };
+            for (auto &k : kMenuArrows) {
+                if (IsKeyPressed(k.rl) || IsKeyPressedRepeat(k.rl)) {
+                    dispatchInput(k.g);
+                    return;
+                }
+            }
         }
     }
 
