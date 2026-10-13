@@ -133,6 +133,36 @@ static std::string scrollText(const std::string& text, int maxWidth, int tick, i
     return std::string(maxWidth - pos, ' ') + utf8Substr(text, 0, pos);
 }
 
+// Parte el texto en líneas de como máximo `width` columnas sin cortar palabras
+// (salvo que una palabra sola no quepa).
+static std::vector<std::string> wrapText(const std::string& text, int width) {
+    std::vector<std::string> out;
+    if (width <= 0) return out;
+    std::string cur;
+    size_t i = 0;
+    while (i < text.size()) {
+        size_t sp = text.find(' ', i);
+        std::string word = text.substr(i, sp == std::string::npos ? std::string::npos : sp - i);
+        i = (sp == std::string::npos) ? text.size() : sp + 1;
+        while (utf8Len(word) > width) {
+            if (!cur.empty()) { out.push_back(cur); cur.clear(); }
+            out.push_back(utf8Substr(word, 0, width));
+            word = utf8Substr(word, width, utf8Len(word) - width);
+        }
+        if (cur.empty())                                    cur = word;
+        else if (utf8Len(cur) + 1 + utf8Len(word) <= width) cur += " " + word;
+        else { out.push_back(cur); cur = word; }
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
+}
+
+// Recorta a `width` columnas marcando el corte con '~'.
+static std::string fitText(const std::string& s, int width) {
+    if (width <= 0) return "";
+    return utf8Len(s) > width ? utf8Substr(s, 0, width - 1) + "~" : s;
+}
+
 void Renderer::drawBorder(TerminalScreen& scr, int col, int row, int w, int h, Color c) {
     scr.put(col,         row,         0x2554, c);
     scr.put(col + w - 1, row,         0x2557, c);
@@ -857,8 +887,7 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
                             " DEF:" + std::to_string(ci.def) +
                             " MP:" + std::to_string(ci.mana);
         std::string nameRole = std::string(ci.name) + "  [ " + ci.role + " ]";
-        int cardW = std::max({ (int)nameRole.size(), (int)stats.size(),
-                               (int)std::string(ci.desc).size(), 20 }) + 4;
+        int cardW = std::max({ utf8Len(nameRole), utf8Len(stats), utf8Len(ci.desc), 20 }) + 4;
         int cardX = (scr.cols() - cardW) / 2;
         if (cardX < 1) cardX = 1;
         int cardH = 7;
@@ -882,7 +911,15 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
         int portH = kSrcSize / 2;
 
         int listCol = 2;
+        // Ancho según la ficha más larga de las seis subclases normales
         int boxW = 36;
+        for (int k = 0; k < 6; k++) {
+            const auto& c = kClasses[k];
+            std::string st = "HP:" + std::to_string(c.hp) + " ATK:" + std::to_string(c.atk) +
+                             " DEF:" + std::to_string(c.def) + " MP:" + std::to_string(c.mana);
+            boxW = std::max({ boxW, utf8Len(c.desc) + 4, utf8Len(st) + 4,
+                              utf8Len(c.name) + 8 });
+        }
         int boxH = 7;
         int startRow = 4;
 
@@ -1021,7 +1058,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
 
 void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
                             int mapZoom, bool shaderOn) {
-    int cx = scr.cols() / 2, cy = scr.rows() / 2;
+    int cy = scr.rows() / 2;
     drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
     drawCentered(scr, cy - 4, 0, scr.cols(), "Configuración", COL_WHITE);
@@ -1042,18 +1079,19 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
         {"Volver",       ""},
     };
 
+    int labelW = 0;
+    for (const auto& it : items) labelW = std::max(labelW, utf8Len(it.label));
+    std::vector<BoxLine> lines;
     for (int i = 0; i < 4; i++) {
-        int y = cy - 1 + i * 2;
         bool sel = (i == selection);
-        Color c = sel ? COL_YELLOW : COL_WHITE;
-        uint8_t fl = sel ? CELL_BOLD : 0;
-        std::string line = std::string("  ") + items[i].label;
-        scr.putStr(cx - 16, y, line.c_str(), c, COL_BLACK, fl);
-        if (items[i].value[0] != '\0') {
-            std::string val = std::string("[") + items[i].value + "]";
-            scr.putStr(cx + 4, y, val.c_str(), sel ? COL_CYAN : COL_GRAY, COL_BLACK, fl);
-        }
+        std::string line = std::string(items[i].label);
+        if (items[i].value[0] != '\0')
+            line += std::string(labelW - utf8Len(items[i].label) + 4, ' ') +
+                    "[" + items[i].value + "]";
+        lines.push_back({ line, sel ? COL_YELLOW : COL_WHITE,
+                          static_cast<uint8_t>(sel ? (CELL_BOLD | CELL_INVERTED) : 0) });
     }
+    drawFitBox(scr, cy - 2, lines, COL_GRAY, 34);
 
     drawCentered(scr, cy + 7, 0, scr.cols(),
                  "W/S navegar  |  ENTER cambiar  |  ESC volver",
@@ -1236,15 +1274,17 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
         scr.putStr(halfW + 2, lr++, log[i], logColor(log[i]));
 
     drawHSep(scr, 0, br++, cols);
-    scr.putStr(1, br, player.getName() + " [" + className(player) + "]",
-               COL_CYAN, COL_BLACK, CELL_BOLD);
+    // Cada campo empieza tras el anterior: un nombre largo no pisa los valores
+    int px = 1;
+    px += scr.putStr(px, br, player.getName() + " [" + className(player) + "]",
+                     COL_CYAN, COL_BLACK, CELL_BOLD) + 3;
     Color phpc = hpColor(player.getHp(), player.getMaxHp());
-    scr.putStr(20, br, "HP:", phpc, COL_BLACK, CELL_BOLD);
-    scr.putStr(24, br, std::to_string(player.getHp()) + "/" +
-               std::to_string(player.getMaxHp()), phpc);
-    std::string mpLbl2 = player.getClass() == PlayerClass::Warrior ? "AG:" : "MP:";
-    scr.putStr(35, br, mpLbl2.c_str(), COL_CYAN, COL_BLACK, CELL_BOLD);
-    scr.putStr(39, br++, std::to_string(player.getMana()) + "/" +
+    px += scr.putStr(px, br, "HP: ", phpc, COL_BLACK, CELL_BOLD);
+    px += scr.putStr(px, br, std::to_string(player.getHp()) + "/" +
+                     std::to_string(player.getMaxHp()), phpc) + 3;
+    std::string mpLbl2 = player.getClass() == PlayerClass::Warrior ? "AG: " : "MP: ";
+    px += scr.putStr(px, br, mpLbl2, COL_CYAN, COL_BLACK, CELL_BOLD);
+    scr.putStr(px, br++, std::to_string(player.getMana()) + "/" +
                std::to_string(player.getMaxMana()), COL_CYAN);
     if (!ptags.empty()) apStr += "  " + ptags;
     scr.putStr(1, br++, apStr, COL_YELLOW);
@@ -1252,17 +1292,32 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 
     if (!showingArts) {
         std::string mpCost = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
-        scr.putStr(1,            br, "[1] Atacar      1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 3,     br, "[2] At.Fuerte  2PA 8" + mpCost, ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY);
-        scr.putStr(2 * cols / 3, br++, "[3] Habilidades", COL_WHITE);
-        scr.putStr(1,            br, "[4] Defender     1PA", ap >= 1 ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 3,     br, "[5] Poción (" + std::to_string(player.countHpPotions()) + ")  1PA", player.countHpPotions() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY);
-        scr.putStr(2 * cols / 3, br++, "[6] Huir        3PA", ap >= 3 ? COL_WHITE : COL_GRAY);
         int lootPct = combat.getLootChance();
-        std::string lootStr = "[7] Saquear (" + std::to_string(lootPct) + "%)  1PA";
-        scr.putStr(1, br, lootStr, (ap >= 1 && lootPct > 0) ? COL_WHITE : COL_GRAY);
-        scr.putStr(cols / 3,     br, "[SPACE] Fin turno", COL_WHITE);
-        scr.putStr(2 * cols / 3, br++, "[TAB] Cambiar objetivo", COL_GRAY, COL_BLACK, CELL_DIM);
+        struct Action { std::string label; Color c; uint8_t fl; };
+        const Action actions[9] = {
+            { "[1] Atacar  1PA", ap >= 1 ? COL_WHITE : COL_GRAY, 0 },
+            { "[2] At.Fuerte  2PA 8" + mpCost,
+              ap >= 2 && player.getMana() >= 8 ? COL_WHITE : COL_GRAY, 0 },
+            { "[3] Habilidades", COL_WHITE, 0 },
+            { "[4] Defender  1PA", ap >= 1 ? COL_WHITE : COL_GRAY, 0 },
+            { "[5] Poción (" + std::to_string(player.countHpPotions()) + ")  1PA",
+              player.countHpPotions() > 0 && ap >= 1 ? COL_CYAN : COL_GRAY, 0 },
+            { "[6] Huir  3PA", ap >= 3 ? COL_WHITE : COL_GRAY, 0 },
+            { "[7] Saquear (" + std::to_string(lootPct) + "%)  1PA",
+              (ap >= 1 && lootPct > 0) ? COL_WHITE : COL_GRAY, 0 },
+            { "[SPACE] Fin turno", COL_WHITE, 0 },
+            { "[TAB] Cambiar objetivo", COL_GRAY, CELL_DIM },
+        };
+        // Columnas tan anchas como la acción más larga; si no caben tres, se
+        // reparten en tercios de pantalla como antes
+        int colW = 0;
+        for (const auto& a : actions) colW = std::max(colW, utf8Len(a.label) + 3);
+        if (1 + 3 * colW > cols) colW = cols / 3;
+        for (int i = 0; i < 9; i++) {
+            const auto& a = actions[i];
+            scr.putStr(1 + (i % 3) * colW, br, fitText(a.label, colW - 1), a.c, COL_BLACK, a.fl);
+            if (i % 3 == 2) br++;
+        }
         if (combat.getPhase() == CombatPhase::EnemyTurn)
             drawCentered(scr, br, 0, cols, "~~ Turno del enemigo ~~", COL_CYAN, CELL_BOLD);
         if (combat.isOver()) {
@@ -1296,8 +1351,54 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
 // ─── drawInventory ────────────────────────────────────────────────────────────
 
 void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int selection) {
+    const auto& items = player.getInventory().items();
+    auto itemLine = [&](const Item& item, Color& ic) {
+        std::string tag; ic = COL_WHITE;
+        if (item.type == ItemType::Weapon) {
+            tag = "[ARMA]   "; ic = COL_YELLOW;
+        } else if (item.type == ItemType::Armor) {
+            tag = "[ARMADURA]"; ic = COL_GREEN;
+        } else if (item.type == ItemType::Consumable && item.statBonus > 0) {
+            tag = "[POCIÓN] "; ic = COL_CYAN;
+        } else if (item.type == ItemType::Consumable && item.name == "Pala") {
+            tag = "[PALA]   "; ic = COL_BROWN;
+        } else if (item.type == ItemType::Consumable) {
+            tag = "[MANA]   "; ic = COL_BLUE;
+        } else if (item.type == ItemType::Bomb) {
+            tag = "[BOMBA]  "; ic = COL_ORANGE;
+        } else {
+            tag = "[MISC]   ";
+        }
+        std::string line = tag + " " + item.name;
+        if (item.quantity > 1)
+            line += " x" + std::to_string(item.quantity);
+        if (item.type != ItemType::Consumable && item.type != ItemType::Bomb)
+            line += "  +" + std::to_string(item.statBonus)
+                  + (item.type == ItemType::Weapon ? " ATK" : " DEF");
+        else if (item.type == ItemType::Consumable && item.statBonus > 0)
+            line += "  +" + std::to_string(item.statBonus) + " HP";
+        else if (item.type == ItemType::Consumable)
+            line += "  +50% " + std::string(player.getClass() == PlayerClass::Warrior ? "AG" : "MP");
+        return line;
+    };
+    const std::string statsLine =
+        "ATK:" + std::to_string(player.getAttack()) +
+        "  DEF:" + std::to_string(player.getDefense()) +
+        "  $" + std::to_string(player.getCoins()) +
+        "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
+        "/" + std::to_string(player.getInventory().totalSlots());
+    const std::string helpLine = "[W/S] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar";
+
+    // Ancho según la línea más larga; mínimo 60 para que la ventana no salte
+    // de tamaño con cada objeto que entra o sale
+    int contentW = std::max(utf8Len(statsLine), utf8Len(helpLine));
+    for (const auto& item : items) {
+        Color unused;
+        contentW = std::max(contentW, utf8Len(itemLine(item, unused)));
+    }
     int cx = scr.cols() / 2;
-    int w  = 60, sc2 = cx - w / 2, r = 2;
+    int w  = std::clamp(contentW + 4, std::min(60, scr.cols()), scr.cols());
+    int sc2 = cx - w / 2, r = 2;
 
     // Retrato del jugador a la izquierda del panel (si hay espacio)
     if (sc2 >= 26) {
@@ -1400,38 +1501,12 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
     drawBorder(scr, sc2, 1, w, scr.rows() - 2);
 
     scr.putStr(sc2 + 2, r++, "=== MOCHILA ===", COL_CYAN, COL_BLACK, CELL_BOLD);
-    const auto& items = player.getInventory().items();
     if (items.empty()) {
         scr.putStr(sc2 + 2, r++, "(vacia)", COL_GRAY, COL_BLACK, CELL_DIM);
     } else {
         for (int i = 0; i < static_cast<int>(items.size()); i++) {
-            const auto& item = items[i];
-            std::string tag; Color ic = COL_WHITE;
-            if (item.type == ItemType::Weapon) {
-                tag = "[ARMA]   "; ic = COL_YELLOW;
-            } else if (item.type == ItemType::Armor) {
-                tag = "[ARMADURA]"; ic = COL_GREEN;
-            } else if (item.type == ItemType::Consumable && item.statBonus > 0) {
-                tag = "[POCIÓN] "; ic = COL_CYAN;
-            } else if (item.type == ItemType::Consumable && item.name == "Pala") {
-                tag = "[PALA]   "; ic = COL_BROWN;
-            } else if (item.type == ItemType::Consumable) {
-                tag = "[MANA]   "; ic = COL_BLUE;
-            } else if (item.type == ItemType::Bomb) {
-                tag = "[BOMBA]  "; ic = COL_ORANGE;
-            } else {
-                tag = "[MISC]   ";
-            }
-            std::string line = tag + " " + item.name;
-            if (item.quantity > 1)
-                line += " x" + std::to_string(item.quantity);
-            if (item.type != ItemType::Consumable && item.type != ItemType::Bomb)
-                line += "  +" + std::to_string(item.statBonus)
-                      + (item.type == ItemType::Weapon ? " ATK" : " DEF");
-            else if (item.type == ItemType::Consumable && item.statBonus > 0)
-                line += "  +" + std::to_string(item.statBonus) + " HP";
-            else if (item.type == ItemType::Consumable)
-                line += "  +50% " + std::string(player.getClass() == PlayerClass::Warrior ? "AG" : "MP");
+            Color ic;
+            std::string line = itemLine(items[i], ic);
             uint8_t f = (selection == i) ? CELL_INVERTED : 0;
             scr.putStr(sc2 + 2, r++, line, ic, COL_BLACK, f);
         }
@@ -1441,22 +1516,53 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
     scr.put(sc2, r, 0x2560, COL_WHITE);
     scr.put(sc2 + w - 1, r, 0x2563, COL_WHITE);
     r++;
-    scr.putStr(sc2 + 2, r++,
-        "ATK:" + std::to_string(player.getAttack()) +
-        "  DEF:" + std::to_string(player.getDefense()) +
-        "  $" + std::to_string(player.getCoins()) +
-        "  Slots:" + std::to_string(player.getInventory().usedSlots()) +
-        "/" + std::to_string(player.getInventory().totalSlots()), COL_GREEN);
-    scr.putStr(sc2 + 2, r,
-               "[W/S] Navegar  [E] Equipar  [U] Usar  [ESC] Cerrar",
-               COL_GRAY, COL_BLACK, CELL_DIM);
+    scr.putStr(sc2 + 2, r++, statsLine, COL_GREEN);
+    scr.putStr(sc2 + 2, r, helpLine, COL_GRAY, COL_BLACK, CELL_DIM);
 }
 
 // ─── drawQuestLog ─────────────────────────────────────────────────────────────
 
 void Renderer::drawQuestLog(TerminalScreen& scr,
                              const std::vector<Quest>& quests, int selection) {
-    int w  = std::min(scr.cols() - 4, 70);
+    auto statusInfo = [](QuestStatus st, std::string& icon, std::string& label, Color& c) {
+        switch (st) {
+            case QuestStatus::Completed:  c = COL_GREEN;  icon = "[+] "; label = "COMPLETADA";  break;
+            case QuestStatus::InProgress: c = COL_YELLOW; icon = "[~] "; label = "EN PROGRESO"; break;
+            case QuestStatus::Failed:     c = COL_RED;    icon = "[x] "; label = "FALLIDA";     break;
+            default:                      c = COL_GRAY;   icon = "[ ] "; label = "PENDIENTE";   break;
+        }
+    };
+    auto rewardLine = [](const Quest& q) {
+        return "XP: " + std::to_string(q.xpReward) + "   Oro: " + std::to_string(q.goldReward);
+    };
+
+    // Anchos según el contenido de todas las misiones: la ventana no cambia
+    // de tamaño al moverse por la lista. La descripción se ajusta por palabras.
+    const std::string footer = " W/S navegar  |  ESC volver ";
+    int listContent = 0, detailContent = 30;
+    for (const auto& q : quests) {
+        std::string icon, label; Color c;
+        statusInfo(q.status, icon, label, c);
+        listContent   = std::max(listContent, utf8Len(icon + q.title));
+        detailContent = std::max({ detailContent, utf8Len(q.title), utf8Len(rewardLine(q)) });
+        for (const auto& obj : q.objectives)
+            detailContent = std::max(detailContent, utf8Len(obj.description) + 2);
+    }
+    detailContent = std::min(detailContent, 50);
+
+    int listW   = std::max(listContent + 2, 20);
+    int detailW = detailContent + 3;
+    int w = std::max(listW + detailW + 1, utf8Len(footer) + 2);
+    // Sin espacio: primero se estrecha el detalle y después la lista
+    int maxW = scr.cols() - 4;
+    if (w > maxW) {
+        int excess = w - maxW;
+        int cut = std::min(excess, std::max(0, detailW - 23));
+        detailW -= cut; excess -= cut;
+        listW = std::max(12, listW - excess);
+        w = std::min(maxW, listW + detailW + 1);
+    }
+
     int x0 = (scr.cols() - w) / 2;
     int y0 = 1;
     int h  = scr.rows() - 2;
@@ -1469,79 +1575,52 @@ void Renderer::drawQuestLog(TerminalScreen& scr,
         return;
     }
 
-    // Lista izquierda
-    int listW  = w / 2 - 1;
     int detailX = x0 + listW + 1;
-    int detailW = w - listW - 1;
+    int textW   = detailW - 3;
     drawVSep(scr, x0 + listW, y0 + 1, h - 2);
 
     int listY = y0 + 1;
     for (int i = 0; i < static_cast<int>(quests.size()); i++) {
         const auto& q = quests[i];
-        Color c; std::string icon;
-        switch (q.status) {
-            case QuestStatus::Completed:  c = COL_GREEN;  icon = "[+] "; break;
-            case QuestStatus::InProgress: c = COL_YELLOW; icon = "[~] "; break;
-            case QuestStatus::Failed:     c = COL_RED;    icon = "[x] "; break;
-            default:                      c = COL_GRAY;   icon = "[ ] "; break;
+        std::string icon, label; Color c;
+        statusInfo(q.status, icon, label, c);
+        std::string line = fitText(icon + q.title, listW - 2);
+        uint8_t f = 0;
+        if (i == selection) {
+            f = CELL_INVERTED;
+            line += std::string(std::max(0, listW - 2 - utf8Len(line)), ' ');
         }
-        std::string line = icon + q.title;
-        if ((int)line.size() > listW - 2) line = line.substr(0, listW - 5) + "...";
-        uint8_t f = (i == selection) ? CELL_INVERTED : 0;
         scr.putStr(x0 + 1, listY + i, line, c, COL_BLACK, f);
     }
 
-    // Detalle derecho
     if (selection >= 0 && selection < (int)quests.size()) {
         const auto& q = quests[selection];
         int dy = y0 + 1;
-        // Título
-        std::string title = q.title;
-        if ((int)title.size() > detailW - 2) title = title.substr(0, detailW - 5) + "...";
-        scr.putStr(detailX + 1, dy++, title, COL_YELLOW, COL_BLACK, CELL_BOLD);
+        scr.putStr(detailX + 1, dy++, fitText(q.title, textW), COL_YELLOW, COL_BLACK, CELL_BOLD);
         dy++;
-        // Estado
-        std::string statusStr;
-        Color sc;
-        switch (q.status) {
-            case QuestStatus::Completed:  statusStr = "COMPLETADA";  sc = COL_GREEN;  break;
-            case QuestStatus::InProgress: statusStr = "EN PROGRESO"; sc = COL_YELLOW; break;
-            case QuestStatus::Failed:     statusStr = "FALLIDA";     sc = COL_RED;    break;
-            default:                      statusStr = "PENDIENTE";   sc = COL_GRAY;   break;
-        }
+        std::string icon, statusStr; Color sc;
+        statusInfo(q.status, icon, statusStr, sc);
         scr.putStr(detailX + 1, dy++, statusStr, sc, COL_BLACK, CELL_BOLD);
         dy++;
-        // Descripción (wrap simple)
-        std::string desc = q.description;
-        while (!desc.empty() && dy < y0 + h - 4) {
-            int take = std::min((int)desc.size(), detailW - 2);
-            // no cortar a mitad de palabra
-            if (take < (int)desc.size() && desc[take] != ' ')
-                while (take > 0 && desc[take-1] != ' ') take--;
-            scr.putStr(detailX + 1, dy++, desc.substr(0, take), COL_WHITE);
-            desc = (take < (int)desc.size()) ? desc.substr(take) : "";
-            if (!desc.empty() && desc[0] == ' ') desc = desc.substr(1);
+        for (const auto& l : wrapText(q.description, textW)) {
+            if (dy >= y0 + h - 4) break;
+            scr.putStr(detailX + 1, dy++, l, COL_WHITE);
         }
         dy++;
-        // Objetivos
         scr.putStr(detailX + 1, dy++, "Objetivos:", COL_CYAN, COL_BLACK, CELL_BOLD);
         for (const auto& obj : q.objectives) {
             if (dy >= y0 + h - 2) break;
             std::string objLine = (obj.completed ? "\xe2\x96\xa0 " : "\xe2\x96\xa1 ") + obj.description;
-            Color oc = obj.completed ? COL_GREEN : COL_GRAY;
-            if ((int)objLine.size() > detailW - 2) objLine = objLine.substr(0, detailW - 5) + "...";
-            scr.putStr(detailX + 1, dy++, objLine, oc);
+            scr.putStr(detailX + 1, dy++, fitText(objLine, textW),
+                       obj.completed ? COL_GREEN : COL_GRAY);
         }
-        // Recompensas
         if (dy < y0 + h - 2) {
             dy++;
-            scr.putStr(detailX + 1, dy, "XP: " + std::to_string(q.xpReward) +
-                       "   Oro: " + std::to_string(q.goldReward), COL_YELLOW);
+            scr.putStr(detailX + 1, dy, fitText(rewardLine(q), textW), COL_YELLOW);
         }
     }
 
-    drawCentered(scr, y0 + h - 1, x0, w,
-                 " W/S navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
+    drawCentered(scr, y0 + h - 1, x0, w, footer, COL_GRAY, CELL_DIM);
 }
 
 // ─── drawBestiary ──────────────────────────────────────────────────────────────
@@ -1551,7 +1630,28 @@ void Renderer::drawBestiary(TerminalScreen& scr,
                              int selection) {
     int cols = scr.cols();
     int rows = scr.rows();
-    int w = std::min(cols - 4, 70);
+
+    // Anchos a partir de los datos de todas las criaturas (descubiertas o no),
+    // para que la ventana no cambie al descubrir una nueva.
+    int nameW = 3, killsW = 2;
+    for (int i = 0; i < kBestiaryEntryCount; i++) {
+        nameW  = std::max(nameW, utf8Len(kBestiaryData[i].name));
+        killsW = std::max(killsW, static_cast<int>(std::to_string(bestiary[i].kills).size()));
+    }
+    // glifo + espacio + nombre + " x" + kills
+    int listW = std::max(20, 2 + nameW + 2 + killsW + 2);
+
+    int detailContent = std::max({ 26, nameW + 2,
+                                   utf8Len("Kills: 9999  Encontrado piso 20") });
+    for (const auto& info : kBestiaryData)
+        detailContent = std::max(detailContent, std::min(utf8Len(info.special), 44));
+    int detailW = detailContent + 3;
+
+    const std::string footer = " W/S navegar  |  ESC volver ";
+    int w = std::min(cols - 4, std::max(listW + detailW + 1, utf8Len(footer) + 2));
+    detailW = std::max(10, w - listW - 1);
+    int textW = detailW - 3;
+
     int x0 = (cols - w) / 2;
     int y0 = 1;
     int h = rows - 2;
@@ -1559,7 +1659,6 @@ void Renderer::drawBestiary(TerminalScreen& scr,
     drawBorder(scr, x0, y0, w, h);
     drawCentered(scr, y0, x0, w, " BESTIARIO ", COL_CYAN, CELL_BOLD);
 
-    int listW = 28;
     int detailX = x0 + listW + 1;
     drawVSep(scr, x0 + listW, y0 + 1, h - 2);
 
@@ -1569,23 +1668,22 @@ void Renderer::drawBestiary(TerminalScreen& scr,
         uint8_t f = (i == selection) ? CELL_INVERTED : 0;
         if (be.discovered) {
             Color c = colorFromPair(kBestiaryData[i].colorPair);
+            std::string kills = " x" + std::to_string(be.kills);
+            int nameSpace = listW - 2 - 2 - utf8Len(kills);
+            std::string name = fitText(be.name, nameSpace);
+            name += std::string(std::max(0, nameSpace - utf8Len(name)), ' ');
             scr.put(x0 + 1, ly, kBestiaryData[i].glyph, c, COL_BLACK, f);
-            scr.putStr(x0 + 3, ly, be.name, c, COL_BLACK, f);
-            int pad = x0 + 3 + static_cast<int>(be.name.size());
-            while (pad < x0 + listW - 5 - 2)
-                scr.put(pad++, ly, ' ', COL_BLACK);
-            scr.putStr(pad, ly, " x" + std::to_string(be.kills),
-                       COL_WHITE, COL_BLACK, f);
+            scr.put(x0 + 2, ly, ' ', c, COL_BLACK, f);
+            scr.putStr(x0 + 3, ly, name, c, COL_BLACK, f);
+            scr.putStr(x0 + 3 + nameSpace, ly, kills, COL_WHITE, COL_BLACK, f);
         } else {
             std::string line = "  ???";
-            while (static_cast<int>(line.size()) < listW - 2)
-                line += ' ';
+            line += std::string(std::max(0, listW - 2 - utf8Len(line)), ' ');
             scr.putStr(x0 + 1, ly, line, COL_GRAY, COL_BLACK, f | CELL_DIM);
         }
         ly++;
     }
 
-    // Panel derecho: detalle del seleccionado
     if (selection >= 0 && selection < kBestiaryEntryCount) {
         const auto& be = bestiary[selection];
         const auto& info = kBestiaryData[selection];
@@ -1595,11 +1693,11 @@ void Renderer::drawBestiary(TerminalScreen& scr,
         if (be.discovered) {
             Color gc = colorFromPair(info.colorPair);
             scr.put(dx, dy, info.glyph, gc);
-            scr.putStr(dx + 2, dy, be.name, gc, COL_BLACK, CELL_BOLD);
+            scr.putStr(dx + 2, dy, fitText(be.name, textW - 2), gc, COL_BLACK, CELL_BOLD);
             dy++;
 
-            scr.putStr(dx, dy++, "Kills: " + std::to_string(be.kills)
-                       + "  Encontrado piso " + std::to_string(be.firstSeenFloor),
+            scr.putStr(dx, dy++, fitText("Kills: " + std::to_string(be.kills)
+                       + "  Encontrado piso " + std::to_string(be.firstSeenFloor), textW),
                        COL_WHITE);
 
             dy++;
@@ -1612,17 +1710,20 @@ void Renderer::drawBestiary(TerminalScreen& scr,
 
             if (!info.special.empty()) {
                 dy++;
-                scr.putStr(dx, dy++, info.special, COL_YELLOW, COL_BLACK, CELL_DIM);
+                for (const auto& l : wrapText(info.special, textW)) {
+                    if (dy >= y0 + h - 1) break;
+                    scr.putStr(dx, dy++, l, COL_YELLOW, COL_BLACK, CELL_DIM);
+                }
             }
         } else {
             scr.putStr(dx, dy++, "???", COL_GRAY, COL_BLACK, CELL_DIM);
-            scr.putStr(dx, dy + 1, "Aun no has encontrado", COL_GRAY, COL_BLACK, CELL_DIM);
-            scr.putStr(dx, dy + 2, "esta criatura.", COL_GRAY, COL_BLACK, CELL_DIM);
+            dy++;
+            for (const auto& l : wrapText("Aun no has encontrado esta criatura.", textW))
+                scr.putStr(dx, dy++, l, COL_GRAY, COL_BLACK, CELL_DIM);
         }
     }
 
-    drawCentered(scr, y0 + h - 1, x0, w,
-                 " W/S navegar  |  ESC volver ", COL_GRAY, CELL_DIM);
+    drawCentered(scr, y0 + h - 1, x0, w, footer, COL_GRAY, CELL_DIM);
 }
 
 // ─── drawGameOver ─────────────────────────────────────────────────────────────
@@ -1654,21 +1755,66 @@ void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
 // ─── drawQuitDialog ───────────────────────────────────────────────────────────
 
 void Renderer::drawQuitDialog(TerminalScreen& scr, int selection) {
-    int cx = scr.cols() / 2, cy = scr.rows() / 2;
-    int w = 36, h = 7;
-    int bx = cx - w / 2, by = cy - h / 2;
-    drawBorder(scr, bx, by, w, h, COL_YELLOW);
-    drawCentered(scr, by + 1, bx, w, "Salir del juego", COL_WHITE, CELL_BOLD);
-    drawCentered(scr, by + 2, bx, w, "¿Qué deseas hacer?", COL_GRAY, CELL_DIM);
     const char* opts[] = { "Menú Principal", "Salir al escritorio" };
+    std::vector<BoxLine> lines = {
+        { "Salir del juego",    COL_WHITE, CELL_BOLD, false, true },
+        { "¿Qué deseas hacer?", COL_GRAY,  CELL_DIM,  false, true },
+        {},
+    };
     for (int i = 0; i < 2; i++) {
         bool sel = (i == selection);
-        std::string label = std::string("  ") + opts[i] + "  ";
-        Color c = sel ? COL_YELLOW : COL_WHITE;
-        uint8_t fl = sel ? (CELL_BOLD | CELL_INVERTED) : 0;
-        drawCentered(scr, by + 4 + i, bx, w, label, c, fl);
+        lines.push_back({ std::string("  ") + opts[i] + "  ",
+                          sel ? COL_YELLOW : COL_WHITE,
+                          static_cast<uint8_t>(sel ? (CELL_BOLD | CELL_INVERTED) : 0),
+                          false, true });
     }
-    drawCentered(scr, by + h - 1, bx, w, "ESC para cancelar", COL_GRAY, CELL_DIM);
+    lines.push_back({ "ESC para cancelar", COL_GRAY, CELL_DIM, false, true });
+    int h = static_cast<int>(lines.size()) + 2;
+    drawFitBox(scr, scr.rows() / 2 - h / 2, lines, COL_YELLOW, 30);
+}
+
+// ─── Ventanas auto-ajustables ─────────────────────────────────────────────────
+
+static std::string padRight(const std::string& s, int width) {
+    int len = utf8Len(s);
+    return len >= width ? s : s + std::string(width - len, ' ');
+}
+
+static std::string padLeft(const std::string& s, int width) {
+    int len = utf8Len(s);
+    return len >= width ? s : std::string(width - len, ' ') + s;
+}
+
+void Renderer::drawFitBox(TerminalScreen& scr, int row,
+                          const std::vector<BoxLine>& lines, Color border, int minW) {
+    int content = 0;
+    for (const auto& l : lines)
+        if (!l.sep) content = std::max(content, utf8Len(l.text));
+    int w  = std::clamp(content + 4, std::min(minW, scr.cols()), scr.cols());
+    int bx = (scr.cols() - w) / 2;
+    int h  = static_cast<int>(lines.size()) + 2;
+    int inner = w - 4;
+    drawBorder(scr, bx, row, w, h, border);
+
+    for (int i = 0; i < static_cast<int>(lines.size()); i++) {
+        const BoxLine& l = lines[i];
+        int r = row + 1 + i;
+        if (l.sep) {
+            for (int x = 1; x < w - 1; x++)
+                scr.put(bx + x, r, 0x2550, border);
+            scr.put(bx, r, 0x2560, border);
+            scr.put(bx + w - 1, r, 0x2563, border);
+            continue;
+        }
+        std::string text = fitText(l.text, inner);
+        if (l.center) {
+            drawCentered(scr, r, bx, w, text, l.fg, l.flags);
+        } else {
+            // La selección invertida ocupa todo el ancho para que se lea como fila
+            if (l.flags & CELL_INVERTED) text = padRight(text, inner);
+            scr.putStr(bx + 2, r, text, l.fg, COL_BLACK, l.flags);
+        }
+    }
 }
 
 // ─── drawShop ─────────────────────────────────────────────────────────────────
@@ -1677,145 +1823,124 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
                          const std::string& message,
                          bool sellMode, int sellSelection) {
-    int cx = scr.cols() / 2;
+    std::vector<BoxLine> lines;
+    lines.push_back({ sellMode ? "=== VENDER ===" : "=== TIENDA DEL PUEBLO ===",
+                      COL_ORANGE, CELL_BOLD });
+    lines.push_back({ "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
+                      COL_ORANGE });
+    lines.push_back(BoxLine::separator());
 
     if (sellMode) {
-        int w = 66, sc2 = cx - w / 2, r = 2;
-        auto& inv = player.getInventory().items();
-        int boxH = static_cast<int>(inv.size()) + 8;
-        drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
-        scr.putStr(sc2 + 2, r++, "=== VENDER ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
-        scr.putStr(sc2 + 2, r++,
-                   "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
-                   COL_ORANGE);
-        for (int x = 0; x < w - 2; x++)
-            scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
-        scr.put(sc2, r, 0x2560, COL_ORANGE);
-        scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
-        r++;
+        const auto& inv = player.getInventory().items();
+        auto sellable = [](const Item& it) {
+            return it.type == ItemType::Weapon || it.type == ItemType::Armor;
+        };
+        int nameW = 0, priceW = 0;
+        for (const auto& it : inv) {
+            if (!sellable(it)) continue;
+            nameW  = std::max(nameW, utf8Len(it.name));
+            priceW = std::max(priceW, static_cast<int>(std::to_string(it.value / 2).size()));
+        }
         bool any = false;
         for (int i = 0; i < static_cast<int>(inv.size()); i++) {
             const auto& item = inv[i];
-            if (item.type != ItemType::Weapon && item.type != ItemType::Armor)
-                continue;
+            if (!sellable(item)) continue;
             any = true;
             bool sel = (i == sellSelection);
-            int sellPrice = item.value / 2;
-            std::string tag = (item.type == ItemType::Weapon) ? "[ARMA] " : "[ARMADURA]";
-            std::string line = tag + " " + item.name + "  -  " +
-                               std::to_string(sellPrice) + " $";
-            Color lc = sel ? COL_ORANGE : COL_WHITE;
-            uint8_t lf = sel ? CELL_INVERTED : 0;
-            scr.putStr(sc2 + 2, r++, line, lc, COL_BLACK, lf);
+            std::string tag = (item.type == ItemType::Weapon) ? "[ARMA]    " : "[ARMADURA]";
+            lines.push_back({ tag + " " + padRight(item.name, nameW) + "   " +
+                              padLeft(std::to_string(item.value / 2), priceW) + " $",
+                              sel ? COL_ORANGE : COL_WHITE,
+                              static_cast<uint8_t>(sel ? CELL_INVERTED : 0) });
         }
         if (!any)
-            scr.putStr(sc2 + 2, r++, "(nada que vender)", COL_GRAY, COL_BLACK, CELL_DIM);
-        for (int x = 0; x < w - 2; x++)
-            scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
-        scr.put(sc2, r, 0x2560, COL_ORANGE);
-        scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
-        r++;
-        if (!message.empty())
-            scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
-        scr.putStr(sc2 + 2, r,
-                   "W/S navegar  |  ENTER vender  |  V comprar  |  ESC salir",
-                   COL_GRAY, COL_BLACK, CELL_DIM);
-        return;
+            lines.push_back({ "(nada que vender)", COL_GRAY, CELL_DIM });
+    } else {
+        int nameW = 0, priceW = 0;
+        for (const auto& s : stock) {
+            nameW  = std::max(nameW, utf8Len(s.item.name));
+            priceW = std::max(priceW, static_cast<int>(std::to_string(s.price).size()));
+        }
+        for (int i = 0; i < static_cast<int>(stock.size()); i++) {
+            const auto& s = stock[i];
+            bool sel = (i == selection);
+            std::string line = (s.sold ? "[VENDIDO] " : "          ") +
+                               padRight(s.item.name, nameW) + "   " +
+                               padLeft(std::to_string(s.price), priceW) + " $";
+            if (!s.item.description.empty())
+                line += "   " + s.item.description;
+            lines.push_back({ line,
+                              s.sold ? COL_GRAY : (sel ? COL_ORANGE : COL_WHITE),
+                              static_cast<uint8_t>(s.sold ? CELL_DIM : (sel ? CELL_INVERTED : 0)) });
+        }
     }
 
-    int w = 66, sc2 = cx - w / 2, r = 2;
-    int boxH = static_cast<int>(stock.size()) + 8;
-    drawBorder(scr, sc2, 1, w, boxH, COL_ORANGE);
-    scr.putStr(sc2 + 2, r++, "=== TIENDA DEL PUEBLO ===", COL_ORANGE, COL_BLACK, CELL_BOLD);
-    scr.putStr(sc2 + 2, r++,
-               "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
-               COL_ORANGE);
-    for (int x = 0; x < w - 2; x++)
-        scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
-    scr.put(sc2, r, 0x2560, COL_ORANGE);
-    scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
-    r++;
-    for (int i = 0; i < static_cast<int>(stock.size()); i++) {
-        const auto& s = stock[i];
-        bool sel = (i == selection);
-        std::string line = (s.sold ? "[VENDIDO] " : "          ") +
-                           s.item.name + "  -  " + std::to_string(s.price) +
-                           " $   " + s.item.description;
-        Color lc = s.sold ? COL_GRAY : (sel ? COL_ORANGE : COL_WHITE);
-        uint8_t lf = s.sold ? CELL_DIM : (sel ? CELL_INVERTED : 0);
-        scr.putStr(sc2 + 2, r++, line, lc, COL_BLACK, lf);
-    }
-    for (int x = 0; x < w - 2; x++)
-        scr.put(sc2 + 1 + x, r, 0x2550, COL_ORANGE);
-    scr.put(sc2, r, 0x2560, COL_ORANGE);
-    scr.put(sc2 + w - 1, r, 0x2563, COL_ORANGE);
-    r++;
-    if (!message.empty())
-        scr.putStr(sc2 + 2, r++, message, COL_GREEN, COL_BLACK, CELL_BOLD);
-    scr.putStr(sc2 + 2, r,
-               "W/S navegar  |  ENTER comprar  |  V vender  |  ESC salir",
-               COL_GRAY, COL_BLACK, CELL_DIM);
+    lines.push_back(BoxLine::separator());
+    // Línea de mensaje siempre reservada: la ventana no cambia de alto al comprar
+    lines.push_back({ message, COL_GREEN, CELL_BOLD });
+    lines.push_back({ sellMode ? "W/S navegar  |  ENTER vender  |  V comprar  |  ESC salir"
+                               : "W/S navegar  |  ENTER comprar  |  V vender  |  ESC salir",
+                      COL_GRAY, CELL_DIM });
+    drawFitBox(scr, 1, lines, COL_ORANGE);
 }
 
 void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
                                const Player& player, int incursions) {
-    int cx = scr.cols() / 2;
-    int w = 66, bx = cx - w / 2, r = 2;
+    std::vector<BoxLine> lines;
+    lines.push_back({ menu == VillageMenu::Forge ? "=== FORJA ===" : "=== ENTRENAMIENTO ===",
+                      COL_ORANGE, CELL_BOLD });
+    lines.push_back({ "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
+                      COL_ORANGE });
+    lines.push_back(BoxLine::separator());
 
-    int n = (menu == VillageMenu::Forge) ? 2 : 4;
-    int boxH = n + 8;
-    drawBorder(scr, bx, 1, w, boxH, COL_ORANGE);
-    scr.putStr(bx + 2, r++,
-               menu == VillageMenu::Forge ? "=== FORJA ===" : "=== ENTRENAMIENTO ===",
-               COL_ORANGE, COL_BLACK, CELL_BOLD);
-    scr.putStr(bx + 2, r++,
-               "$ " + std::to_string(player.getCoins()) + " monedas disponibles",
-               COL_ORANGE);
-    for (int x = 0; x < w - 2; x++)
-        scr.put(bx + 1 + x, r, 0x2550, COL_ORANGE);
-    scr.put(bx, r, 0x2560, COL_ORANGE);
-    scr.put(bx + w - 1, r, 0x2563, COL_ORANGE);
-    r++;
+    // Filas "texto ... coste $" con la columna de precios alineada
+    struct Row { std::string text; int cost; bool enabled; };
+    std::vector<Row> rows;
+    std::string help;
 
     if (menu == VillageMenu::Forge) {
-        std::string wName  = player.getEquippedWeapon()
-                           ? player.getEquippedWeapon()->name : "(sin arma)";
-        std::string aName  = player.getEquippedArmor()
-                           ? player.getEquippedArmor()->name : "(sin armadura)";
-        std::string wBonus = player.getEquippedWeapon()
-                           ? " +" + std::to_string(player.getEquippedWeapon()->statBonus) + " ATK" : "";
-        std::string aBonus = player.getEquippedArmor()
-                           ? " +" + std::to_string(player.getEquippedArmor()->statBonus) + " DEF" : "";
-        int wCost = 50 + 25 * (player.getEquippedWeapon() ? player.getEquippedWeapon()->statBonus : 0)
-                    + 20 * (incursions - 1);
-        int aCost = 50 + 25 * (player.getEquippedArmor() ? player.getEquippedArmor()->statBonus : 0)
-                    + 20 * (incursions - 1);
-        auto row = [&](int i, const std::string& text, int cost, bool has) {
-            bool sel = (i == selection);
-            Color lc = has ? (sel ? COL_ORANGE : COL_WHITE) : COL_GRAY;
-            uint8_t lf = sel && has ? CELL_INVERTED : (has ? 0 : CELL_DIM);
-            scr.putStr(bx + 2, r, text + "  -  " + std::to_string(cost) + " $",
-                       lc, COL_BLACK, lf);
-            r++;
+        auto slotRow = [&](const char* tag, const std::optional<Item>& slot,
+                           const char* empty, const char* stat) {
+            int bonus = slot ? slot->statBonus : 0;
+            std::string text = std::string(tag) + (slot
+                ? slot->name + " +" + std::to_string(bonus) + " " + stat : empty);
+            rows.push_back({ text, forgeCost(bonus, incursions), slot.has_value() });
         };
-        row(0, "[ARMA]     " + wName + wBonus, wCost, player.getEquippedWeapon().has_value());
-        row(1, "[ARMADURA] " + aName + aBonus, aCost, player.getEquippedArmor().has_value());
-        scr.putStr(bx + 2, r++, "ENTER forjar +1  |  ESC salir", COL_GRAY, COL_BLACK, CELL_DIM);
-        return;
+        slotRow("[ARMA]     ", player.getEquippedWeapon(), "(sin arma)", "ATK");
+        slotRow("[ARMADURA] ", player.getEquippedArmor(), "(sin armadura)", "DEF");
+        help = "ENTER forjar +1  |  ESC salir";
+    } else {
+        auto stat = [](const char* label, int cur, int next) {
+            return std::string(label) + "  (" + std::to_string(cur) + " -> " +
+                   std::to_string(next) + ")";
+        };
+        rows.push_back({ stat("+10 Vida Max", player.getMaxHp(),   player.getMaxHp() + 10),
+                         trainingCost(0, incursions), true });
+        rows.push_back({ stat("+2  Ataque",   player.getAttack(),  player.getAttack() + 2),
+                         trainingCost(1, incursions), true });
+        rows.push_back({ stat("+1  Defensa",  player.getDefense(), player.getDefense() + 1),
+                         trainingCost(2, incursions), true });
+        rows.push_back({ stat("+5  Mana Max", player.getMaxMana(), player.getMaxMana() + 5),
+                         trainingCost(3, incursions), true });
+        help = "ENTER entrenar  |  ESC salir";
     }
 
-    int costs[4] = {60 + 20 * incursions, 80 + 30 * incursions,
-                    70 + 25 * incursions, 50 + 20 * incursions};
-    const char* labels[4] = { "+10 Vida Max    ", "+2  Ataque     ",
-                              "+1  Defensa     ", "+5  Mana Max    " };
-    for (int i = 0; i < 4; i++) {
-        bool sel = (i == selection);
-        Color lc = sel ? COL_ORANGE : COL_WHITE;
-        uint8_t lf = sel ? CELL_INVERTED : 0;
-        scr.putStr(bx + 2, r++, std::string(labels[i]) + " -  " +
-                   std::to_string(costs[i]) + " $", lc, COL_BLACK, lf);
+    int textW = 0, costW = 0;
+    for (const auto& r : rows) {
+        textW = std::max(textW, utf8Len(r.text));
+        costW = std::max(costW, static_cast<int>(std::to_string(r.cost).size()));
     }
-    scr.putStr(bx + 2, r, "ENTER entrenar  |  ESC salir", COL_GRAY, COL_BLACK, CELL_DIM);
+    for (int i = 0; i < static_cast<int>(rows.size()); i++) {
+        const Row& r = rows[i];
+        bool sel = (i == selection);
+        Color fg = r.enabled ? (sel ? COL_ORANGE : COL_WHITE) : COL_GRAY;
+        uint8_t fl = r.enabled ? (sel ? CELL_INVERTED : 0) : CELL_DIM;
+        lines.push_back({ padRight(r.text, textW) + "   " +
+                          padLeft(std::to_string(r.cost), costW) + " $", fg, fl });
+    }
+    lines.push_back(BoxLine::separator());
+    lines.push_back({ help, COL_GRAY, CELL_DIM });
+    drawFitBox(scr, 1, lines, COL_ORANGE);
 }
 
 // ─── drawSkillTree ────────────────────────────────────────────────────────────
@@ -1827,7 +1952,17 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
 
     // Título
     std::string title = std::string("ARBOL DE HABILIDADES - ") + className(player);
-    int boxW = std::max(52, (int)title.size() + 4);
+    auto choiceDesc = [](const SkillChoice& sc) {
+        return sc.name + ": " + sc.desc +
+               "  (PA:" + std::to_string(sc.apCost) +
+               " MP:" + std::to_string(sc.manaCost) + ")";
+    };
+    // El ancho cubre todas las descripciones posibles: no cambia al mover el cursor
+    int contentW = utf8Len(title);
+    for (const auto& tier : tree.tiers)
+        for (const auto& sc : tier.choices)
+            contentW = std::max(contentW, utf8Len(choiceDesc(sc)));
+    int boxW = std::max(52, contentW + 4);
     if (boxW > scr.cols() - 4) boxW = scr.cols() - 4;
     int boxX = (scr.cols() - boxW) / 2;
     if (boxX < 1) boxX = 1;
@@ -1986,16 +2121,13 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
     if (pendingTier >= 0 && pendingTier < static_cast<int>(tree.tiers.size())) {
         const SkillTier& tier = tree.tiers[pendingTier];
         int ci2 = std::min(choiceCursor, static_cast<int>(tier.choices.size()) - 1);
-        const SkillChoice& sc = tier.choices[ci2];
-        descLine = sc.name + ": " + sc.desc +
-                   "  (PA:" + std::to_string(sc.apCost) +
-                   " MP:" + std::to_string(sc.manaCost) + ")";
+        descLine = choiceDesc(tier.choices[ci2]);
     } else {
         descLine = "Habilidades de este nivel ya desbloqueadas.";
     }
     scr.put(boxX, treeRow, 0x2551, COL_YELLOW);
     scr.put(boxX + boxW - 1, treeRow, 0x2551, COL_YELLOW);
-    if (utf8Len(descLine) > innerW - 2) descLine = utf8Substr(descLine, 0, innerW - 2);
+    descLine = fitText(descLine, innerW - 2);
     scr.putStr(innerX + 1, treeRow, descLine, COL_CYAN);
     treeRow++;
 

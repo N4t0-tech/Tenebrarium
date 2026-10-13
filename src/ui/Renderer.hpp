@@ -69,6 +69,19 @@ public:
                                 const Player& player, int incursions);
 
 private:
+    // Línea de una ventana auto-ajustable (drawFitBox). sep dibuja ╠═╣.
+    struct BoxLine {
+        std::string text;
+        Color       fg     = WHITE;
+        uint8_t     flags  = 0;
+        bool        sep    = false;
+        bool        center = false;
+        static BoxLine separator() { BoxLine l; l.sep = true; return l; }
+    };
+    // Ventana centrada en horizontal cuyo ancho se ajusta a la línea más larga,
+    // entre minW y el ancho de pantalla; lo que no cabe se recorta con '~'.
+    static void drawFitBox(TerminalScreen& scr, int row, const std::vector<BoxLine>& lines,
+                           Color border, int minW = 40);
     static void drawHSep(TerminalScreen& scr, int col, int row, int w,
                          Color c = WHITE);
     static void drawVSep(TerminalScreen& scr, int col, int row, int h,
