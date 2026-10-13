@@ -464,7 +464,8 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
 // ─── HUD helpers ─────────────────────────────────────────────────────────────
 
 void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
-                             const Player& player, int mapZoom, int scrollTick) {
+                             const Player& player, int mapZoom, int scrollTick,
+                             bool arrowMovement) {
     int r = row;
     auto put = [&](const std::string& s, Color c, uint8_t f = 0) {
         scr.putStr(col + 1, r++, s, c, COL_BLACK, f);
@@ -542,7 +543,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
                        ? "  Inc " + std::to_string(player.getIncursions()) : "";
     put("Piso " + std::to_string(fl) + incTag + " [" + diff + "]", dc, CELL_DIM);
     drawHSep(scr, col, r++, sepW);
-     put("WASD  mover",    COL_GRAY, CELL_DIM);
+     put(arrowMovement ? "▲◄▼►  mover" : "WASD  mover", COL_GRAY, CELL_DIM);
      put("  E   bomba",    COL_GRAY, CELL_DIM);
      if (canUseMapAbility(player, ArtEffect::Trampa))
          put("  T   trampa",   COL_GRAY, CELL_DIM);
@@ -561,7 +562,8 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
 }
 
 // HUD inferior: 6 filas (separador + retrato 20×10 half-block + contenido compacto + controles)
-void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom) {
+void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, int mapZoom,
+                          bool arrowMovement) {
     int cols = scr.cols();
 
     constexpr int kPortBorderW = 22;
@@ -636,7 +638,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     scr.put(rpX + rpW - 1, row + 5, 0x2563, COL_WHITE);
 
     // row 6-7: controls
-    scr.putStr(rpC, row + 6, std::string("[WASD]Mover  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv")
+    scr.putStr(rpC, row + 6, std::string(arrowMovement ? "[▲◄▼►]Mover" : "[WASD]Mover") + "  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv"
                + (player.getClass() == PlayerClass::Warrior ? "  [Q]Cadáver" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
     scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
@@ -1067,7 +1069,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
 // ─── drawSettings ──────────────────────────────────────────────────────────────
 
 void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                            int mapZoom, bool shaderOn) {
+                            int mapZoom, bool shaderOn, bool arrowMovement) {
     int cy = scr.rows() / 2;
     drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
@@ -1081,18 +1083,20 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     const char* hudVal = (hud == HudLayout::Sidebar) ? "Panel lateral" : "Barra inferior";
     const char* zoomVal = (mapZoom == 1) ? "1x" : (mapZoom == 2) ? "2x" : "3x";
     const char* shaderVal = shaderOn ? "On" : "Off";
+    const char* moveVal = arrowMovement ? "Flechas" : "WASD";
 
     Setting items[] = {
         {"Estilo HUD",   hudVal},
         {"Zoom Mapa",    zoomVal},
         {"Shader CRT",   shaderVal},
+        {"Movimiento",   moveVal},
         {"Volver",       ""},
     };
 
     int labelW = 0;
     for (const auto& it : items) labelW = std::max(labelW, utf8Len(it.label));
     std::vector<BoxLine> lines;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < (int)std::size(items); i++) {
         bool sel = (i == selection);
         std::string line = std::string(items[i].label);
         if (items[i].value[0] != '\0')
@@ -1113,7 +1117,8 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const std::vector<MapEntity>& entities,
                                 const std::vector<Position>& torches,
                                 const std::string& message, int mapZoom,
-                                int scrollTick, bool isVillage, const DayLight& light) {
+                                int scrollTick, bool isVillage, const DayLight& light,
+                                bool arrowMovement) {
     // Hora del pueblo sobre el borde superior del mapa: " ● 10:30 Día "
     auto drawClock = [&]() {
         if (!isVillage) return;
@@ -1141,7 +1146,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, light);
         drawBorder(scr, 0, 0, mapW, scr.rows());
         drawClock();
-        drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
+        drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick, arrowMovement);
         if (!message.empty())
             drawCentered(scr, scr.rows() / 2, 1, mapW - 2,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED | CELL_ITALIC);
@@ -1152,7 +1157,7 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                 colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, light);
         drawBorder(scr, 0, 0, scr.cols(), mapH);
         drawClock();
-        drawHudBar(scr, mapH, player, mapZoom);
+        drawHudBar(scr, mapH, player, mapZoom, arrowMovement);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 1, scr.cols() - 2,
                          " " + message + " ", COL_YELLOW, CELL_BOLD | CELL_INVERTED | CELL_ITALIC);

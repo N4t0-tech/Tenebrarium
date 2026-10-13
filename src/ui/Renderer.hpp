@@ -37,7 +37,7 @@ public:
                               int tierCursor, int choiceCursor);
     static void drawHudSelect(TerminalScreen& scr, int selection);
     static void drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                             int mapZoom, bool shaderOn);
+                             int mapZoom, bool shaderOn, bool arrowMovement);
 
     // ── Pantallas de juego ───────────────────────────────────────────────────
     static void drawExploration(TerminalScreen& scr, const Map& map,
@@ -46,7 +46,8 @@ public:
                                 const std::vector<Position>& torches,
                                 const std::string& message = "",
                                 int mapZoom = 1, int scrollTick = 0,
-                                bool isVillage = false, const DayLight& light = DayLight{});
+                                bool isVillage = false, const DayLight& light = DayLight{},
+                                bool arrowMovement = false);
     static Color colorForPlayerClass(PlayerClass pc);
     static Color colorFromPair(int pair);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
@@ -98,9 +99,10 @@ private:
 
     static void  drawHudPanel(TerminalScreen& scr, int col, int row,
                                const Player& player, int mapZoom = 1,
-                               int scrollTick = 0);
+                               int scrollTick = 0, bool arrowMovement = false);
     static void  drawHudBar(TerminalScreen& scr, int row,
-                             const Player& player, int mapZoom = 1);
+                             const Player& player, int mapZoom = 1,
+                             bool arrowMovement = false);
     static void  drawPortrait(TerminalScreen& scr, int col, int row,
                                const char* filename, float scale = 1.0f,
                                Color tint = WHITE, bool useGlyphs = false);

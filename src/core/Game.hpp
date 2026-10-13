@@ -82,6 +82,7 @@ private:
     int  mapZoom_{1};
     int  scrollTick_{0};
     bool shaderEnabled_{true};
+    bool arrowMovement_{false};   // true: moverse con las flechas en lugar de WASD
     bool fullscreen_{false};
     bool wasFullscreen_{false};
     int  windowedW_{1280};

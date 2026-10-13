@@ -876,9 +876,14 @@ bool Game::processHeldMovement()
 {
     static constexpr double kMoveFirstRepeat = 0.18;
     static constexpr double kMoveRepeat      = 0.10;
-    static constexpr struct { int rl; int g; } kMoveKeys[] = {
+    struct MoveKey { int rl; int g; };
+    static constexpr MoveKey kWasdKeys[] = {
         {87, 'w'}, {65, 'a'}, {83, 's'}, {68, 'd'},
     };
+    static constexpr MoveKey kArrowKeys[] = {
+        {265, 'w'}, {263, 'a'}, {264, 's'}, {262, 'd'}, // KEY_UP, KEY_LEFT, KEY_DOWN, KEY_RIGHT
+    };
+    const auto& kMoveKeys = arrowMovement_ ? kArrowKeys : kWasdKeys;
 
     GameState st = state_.load();
     if (st != GameState::Exploration && st != GameState::Village) {
@@ -1356,7 +1361,7 @@ void Game::inputCredits(int key)
 
 void Game::inputSettings(int key)
 {
-    static constexpr int n = 4;
+    static constexpr int n = 5;
     switch (key)
     {
     case 'w':
@@ -1377,6 +1382,9 @@ void Game::inputSettings(int key)
             saveSettings();
         } else if (settingsSelection_ == 2) {
             shaderEnabled_ = !shaderEnabled_;
+            saveSettings();
+        } else if (settingsSelection_ == 3) {
+            arrowMovement_ = !arrowMovement_;
             saveSettings();
         } else {
             menuSelection_ = 0;
@@ -1700,7 +1708,8 @@ void Game::render(TerminalScreen &scr)
             Renderer::drawHudSelect(scr, hudSelection_);
             break;
         case MenuPhase::Settings:
-            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_);
+            Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_,
+                                   arrowMovement_);
             break;
         }
         break;
@@ -1735,7 +1744,8 @@ void Game::render(TerminalScreen &scr)
                 }
 
                 Renderer::drawExploration(scr, acc.map(), *player_, hudLayout_,
-                                           entities, torchPos, "", mapZoom_, scrollTick_);
+                                           entities, torchPos, "", mapZoom_, scrollTick_,
+                                           false, DayLight{}, arrowMovement_);
                 scrollTick_++;
              }
          }
@@ -1749,7 +1759,8 @@ void Game::render(TerminalScreen &scr)
             } else {
                 Renderer::drawExploration(scr, village_->map, *player_, hudLayout_,
                                           villageEntities(*village_), villageTorches(*village_),
-                                          "", mapZoom_, scrollTick_, true, dayLight(villageHour_));
+                                          "", mapZoom_, scrollTick_, true, dayLight(villageHour_),
+                                          arrowMovement_);
             }
         }
         break;
@@ -3212,6 +3223,7 @@ void Game::saveSettings() const {
         f << "hudLayout=" << static_cast<int>(hudLayout_) << "\n";
         f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
         f << "fullscreen=" << static_cast<int>(fullscreen_) << "\n";
+        f << "arrowMovement=" << static_cast<int>(arrowMovement_) << "\n";
     }
 }
 
@@ -3230,6 +3242,9 @@ void Game::loadSettings() {
             catch (...) {}
         } else if (line.rfind("fullscreen=", 0) == 0) {
             try { fullscreen_ = std::stoi(line.substr(11)) != 0; }
+            catch (...) {}
+        } else if (line.rfind("arrowMovement=", 0) == 0) {
+            try { arrowMovement_ = std::stoi(line.substr(14)) != 0; }
             catch (...) {}
         }
     }
