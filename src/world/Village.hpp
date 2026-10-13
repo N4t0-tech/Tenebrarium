@@ -5,12 +5,21 @@
 // Todas las casillas se marcan exploradas: en el hub no hay niebla de guerra.
 
 #include "Map.hpp"
+#include <string>
 #include <vector>
 
 enum class VillageMenu {
     None,     // caminando por el pueblo
     Forge,    // submenú de la forja (mejorar equipo)
     Training, // submenú de entrenamiento (mejorar stats)
+};
+
+// Cartel sobre la fachada de un edificio. Se resalta cuando el jugador se
+// acerca a su puerta.
+struct VillageSign {
+    Position    pos;    // casilla central del cartel
+    Position    door;   // entrada del edificio
+    std::string text;
 };
 
 struct VillageLayout {
@@ -21,6 +30,7 @@ struct VillageLayout {
     Position training{0, 0};     // casilla que abre el submenú de entrenamiento
     Position stairsDown{0, 0};   // casilla que inicia una nueva incursión
     std::vector<Position> lanterns;    // farolas decorativas (luz cálida)
+    std::vector<VillageSign> signs;    // carteles de los edificios
 };
 
 // Si assets/maps/aldea.xp falta o está corrupto, construye una plaza de respaldo.

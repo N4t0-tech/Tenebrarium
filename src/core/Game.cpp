@@ -691,6 +691,30 @@ static constexpr int kPadX = 1;
             DrawTextEx(font, msgText.c_str(), {(float)pixelX, (float)pixelY}, (float)fontSize, 0, blackFg);
         }
 
+        // Carteles de los edificios del pueblo: tenues de lejos, iluminados al
+        // acercarse a la puerta
+        if (village_ && state_.load() == GameState::Village && villageMenu_ == VillageMenu::None) {
+            const MapViewport& vp = mapViewport_;
+            Position pp = village_->map.getPlayerPos();
+            int camX = pp.x - vp.viewW / 2;
+            int camY = pp.y - vp.viewH / 2;
+            BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
+            for (const VillageSign& sign : village_->signs) {
+                bool near = std::max(std::abs(pp.x - sign.door.x), std::abs(pp.y - sign.door.y)) <= 4;
+                std::string text = " " + sign.text + " ";
+                Vector2 sz = MeasureTextEx(font, text.c_str(), (float)fontSize, 0);
+                int px = vp.originX + (sign.pos.x - camX) * vp.cellW + vp.cellW / 2 - (int)sz.x / 2;
+                int py = vp.originY + (sign.pos.y - camY) * vp.cellH + (vp.cellH - cellH) / 2;
+                Color board  = near ? Color{120, 82, 40, 255}  : Color{70, 48, 26, 230};
+                Color frame  = near ? Color{220, 170, 90, 255} : Color{110, 80, 45, 230};
+                Color letter = near ? Color{255, 236, 180, 255} : Color{170, 150, 115, 255};
+                DrawRectangle(px - 1, py, (int)sz.x + 2, cellH, board);
+                DrawRectangleLines(px - 1, py, (int)sz.x + 2, cellH, frame);
+                DrawTextEx(font, text.c_str(), {(float)px, (float)py}, (float)fontSize, 0, letter);
+            }
+            EndScissorMode();
+        }
+
         // Mensaje del pueblo (Raylib directo, encima de todo)
         if (village_ && !villageMessage_.empty() && GetTime() < villageMessageEndTime_) {
             std::string msgText = " " + villageMessage_ + " ";

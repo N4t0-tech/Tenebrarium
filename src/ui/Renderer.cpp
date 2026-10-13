@@ -353,9 +353,18 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                     return c;
                 };
 
+                // Color que se ve de la casilla del pueblo: el glifo si es un
+                // bloque lleno, el fondo en otro caso. Las entidades lo usan de fondo.
+                auto villageGround = [&]() -> Color {
+                    Color g = (tile.glyph == 0x2588)
+                        ? Color{tile.fg_r, tile.fg_g, tile.fg_b, 255}
+                        : Color{tile.bg_r, tile.bg_g, tile.bg_b, 255};
+                    return litBg(applyFactor(nightTint(g), f));
+                };
+
                 // Jugador (dentro del bloque visible para que reciba torchBoost)
                 if (mx == pp.x && my == pp.y) {
-                    Color entBg = litBg(isVillage ? nightTint(Color{tile.fg_r, tile.fg_g, tile.fg_b, 255}) : colFloor);
+                    Color entBg = isVillage ? villageGround() : litBg(colFloor);
                     scr.put(dc, dr, '@', applyFactor(playerColor, f), entBg, CELL_BOLD);
                     continue;
                 }
@@ -370,11 +379,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                             continue;
                         }
                         Color ec = applyFactor(colorFromPair(ent.colorPair), f);
-                        Color entBg = isVillage
-                            ? litBg((ent.glyph == 'i')
-                                ? nightTint(Color{tile.bg_r, tile.bg_g, tile.bg_b, 255})
-                                : colFloor)
-                            : litBg(colFloor);
+                        Color entBg = isVillage ? villageGround() : litBg(colFloor);
                         scr.put(dc, dr, ent.glyph, ec, entBg,
                                 ent.bold ? CELL_BOLD : 0);
                         drew = true;
@@ -383,11 +388,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 }
                 if (!drew && hasDeadFallback) {
                     Color ec = applyFactor(COL_GRAY, f * 0.85f);
-                    Color entBg = isVillage
-                        ? litBg((deadFallback.glyph == 'i')
-                            ? nightTint(Color{tile.bg_r, tile.bg_g, tile.bg_b, 255})
-                            : colFloor)
-                        : litBg(colFloor);
+                    Color entBg = isVillage ? villageGround() : litBg(colFloor);
                     scr.put(dc, dr, deadFallback.glyph, ec, entBg,
                             CELL_DIM | CELL_STRIKETHROUGH);
                     drew = true;
@@ -400,7 +401,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 }
                 Color tileBg = (tile.type == TileType::Floor || tile.type == TileType::Stairs) ? colFloor : colWall;
                 if (isVillage)
-                    tileBg = Color{tile.bg_r, tile.bg_g, tile.bg_b, 255};
+                    tileBg = applyFactor(nightTint(Color{tile.bg_r, tile.bg_g, tile.bg_b, 255}), f);
                 Color tileFg = isVillage
                     ? nightTint(Color{tile.fg_r, tile.fg_g, tile.fg_b, 255}) : colTile;
                 if (isVillage && effectiveTorch > 0) {
