@@ -99,7 +99,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 8 << '\n'; // version 8: árboles reordenados (Lv5 = habilidad de mapa)
+    f << 9 << '\n'; // version 9: hora del pueblo
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -225,6 +225,9 @@ void GameSerializer::save(Game& g)
             f << we.remainingHp << ' ';
         f << '\n';
     }
+
+    // Hora del pueblo (v9)
+    f << g.villageHour_ << '\n';
 }
 
 // ─── load ─────────────────────────────────────────────────────────────────────
@@ -235,7 +238,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 8)
+    if (!(f >> version) || version < 1 || version > 9)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -501,6 +504,14 @@ bool GameSerializer::load(Game& g)
             if (!(f >> t.pos.x >> t.pos.y)) return false;
         for (auto& we : acc.enemies())
             if (!(f >> we.remainingHp)) return false;
+    }
+
+    // Hora del pueblo (v9); partidas anteriores empiezan por la mañana
+    g.villageHour_ = kStartHour;
+    if (version >= 9) {
+        float hour;
+        if (!(f >> hour)) return false;
+        g.villageHour_ = advanceHour(hour, 0.0f);
     }
 
     // Restore runtime state

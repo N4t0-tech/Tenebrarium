@@ -13,6 +13,7 @@
 #include "combat/CombatSystem.hpp"
 #include "world/Dungeon.hpp"
 #include "world/Village.hpp"
+#include "world/DayCycle.hpp"
 #include "ui/HudLayout.hpp"
 #include "ui/TerminalScreen.hpp"
 #include "quests/Quest.hpp"
@@ -62,6 +63,7 @@ private:
     std::unique_ptr<VillageLayout> village_;
     VillageMenu  villageMenu_{VillageMenu::None};
     bool         villageConfirmDescend_{false};  // pisó la escalera, espera ENTER
+    float        villageHour_{kStartHour};       // hora del pueblo (0–24), ver DayCycle.hpp
     int          villageSelection_{0};
     std::string  villageMessage_;
     double       villageMessageEndTime_{0.0};

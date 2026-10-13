@@ -542,13 +542,12 @@ static constexpr int kPadX = 1;
                                    Renderer::colorForPlayerClass(player_->getClass()),
                                    player_->getDungeonFloor());
             } else if (village_) {
-                float nf = static_cast<float>((1.0 - std::cos(2.0 * M_PI * GetTime() / 120.0)) * 0.5);
                 Renderer::drawMap(mapScr, 0, 0,
                                    mapScr.cols(), mapScr.rows(),
                                    village_->map, villageEntities(*village_),
                                    villageTorches(*village_),
                                    Renderer::colorForPlayerClass(player_->getClass()),
-                                   player_->getDungeonFloor(), true, nf);
+                                   player_->getDungeonFloor(), true, dayLight(villageHour_));
             }
 
             mapScr.render(offX + cellW, offY + cellH);
@@ -698,6 +697,17 @@ static constexpr int kPadX = 1;
             Position pp = village_->map.getPlayerPos();
             int camX = pp.x - vp.viewW / 2;
             int camY = pp.y - vp.viewH / 2;
+            // Mismo tinte que el mapa; cerca de la puerta recuperan la mitad del brillo
+            const DayLight light = dayLight(villageHour_);
+            auto shade = [&](Color c, bool near) {
+                auto ch = [](uint8_t v, float mul, float add) {
+                    return std::clamp(v * mul + add, 0.0f, 255.0f);
+                };
+                float k = near ? 0.5f : 0.0f;
+                return Color{ (uint8_t)(ch(c.r, light.mulR, light.addR) * (1 - k) + c.r * k),
+                              (uint8_t)(ch(c.g, light.mulG, light.addG) * (1 - k) + c.g * k),
+                              (uint8_t)(ch(c.b, light.mulB, light.addB) * (1 - k) + c.b * k), c.a };
+            };
             BeginScissorMode(vp.originX, vp.originY, vp.viewW * vp.cellW, vp.viewH * vp.cellH);
             for (const VillageSign& sign : village_->signs) {
                 bool near = std::max(std::abs(pp.x - sign.door.x), std::abs(pp.y - sign.door.y)) <= 4;
@@ -705,9 +715,9 @@ static constexpr int kPadX = 1;
                 Vector2 sz = MeasureTextEx(font, text.c_str(), (float)fontSize, 0);
                 int px = vp.originX + (sign.pos.x - camX) * vp.cellW + vp.cellW / 2 - (int)sz.x / 2;
                 int py = vp.originY + (sign.pos.y - camY) * vp.cellH + (vp.cellH - cellH) / 2;
-                Color board  = near ? Color{120, 82, 40, 255}  : Color{70, 48, 26, 230};
-                Color frame  = near ? Color{220, 170, 90, 255} : Color{110, 80, 45, 230};
-                Color letter = near ? Color{255, 236, 180, 255} : Color{170, 150, 115, 255};
+                Color board  = shade(near ? Color{120, 82, 40, 255}  : Color{70, 48, 26, 230}, near);
+                Color frame  = shade(near ? Color{220, 170, 90, 255} : Color{110, 80, 45, 230}, near);
+                Color letter = shade(near ? Color{255, 236, 180, 255} : Color{170, 150, 115, 255}, near);
                 DrawRectangle(px - 1, py, (int)sz.x + 2, cellH, board);
                 DrawRectangleLines(px - 1, py, (int)sz.x + 2, cellH, frame);
                 DrawTextEx(font, text.c_str(), {(float)px, (float)py}, (float)fontSize, 0, letter);
@@ -1164,8 +1174,10 @@ void Game::dispatchInput(int key)
             }
             if (goVillage) {
                 saveGame();
+                villageHour_ = advanceHour(villageHour_, incursionHours(player_->getDungeonFloor()));
                 setState(GameState::Village);
-                villageMessage_ = "Regresas al pueblo.";
+                villageMessage_ = std::string("Regresas al pueblo. ") +
+                                  dayPhaseName(dayLight(villageHour_).phase) + ".";
                 villageMessageEndTime_ = GetTime() + 2.0;
             }
         }
@@ -1448,6 +1460,7 @@ void Game::inputHudSelect(int key)
         }
         initBestiary();
         initQuests();
+        villageHour_ = kStartHour;
         setState(GameState::Village);
         villageMessage_ = "Bienvenido a la aldea, " + playerName_ + ".";
         villageMessageEndTime_ = GetTime() + 3.0;
@@ -1507,6 +1520,8 @@ void Game::update()
     updateProjectiles();
     resolveTrapTriggers();
     updateManaRegen();
+    if (state_.load() == GameState::Village)
+        villageHour_ = advanceHour(villageHour_, GetFrameTime() * 24.0f / kDayLengthSeconds);
     checkQuestProgress();
 
     // Abrir árbol de habilidades cuando hay un desbloqueo pendiente
@@ -1662,15 +1677,13 @@ void Game::render(TerminalScreen &scr)
     case GameState::Village:
         if (village_ && player_)
         {
-            // Ciclo día/noche: 120s (60 día + 60 noche), sinusoidal
-            float nightFactor = static_cast<float>((1.0 - std::cos(2.0 * M_PI * GetTime() / 120.0)) * 0.5);
             if (villageMenu_ != VillageMenu::None) {
                 Renderer::drawVillageMenu(scr, villageMenu_, villageSelection_,
                                           *player_, player_->getIncursions());
             } else {
                 Renderer::drawExploration(scr, village_->map, *player_, hudLayout_,
                                           villageEntities(*village_), villageTorches(*village_),
-                                          "", mapZoom_, scrollTick_, true, nightFactor);
+                                          "", mapZoom_, scrollTick_, true, dayLight(villageHour_));
             }
         }
         break;

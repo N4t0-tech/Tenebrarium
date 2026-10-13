@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <cstdio>
 
 // ─── colores TUI ─────────────────────────────────────────────────────────────
 static constexpr Color COL_WHITE   = WHITE;
@@ -237,7 +238,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                        int viewW, int viewH,
                        const Map& map, const std::vector<MapEntity>& entities,
                        const std::vector<Position>& torches,
-                       Color playerColor, int floor, bool isVillage, float nightFactor) {
+                       Color playerColor, int floor, bool isVillage, const DayLight& light) {
     Position pp = map.getPlayerPos();
     int camX = pp.x - viewW / 2;
     int camY = pp.y - viewH / 2;
@@ -271,12 +272,16 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
     static constexpr float FOV_RADIUS = 8.0f;
     float cellAspect = (float)scr.cellH() / scr.cellW();
 
-    auto nightTint = [nightFactor](Color c) -> Color {
-        if (nightFactor <= 0.0f) return c;
-        return { (uint8_t)(c.r * (1.0f - nightFactor * 0.7f)),
-                 (uint8_t)(c.g * (1.0f - nightFactor * 0.7f)),
-                 (uint8_t)((int)c.b + (int)((255 - c.b) * nightFactor * 0.15f)),
-                 c.a };
+    const float darkness = isVillage ? light.darkness : 0.0f;
+    auto nightTint = [&light, isVillage](Color c) -> Color {
+        if (!isVillage) return c;
+        float gray = 0.30f * c.r + 0.59f * c.g + 0.11f * c.b;
+        auto ch = [&](uint8_t v, float mul, float add) {
+            float d = v + (gray - v) * light.desat;
+            return (uint8_t)std::clamp(d * mul + add, 0.0f, 255.0f);
+        };
+        return { ch(c.r, light.mulR, light.addR), ch(c.g, light.mulG, light.addG),
+                 ch(c.b, light.mulB, light.addB), c.a };
     };
 
     // Rellenar todo el viewport con negro frío
@@ -304,7 +309,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                 float dx = (float)(mx - pp.x), dy = (float)(my - pp.y);
                 float pixelDist = std::sqrt(dx*dx + dy*dy * cellAspect * cellAspect);
                 float baseFactor = std::max(0.45f, 1.0f - (pixelDist / FOV_RADIUS) * 0.55f);
-                float factor = isVillage ? (1.0f - nightFactor) + nightFactor * baseFactor : baseFactor;
+                float factor = isVillage ? (1.0f - darkness) + darkness * baseFactor : baseFactor;
 
                 // Luz dinámica de antorchas
                 float torchBoost = 0.0f;
@@ -340,7 +345,7 @@ void Renderer::drawMap(TerminalScreen& scr, int col, int row,
                         }
                     }
                 }
-                float effectiveTorch = isVillage ? torchBoost * nightFactor : torchBoost;
+                float effectiveTorch = isVillage ? torchBoost * darkness : torchBoost;
                 float f = std::min(1.0f, factor + effectiveTorch * torchIntensity);
 
                 auto litBg = [&](Color c) -> Color {
@@ -1104,13 +1109,34 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
                                 const std::vector<MapEntity>& entities,
                                 const std::vector<Position>& torches,
                                 const std::string& message, int mapZoom,
-                                int scrollTick, bool isVillage, float nightFactor) {
+                                int scrollTick, bool isVillage, const DayLight& light) {
+    // Hora del pueblo sobre el borde superior del mapa: " ● 10:30 Día "
+    auto drawClock = [&]() {
+        if (!isVillage) return;
+        int hh = static_cast<int>(light.hour);
+        int mm = static_cast<int>((light.hour - hh) * 60.0f) / 10 * 10;
+        char time[16];
+        std::snprintf(time, sizeof(time), "%02d:%02d", hh, mm);
+        int icon; Color ic;
+        switch (light.phase) {
+        case DayPhase::Day:   icon = 0x25CF; ic = COL_YELLOW;            break;
+        case DayPhase::Night: icon = 0x25D0; ic = {170, 190, 255, 255};  break;
+        default:              icon = 0x25D1; ic = COL_ORANGE;            break;
+        }
+        int x = 2;
+        scr.put(x++, 0, ' ', COL_WHITE);
+        scr.put(x++, 0, icon, ic, COL_BLACK, CELL_BOLD);
+        x += scr.putStr(x, 0, std::string(" ") + time + " ", COL_WHITE);
+        scr.putStr(x, 0, std::string(dayPhaseName(light.phase)) + " ", ic);
+    };
+
     if (layout == HudLayout::Sidebar) {
         int panelW = 30;
         int mapW   = scr.cols() - panelW - 1;
         drawMap(scr, 1, 1, mapW - 2, scr.rows() - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, nightFactor);
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, light);
         drawBorder(scr, 0, 0, mapW, scr.rows());
+        drawClock();
         drawHudPanel(scr, mapW + 1, 0, player, mapZoom, scrollTick);
         if (!message.empty())
             drawCentered(scr, scr.rows() / 2, 1, mapW - 2,
@@ -1119,8 +1145,9 @@ void Renderer::drawExploration(TerminalScreen& scr, const Map& map,
         int hudH = 13;
         int mapH = scr.rows() - hudH;
         drawMap(scr, 1, 1, scr.cols() - 2, mapH - 2, map, entities, torches,
-                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, nightFactor);
+                colorForPlayerClass(player.getClass()), player.getDungeonFloor(), isVillage, light);
         drawBorder(scr, 0, 0, scr.cols(), mapH);
+        drawClock();
         drawHudBar(scr, mapH, player, mapZoom);
         if (!message.empty())
             drawCentered(scr, mapH / 2, 1, scr.cols() - 2,

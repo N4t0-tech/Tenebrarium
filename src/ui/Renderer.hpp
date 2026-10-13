@@ -9,6 +9,7 @@
 #include "ui/TerminalScreen.hpp"
 #include "world/Map.hpp"
 #include "world/Village.hpp"
+#include "world/DayCycle.hpp"
 #include "entities/Player.hpp"
 #include "combat/CombatSystem.hpp"
 #include "ui/HudLayout.hpp"
@@ -43,14 +44,14 @@ public:
                                 const std::vector<Position>& torches,
                                 const std::string& message = "",
                                 int mapZoom = 1, int scrollTick = 0,
-                                bool isVillage = false, float nightFactor = 0.0f);
+                                bool isVillage = false, const DayLight& light = DayLight{});
     static Color colorForPlayerClass(PlayerClass pc);
     static Color colorFromPair(int pair);
     static void drawMap(TerminalScreen& scr, int col, int row, int viewW, int viewH,
                          const Map& map, const std::vector<MapEntity>& entities,
                          const std::vector<Position>& torches,
                          Color playerColor, int floor = 1,
-                         bool isVillage = false, float nightFactor = 0.0f);
+                         bool isVillage = false, const DayLight& light = DayLight{});
     static void drawCombat(TerminalScreen& scr, const CombatSystem& combat,
                            const Player& player, bool showingArts, int artSelection,
                            bool isBoss = false, int flashIdx = -1);
