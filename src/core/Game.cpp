@@ -2008,7 +2008,8 @@ void Game::openChest(WorldChest& chest)
         else
         {
             player_->pickupItem(chest.item);
-            dungeon_->message = "Cofre: encontraste " + chest.item.name + "!  (+" +
+            dungeon_->message = "Cofre: encontraste " + chest.item.name +
+                " [" + tierName(chest.item.tier) + "]!  (+" +
                 std::to_string(chest.item.statBonus) +
                 (chest.item.type == ItemType::Weapon ? " ATK" : " DEF") + ")";
         }
@@ -2446,9 +2447,11 @@ void Game::generateShopStock()
     shopStock_.push_back({bomb, bomb.value, false});
     Item shovel = DungeonPopulator::pickShovel(tier);
     shopStock_.push_back({shovel, shovel.value, false});
-    Item w = DungeonPopulator::pickWeapon(cls, tier);
+    // La tienda vende comunes y raros; de vez en cuando, un épico
+    int shopMaxTier = (std::rand() % 10 == 0) ? 3 : 2;
+    Item w = DungeonPopulator::pickWeapon(cls, tier, 1, shopMaxTier);
     shopStock_.push_back({w, w.value + tier * 5, false});
-    Item a = DungeonPopulator::pickArmor(cls, tier);
+    Item a = DungeonPopulator::pickArmor(cls, tier, 1, shopMaxTier);
     shopStock_.push_back({a, a.value + tier * 5, false});
 }
 
@@ -2484,14 +2487,24 @@ std::string Game::rewardEnemyKill(WorldEnemy& we)
     we.alive = false;
     we.remainingHp = -1;
     dungeon_->enemiesKilled++;
+    std::string loot;
+    if (we.isBoss) {
+        // Los jefes sueltan siempre un arma o armadura épica o legendaria
+        int fl = player_->getDungeonFloor();
+        PlayerClass cls = player_->getClass();
+        Item gear = (std::rand() % 2 == 0) ? DungeonPopulator::pickWeapon(cls, fl, 3)
+                                           : DungeonPopulator::pickArmor(cls, fl, 3);
+        if (player_->pickupItem(gear))
+            loot = gear.name + " [" + tierName(gear.tier) + "]";
+    }
     int lootChance = we.isBoss ? 45 : 15;
     if (std::rand() % 100 < lootChance)
     {
         Item pot = DungeonPopulator::pickPotion(player_->getDungeonFloor());
         if (player_->getInventory().addItem(pot))
-            return pot.name;
+            loot += (loot.empty() ? "" : ", ") + pot.name;
     }
-    return "";
+    return loot;
 }
 
 // ─── Habilidades en el mapa: trampas y hechizos ──────────────────────────────

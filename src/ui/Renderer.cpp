@@ -46,6 +46,22 @@ static constexpr Color COL_COLD_BG = { 8, 10, 16, 255 };  // negro frío sutil
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+static Color colorForTier(int tier);
+
+static Color shopItemColor(const Item& item) {
+    bool gear = item.type == ItemType::Weapon || item.type == ItemType::Armor;
+    return gear ? colorForTier(item.tier) : COL_WHITE;
+}
+
+static Color colorForTier(int tier) {
+    switch (tier) {
+        case 2:  return COL_BLUE;
+        case 3:  return COL_MAGENTA;
+        case 4:  return COL_ORANGE;
+        default: return COL_GRAY;
+    }
+}
+
 const char* Renderer::className(const Player& p) {
     switch (p.getClass()) {
         case PlayerClass::Warrior:    return "Guerrero";
@@ -1362,9 +1378,9 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
     auto itemLine = [&](const Item& item, Color& ic) {
         std::string tag; ic = COL_WHITE;
         if (item.type == ItemType::Weapon) {
-            tag = "[ARMA]   "; ic = COL_YELLOW;
+            tag = "[ARMA]   "; ic = colorForTier(item.tier);
         } else if (item.type == ItemType::Armor) {
-            tag = "[ARMADURA]"; ic = COL_GREEN;
+            tag = "[ARMADURA]"; ic = colorForTier(item.tier);
         } else if (item.type == ItemType::Consumable && item.statBonus > 0) {
             tag = "[POCIÓN] "; ic = COL_CYAN;
         } else if (item.type == ItemType::Consumable && item.name == "Pala") {
@@ -1493,16 +1509,16 @@ void Renderer::drawInventory(TerminalScreen& scr, const Player& player, int sele
         }
         ly++;
         auto equipLine = [&](const std::string& label,
-                             const std::optional<Item>& slot, Color c) {
+                             const std::optional<Item>& slot) {
             if (slot)
                 scr.putStr(indent, ly, label + slot->name
-                           + " +" + std::to_string(slot->statBonus), c);
+                           + " +" + std::to_string(slot->statBonus), colorForTier(slot->tier));
             else
                 scr.putStr(indent, ly, label + "(vacio)", COL_GRAY, COL_BLACK, CELL_DIM);
             ly++;
         };
-        equipLine("Arma:  ", player.getEquippedWeapon(), COL_YELLOW);
-        equipLine("Armad: ", player.getEquippedArmor(), COL_GREEN);
+        equipLine("Arma:  ", player.getEquippedWeapon());
+        equipLine("Armad: ", player.getEquippedArmor());
     }
 
     drawBorder(scr, sc2, 1, w, scr.rows() - 2);
@@ -1857,7 +1873,7 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
             std::string tag = (item.type == ItemType::Weapon) ? "[ARMA]    " : "[ARMADURA]";
             lines.push_back({ tag + " " + padRight(item.name, nameW) + "   " +
                               padLeft(std::to_string(item.value / 2), priceW) + " $",
-                              sel ? COL_ORANGE : COL_WHITE,
+                              sel ? COL_ORANGE : colorForTier(item.tier),
                               static_cast<uint8_t>(sel ? CELL_INVERTED : 0) });
         }
         if (!any)
@@ -1877,7 +1893,7 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
             if (!s.item.description.empty())
                 line += "   " + s.item.description;
             lines.push_back({ line,
-                              s.sold ? COL_GRAY : (sel ? COL_ORANGE : COL_WHITE),
+                              s.sold ? COL_GRAY : (sel ? COL_ORANGE : shopItemColor(s.item)),
                               static_cast<uint8_t>(s.sold ? CELL_DIM : (sel ? CELL_INVERTED : 0)) });
         }
     }

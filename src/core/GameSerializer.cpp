@@ -9,6 +9,7 @@
 
 #include "GameSerializer.hpp"
 #include "Game.hpp"
+#include "world/DungeonPopulator.hpp"
 #include <raylib.h>
 #include <fstream>
 #include <filesystem>
@@ -53,7 +54,7 @@ void GameSerializer::witem(std::ostream& o, const Item& item)
     wstr(o, item.name);
     wstr(o, item.description);
     o << static_cast<int>(item.type) << ' ' << item.value << ' '
-      << item.slots << ' ' << item.statBonus << ' ' << item.quantity << '\n';
+      << item.slots << ' ' << item.statBonus << ' ' << item.quantity << ' ' << item.tier << '\n';
 }
 
 bool GameSerializer::ritem(std::istream& in, Item& item, int version)
@@ -71,6 +72,12 @@ bool GameSerializer::ritem(std::istream& in, Item& item, int version)
             return false;
     } else {
         item.quantity = 1; // Default for version 1
+    }
+    if (version >= 11) {
+        if (!(in >> item.tier) || item.tier < 1 || item.tier > kMaxItemTier)
+            return false;
+    } else if (item.type == ItemType::Weapon || item.type == ItemType::Armor) {
+        item.tier = DungeonPopulator::tierForItemName(item.name);
     }
     return true;
 }
@@ -99,7 +106,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 10 << '\n'; // version 10: sin subclases
+    f << 11 << '\n'; // version 11: tier de los objetos
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -238,7 +245,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 10)
+    if (!(f >> version) || version < 1 || version > 11)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.

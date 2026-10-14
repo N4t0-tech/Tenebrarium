@@ -17,4 +17,16 @@ struct Item {
     int slots;       // Slots que ocupa en inventario (default 1)
     int statBonus;   // Bono de ataque/defensa/HP según tipo
     int quantity;    // Cantidad apilada (default 1, para pociones/bombas)
+    int tier = 1;    // Rareza de armas y armaduras: 1 Común … 4 Legendario
 };
+
+inline constexpr int kMaxItemTier = 4;
+
+inline const char* tierName(int tier) {
+    switch (tier) {
+        case 2:  return "Raro";
+        case 3:  return "Épico";
+        case 4:  return "Legendario";
+        default: return "Común";
+    }
+}

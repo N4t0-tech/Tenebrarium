@@ -29,8 +29,11 @@ public:
     static Result populate(Map& map, const std::vector<BSPDungeon::Room>& rooms,
                            int depth, PlayerClass cls, int incursions, std::mt19937& rng);
 
-    static Item             pickWeapon(PlayerClass cls, int floor);
-    static Item             pickArmor(PlayerClass cls, int floor);
+    // El tier sale al azar según el piso, acotado a [minTier, maxTier].
+    static Item             pickWeapon(PlayerClass cls, int floor, int minTier = 1, int maxTier = kMaxItemTier);
+    static Item             pickArmor(PlayerClass cls, int floor, int minTier = 1, int maxTier = kMaxItemTier);
+    // Tier de un arma o armadura por su nombre (1 si no está en las tablas).
+    static int              tierForItemName(const std::string& name);
     static Item             pickPotion(int floor);
     static Item             pickBeer();
     static Item             pickManaPotion();

@@ -125,83 +125,153 @@ int DungeonPopulator::xpForEnemy(EnemyType t, int depth, int incursions)
 
 // ─── Item tables ──────────────────────────────────────────────────────────────
 
-Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
+namespace {
+
+struct GearEntry {
+    PlayerClass cls;
+    Item        item;
+};
+
+// Precio de referencia por tier: Común 25–40, Raro 60–90, Épico 140–200, Legendario 350+.
+const std::vector<GearEntry>& gearTable()
 {
-    static const std::vector<Item> warrior = {
-        {"Espada Corta",   "Un filo confiable.",       ItemType::Weapon, 30, 1, 3, 1},
-        {"Estoque",        "Rápido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
-        {"Hacha de Mano",  "Golpea con fuerza.",        ItemType::Weapon, 50, 1, 5, 1},
-        {"Espada",         "Equilibrada y versátil.",   ItemType::Weapon, 50, 1, 5, 1},
-        {"Mandoble",       "Lenta pero letal.",         ItemType::Weapon, 80, 2, 8, 1},
-        {"Lanza",          "Mantiene la distancia.",    ItemType::Weapon, 80, 2, 7, 1},
+    using PC = PlayerClass;
+    static const std::vector<GearEntry> t = {
+        // ─── Guerrero: armas ───
+        {PC::Warrior, {"Espada Corta",        "Un filo confiable.",                ItemType::Weapon, 30, 1,  3, 1, 1}},
+        {PC::Warrior, {"Estoque",             "Rápido y preciso.",                 ItemType::Weapon, 30, 1,  3, 1, 1}},
+        {PC::Warrior, {"Maza de Hierro",      "Abolla yelmos y huesos.",           ItemType::Weapon, 40, 1,  4, 1, 1}},
+        {PC::Warrior, {"Hacha de Mano",       "Golpea con fuerza.",                ItemType::Weapon, 60, 1,  5, 1, 2}},
+        {PC::Warrior, {"Espada",              "Equilibrada y versátil.",           ItemType::Weapon, 70, 1,  6, 1, 2}},
+        {PC::Warrior, {"Martillo de Guerra",  "Cada golpe retumba.",               ItemType::Weapon, 90, 2,  7, 1, 2}},
+        {PC::Warrior, {"Lanza",               "Mantiene la distancia.",            ItemType::Weapon, 150, 2, 9, 1, 3}},
+        {PC::Warrior, {"Mandoble",            "Lenta pero letal.",                 ItemType::Weapon, 170, 2, 10, 1, 3}},
+        {PC::Warrior, {"Hacha del Verdugo",   "Nunca necesitó un segundo tajo.",   ItemType::Weapon, 200, 2, 11, 1, 3}},
+        {PC::Warrior, {"Quebrantamontes",     "Martillo de los reyes enanos.",     ItemType::Weapon, 380, 2, 15, 1, 4}},
+        // ─── Guerrero: armaduras ───
+        {PC::Warrior, {"Gambesón",            "Tela acolchada, mejor que nada.",   ItemType::Armor, 25, 1,  2, 1, 1}},
+        {PC::Warrior, {"Cota de Malla",       "Protección media.",                 ItemType::Armor, 40, 1,  3, 1, 1}},
+        {PC::Warrior, {"Brigantina",          "Placas remachadas bajo el cuero.",  ItemType::Armor, 65, 1,  4, 1, 2}},
+        {PC::Warrior, {"Escudo de Roble",     "Pesado, pero aguanta.",             ItemType::Armor, 85, 1,  5, 1, 2}},
+        {PC::Warrior, {"Armadura de Placas",  "Muy resistente.",                   ItemType::Armor, 160, 2, 7, 1, 3}},
+        {PC::Warrior, {"Placas Templarias",   "Bendecidas en el último altar.",    ItemType::Armor, 195, 2, 8, 1, 3}},
+        {PC::Warrior, {"Égida del Rey Caído", "Su dueño murió de viejo.",          ItemType::Armor, 400, 2, 11, 1, 4}},
+        // ─── Mago: armas ───
+        {PC::Mage,    {"Varita de Roble",     "Canaliza magia.",                   ItemType::Weapon, 25, 1,  2, 1, 1}},
+        {PC::Mage,    {"Varita de Saúco",     "Madera antigua y potente.",         ItemType::Weapon, 35, 1,  3, 1, 1}},
+        {PC::Mage,    {"Bastón de Fresno",    "Firme como su dueño.",              ItemType::Weapon, 35, 1,  3, 1, 1}},
+        {PC::Mage,    {"Báculo de Cristal",   "Poder arcano.",                     ItemType::Weapon, 60, 1,  5, 1, 2}},
+        {PC::Mage,    {"Báculo de Rayos",     "Conduce electricidad.",             ItemType::Weapon, 80, 1,  6, 1, 2}},
+        {PC::Mage,    {"Orbe de Cuarzo",      "Vibra con cada conjuro.",           ItemType::Weapon, 80, 1,  6, 1, 2}},
+        {PC::Mage,    {"Grimorio Oscuro",     "Magia devastadora.",                ItemType::Weapon, 150, 2, 9, 1, 3}},
+        {PC::Mage,    {"Grimorio Demoníaco",  "Conocimiento prohibido.",           ItemType::Weapon, 175, 2, 10, 1, 3}},
+        {PC::Mage,    {"Báculo del Archimago","Tres siglos de hechizos grabados.", ItemType::Weapon, 200, 2, 11, 1, 3}},
+        {PC::Mage,    {"Lengua de Dragón",    "Aún guarda el fuego de la bestia.", ItemType::Weapon, 380, 2, 14, 1, 4}},
+        // ─── Mago: armaduras ───
+        {PC::Mage,    {"Túnica Arcana",       "Ligera y mágica.",                  ItemType::Armor, 25, 1,  1, 1, 1}},
+        {PC::Mage,    {"Capa de Aprendiz",    "Huele a tinta y velas.",            ItemType::Armor, 30, 1,  2, 1, 1}},
+        {PC::Mage,    {"Manto Místico",       "Deflecta hechizos.",                ItemType::Armor, 65, 1,  4, 1, 2}},
+        {PC::Mage,    {"Toga de la Academia", "Bordada con runas de guarda.",      ItemType::Armor, 80, 1,  5, 1, 2}},
+        {PC::Mage,    {"Manto de Seda Lunar", "Brilla en la oscuridad.",           ItemType::Armor, 145, 1, 6, 1, 3}},
+        {PC::Mage,    {"Vestiduras del Oráculo","Ven el golpe antes que tú.",      ItemType::Armor, 180, 1, 7, 1, 3}},
+        {PC::Mage,    {"Manto del Primer Hechicero","Tejido antes que las torres.",ItemType::Armor, 380, 1, 9, 1, 4}},
+        // ─── Arquera: armas ───
+        {PC::Ranger,  {"Honda de Cuero",      "Piedras y paciencia.",              ItemType::Weapon, 25, 1,  2, 1, 1}},
+        {PC::Ranger,  {"Arco Corto",          "Rápido y preciso.",                 ItemType::Weapon, 30, 1,  3, 1, 1}},
+        {PC::Ranger,  {"Arco de Caza",        "Para presas que corren.",           ItemType::Weapon, 40, 1,  4, 1, 1}},
+        {PC::Ranger,  {"Arco Largo",          "Mayor alcance.",                    ItemType::Weapon, 60, 1,  5, 1, 2}},
+        {PC::Ranger,  {"Arco Élfico",         "Tallado en madera élfica.",         ItemType::Weapon, 75, 1,  6, 1, 2}},
+        {PC::Ranger,  {"Ballesta de Mano",    "Pequeña y traicionera.",            ItemType::Weapon, 90, 1,  7, 1, 2}},
+        {PC::Ranger,  {"Ballesta",            "Poderosa y lenta.",                 ItemType::Weapon, 150, 2, 9, 1, 3}},
+        {PC::Ranger,  {"Arco Encantado",      "Flechas mágicas.",                  ItemType::Weapon, 170, 2, 10, 1, 3}},
+        {PC::Ranger,  {"Arco Celestial",      "Bendecido por los dioses.",         ItemType::Weapon, 200, 2, 11, 1, 3}},
+        {PC::Ranger,  {"Susurro del Bosque",  "Nadie oye la flecha que lo mata.",  ItemType::Weapon, 380, 2, 15, 1, 4}},
+        // ─── Arquera: armaduras ───
+        {PC::Ranger,  {"Cuero Reforzado",     "Ágil y resistente.",                ItemType::Armor, 30, 1,  2, 1, 1}},
+        {PC::Ranger,  {"Jubón de Cazador",    "Manchado de mil cacerías.",         ItemType::Armor, 30, 1,  2, 1, 1}},
+        {PC::Ranger,  {"Armadura de Cuero",   "Balance perfecto.",                 ItemType::Armor, 65, 1,  4, 1, 2}},
+        {PC::Ranger,  {"Capa de Explorador",  "Se funde con la sombra.",           ItemType::Armor, 85, 1,  5, 1, 2}},
+        {PC::Ranger,  {"Cuero de Wyvern",     "Las garras resbalan.",              ItemType::Armor, 180, 1, 7, 1, 3}},
+        {PC::Ranger,  {"Manto del Guardabosques","El bosque cuida de los suyos.",  ItemType::Armor, 390, 1, 10, 1, 4}},
+        // ─── Halley ───
+        {PC::Halley,  {"Filo del Equilibrio", "Cortes justos y precisos.",         ItemType::Weapon, 65, 1,  5, 1, 2}},
+        {PC::Halley,  {"Daga Temporal",       "Ataja en el momento exacto.",       ItemType::Weapon, 80, 1,  6, 1, 2}},
+        {PC::Halley,  {"Espada Eterna",       "El tiempo no la desgasta.",         ItemType::Weapon, 170, 2, 9, 1, 3}},
+        {PC::Halley,  {"Guadaña del Juicio",  "Decide el destino.",                ItemType::Weapon, 380, 2, 14, 1, 4}},
+        {PC::Halley,  {"Manto del Equilibrio","Pesa lo que debe pesar.",           ItemType::Armor, 80, 1,  5, 1, 2}},
+        {PC::Halley,  {"Armadura Eterna",     "El tiempo la consagra.",            ItemType::Armor, 190, 2, 8, 1, 3}},
+        // ─── Nato ───
+        {PC::Nato,    {"Cetro Estelar",       "Brilla con luz propia.",            ItemType::Weapon, 80, 1,  6, 1, 2}},
+        {PC::Nato,    {"Lanza Celestial",     "Forjada en el cosmos.",             ItemType::Weapon, 90, 1,  7, 1, 2}},
+        {PC::Nato,    {"Espada del Creador",  "Fragmento de voluntad divina.",     ItemType::Weapon, 180, 2, 10, 1, 3}},
+        {PC::Nato,    {"Báculo de Estrellas", "Gobierna el firmamento.",           ItemType::Weapon, 400, 2, 15, 1, 4}},
+        {PC::Nato,    {"Túnica Estelar",      "Tejida con luz de estrellas.",      ItemType::Armor, 80, 1,  5, 1, 2}},
+        {PC::Nato,    {"Armadura Divina",     "Voluntad hecha materia.",           ItemType::Armor, 190, 2, 8, 1, 3}},
     };
-    static const std::vector<Item> mage = {
-        {"Varita de Roble",   "Canaliza magia.",           ItemType::Weapon, 30, 1, 2, 1},
-        {"Varita de Sauco",   "Madera antigua y potente.", ItemType::Weapon, 30, 1, 2, 1},
-        {"Baculo de Cristal", "Poder arcano.",             ItemType::Weapon, 50, 1, 4, 1},
-        {"Baculo de Rayos",   "Conduce electricidad.",     ItemType::Weapon, 50, 1, 4, 1},
-        {"Grimorio Oscuro",   "Magia devastadora.",        ItemType::Weapon, 80, 2, 6, 1},
-        {"Grimorio Demoniaco","Conocimiento prohibido.",   ItemType::Weapon, 80, 2, 7, 1},
+    return t;
+}
+
+// Probabilidad (%) de cada tier según el piso: Común, Raro, Épico, Legendario.
+int rollTier(int floor)
+{
+    static const int kOdds[4][4] = {
+        {70, 25,  5,  0},   // pisos 1–5
+        {50, 35, 13,  2},   // pisos 6–10
+        {35, 38, 22,  5},   // pisos 11–15
+        {20, 40, 30, 10},   // pisos 16–20
     };
-    static const std::vector<Item> ranger = {
-        {"Arco Corto",     "Rápido y preciso.",         ItemType::Weapon, 30, 1, 3, 1},
-        {"Arco Largo",     "Mayor alcance.",            ItemType::Weapon, 50, 1, 5, 1},
-        {"Arco Elfico",    "Tallado en madera élfica.", ItemType::Weapon, 50, 1, 5, 1},
-        {"Ballesta",       "Poderosa y lenta.",         ItemType::Weapon, 80, 2, 7, 1},
-        {"Arco Encantado", "Flechas mágicas.",          ItemType::Weapon, 80, 2, 7, 1},
-        {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
-    };
-    const std::vector<Item>* pool = nullptr;
-    if (cls == PlayerClass::Warrior)     pool = &warrior;
-    else if (cls == PlayerClass::Mage)   pool = &mage;
-    else if (cls == PlayerClass::Ranger) pool = &ranger;
-    else if (cls == PlayerClass::Halley) {
-        static const std::vector<Item> halley = {
-            {"Filo del Equilibrio", "Cortes justos y precisos.",     ItemType::Weapon, 50, 1, 4, 1},
-            {"Daga Temporal",      "Ataja en el momento exacto.",    ItemType::Weapon, 50, 1, 4, 1},
-            {"Espada Eterna",      "El tiempo no la desgasta.",      ItemType::Weapon, 80, 2, 7, 1},
-            {"Guadaña del Juicio", "Decide el destino.",             ItemType::Weapon, 80, 2, 8, 1},
-        };
-        pool = &halley;
-    } else {
-        static const std::vector<Item> nato = {
-            {"Cetro Estelar",     "Brilla con luz propia.",         ItemType::Weapon, 50, 1, 5, 1},
-            {"Lanza Celestial",   "Forjada en el cosmos.",          ItemType::Weapon, 50, 1, 5, 1},
-            {"Espada del Creador","Fragmento de voluntad divina.",  ItemType::Weapon, 80, 2, 8, 1},
-            {"Báculo de Estrellas","Gobierna el firmamento.",       ItemType::Weapon, 80, 2, 9, 1},
-        };
-        pool = &nato;
+    int band = std::clamp((floor - 1) / 5, 0, 3);
+    int r = std::rand() % 100;
+    for (int t = 0; t < 4; t++) {
+        if (r < kOdds[band][t]) return t + 1;
+        r -= kOdds[band][t];
     }
-    Item item = (*pool)[std::rand() % pool->size()];
+    return 1;
+}
+
+Item pickGear(PlayerClass cls, ItemType type, int floor, int minTier, int maxTier)
+{
+    int tier = std::clamp(rollTier(floor), minTier, maxTier);
+    // Si la clase no tiene ese tier (las secretas no tienen comunes, p. ej.),
+    // se busca el más cercano: primero hacia abajo y luego hacia arriba.
+    std::vector<const Item*> pool;
+    for (int d = 0; pool.empty() && d < kMaxItemTier; d++) {
+        for (int want : {tier - d, tier + d}) {
+            for (const auto& g : gearTable())
+                if (g.cls == cls && g.item.type == type && g.item.tier == want)
+                    pool.push_back(&g.item);
+            if (!pool.empty()) break;
+        }
+    }
+    if (pool.empty())
+        return {"Palo", "Mejor que nada.", type, 5, 1, 1, 1, 1};
+    Item item = *pool[std::rand() % pool.size()];
     item.statBonus += (floor - 1) / 2;
     return item;
 }
 
-Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
+} // namespace
+
+Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor, int minTier, int maxTier)
 {
-    static const Item a[5][2] = {
-        {{"Cota de Malla",      "Protección media.",   ItemType::Armor, 40, 1, 3, 1},
-         {"Armadura de Placas", "Muy resistente.",     ItemType::Armor, 70, 2, 6, 1}},
-        {{"Túnica Arcana",      "Ligera y mágica.",    ItemType::Armor, 30, 1, 1, 1},
-         {"Manto Mistico",      "Deflecta hechizos.",  ItemType::Armor, 60, 1, 4, 1}},
-        {{"Cuero Reforzado",    "Ágil y resistente.",  ItemType::Armor, 35, 1, 2, 1},
-         {"Armadura de Cuero",  "Balance perfecto.",   ItemType::Armor, 55, 1, 4, 1}},
-        {{"Manto del Equilibrio","Pesa lo que debe pesar.",      ItemType::Armor, 40, 1, 3, 1},
-         {"Armadura Eterna",    "El tiempo la consagra.",        ItemType::Armor, 70, 2, 6, 1}},
-        {{"Túnica Estelar",     "Tejida con luz de estrellas.", ItemType::Armor, 40, 1, 4, 1},
-         {"Armadura Divina",    "Voluntad hecha materia.",       ItemType::Armor, 70, 2, 7, 1}},
-    };
-    int ci = 0;
-    switch (cls) {
-        case PlayerClass::Warrior:    ci = 0; break;
-        case PlayerClass::Mage:       ci = 1; break;
-        case PlayerClass::Ranger:     ci = 2; break;
-        case PlayerClass::Halley:     ci = 3; break;
-        case PlayerClass::Nato:       ci = 4; break;
-    }
-    Item item = a[ci][std::rand() % 2];
-    item.statBonus += (floor - 1) / 2;
-    return item;
+    return pickGear(cls, ItemType::Weapon, floor, minTier, maxTier);
+}
+
+Item DungeonPopulator::pickArmor(PlayerClass cls, int floor, int minTier, int maxTier)
+{
+    return pickGear(cls, ItemType::Armor, floor, minTier, maxTier);
+}
+
+int DungeonPopulator::tierForItemName(const std::string& name)
+{
+    for (const auto& g : gearTable())
+        if (g.item.name == name) return g.item.tier;
+    // Nombres antiguos sin tilde
+    if (name == "Varita de Sauco")    return 1;
+    if (name == "Baculo de Cristal" || name == "Baculo de Rayos" ||
+        name == "Manto Mistico"     || name == "Arco Elfico") return 2;
+    if (name == "Grimorio Demoniaco") return 3;
+    return 1;
 }
 
 Item DungeonPopulator::pickPotion(int floor)
@@ -331,7 +401,7 @@ void DungeonPopulator::tryPlaceSecretRoom(Map& map, std::vector<WorldChest>& che
         Position itemPos  = {startX + 1, startY + 1};
         Position coinsPos = {endX   - 1, endY   - 1};
         taken.push_back(itemPos);
-        Item item = (std::rand() % 2 == 0) ? pickWeapon(cls, floor) : pickArmor(cls, floor);
+        Item item = (std::rand() % 2 == 0) ? pickWeapon(cls, floor, 2) : pickArmor(cls, floor, 2);
         chests.push_back({itemPos, false, ChestLoot::Item, 0, item});
 
         if (coinsPos.x != itemPos.x || coinsPos.y != itemPos.y) {
