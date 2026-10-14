@@ -99,7 +99,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 9 << '\n'; // version 9: hora del pueblo
+    f << 10 << '\n'; // version 10: sin subclases
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -238,7 +238,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 9)
+    if (!(f >> version) || version < 1 || version > 10)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -264,6 +264,12 @@ bool GameSerializer::load(Game& g)
         if (!(f >> incursions)) return false;
     }
 
+    // v6-9 guardaban el enum con subclases: cada subclase pasa a su clase original.
+    if (version >= 6 && version <= 9) {
+        static const int kLegacyClass[8] = { 0, 0, 1, 1, 2, 2, 3, 4 };
+        if (cls < 0 || cls > 7) return false;
+        cls = kLegacyClass[cls];
+    }
     PlayerClass playerClass = static_cast<PlayerClass>(cls);
     g.player_ = std::make_unique<Player>(name, playerClass);
     g.player_->level_          = level;

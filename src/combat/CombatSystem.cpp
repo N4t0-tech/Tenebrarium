@@ -14,8 +14,7 @@ CombatSystem::CombatSystem(Player& player, std::vector<std::unique_ptr<Enemy>> e
     : player_(player),
       enemies_(std::move(enemies)),
       currentTarget_(0),
-      maxAp_((player.getClass() == PlayerClass::Ranger ||
-               player.getClass() == PlayerClass::Ballestero) ? 4 : 3),
+      maxAp_(player.getClass() == PlayerClass::Ranger ? 4 : 3),
       currentAp_(maxAp_),
       phase_(CombatPhase::PlayerTurn),
       fled_(false)
@@ -833,10 +832,8 @@ bool CombatSystem::rollCritical() const {
     int chance = 15;
     switch (player_.getClass()) {
         case PlayerClass::Ranger:     chance = 20; break;
-        case PlayerClass::Ballestero: chance = 22; break;
         case PlayerClass::Halley:     chance = 18; break;
         case PlayerClass::Nato:       chance = 20; break;
-        case PlayerClass::Picaro:     chance = 18; break;
         default: break;
     }
     return (std::rand() % 100) < chance;
@@ -857,8 +854,7 @@ int CombatSystem::getPlayerAttackBoost() const {
 
 int CombatSystem::getEffectiveAttack() const {
     int atk = player_.getAttack();
-    if (player_.getClass() == PlayerClass::Warrior ||
-        player_.getClass() == PlayerClass::Picaro) {
+    if (player_.getClass() == PlayerClass::Warrior) {
         int pct = player_.getMana() * 100 / std::max(1, player_.getMaxMana());
         int factor = std::max(70, pct);
         atk = atk * factor / 100;

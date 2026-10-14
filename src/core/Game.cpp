@@ -1024,8 +1024,7 @@ void Game::dispatchInput(int key)
                     int restored = player_->getMaxMana() / 2;
                     player_->restoreMana(restored);
                     player_->getInventory().removeItem(item.name);
-                    std::string label = (player_->getClass() == PlayerClass::Warrior ||
-                                        player_->getClass() == PlayerClass::Picaro) ? "Aguante" : "MP";
+                    std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
                     dungeon_->message = "Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!";
                     dungeon_->messageEndTime = GetTime() + 2.0;
                     used = true;
@@ -1033,8 +1032,7 @@ void Game::dispatchInput(int key)
                 }
             }
             if (!used)
-                dungeon_->message = (player_->getClass() == PlayerClass::Warrior ||
-                                     player_->getClass() == PlayerClass::Picaro)
+                dungeon_->message = player_->getClass() == PlayerClass::Warrior
                     ? "No tienes cerveza." : "No tienes poción de mana.";
             dungeon_->messageEndTime = GetTime() + 2.0;
             break;
@@ -1070,8 +1068,7 @@ void Game::dispatchInput(int key)
         {
             auto spells = unlockedMapSpells();
             if (spells.empty()) {
-                PlayerClass c = player_->getClass();
-                dungeon_->message = (c == PlayerClass::Ranger || c == PlayerClass::Ballestero)
+                dungeon_->message = player_->getClass() == PlayerClass::Ranger
                     ? "Tu habilidad de mapa es la trampa: usa T."
                     : "Desbloquea tu habilidad de mapa en el árbol (Nv 5).";
                 dungeon_->messageEndTime = GetTime() + 2.0;
@@ -1453,7 +1450,6 @@ void Game::inputNameInput(int key)
                                 || playerName_ == "halley&nato");
             classSelection_ = 0;
             classSelectCategory_ = 0;
-            classSelectSubIdx_[0] = classSelectSubIdx_[1] = classSelectSubIdx_[2] = 0;
             menuPhase_ = MenuPhase::ClassSelect;
         }
         return;
@@ -1497,14 +1493,6 @@ void Game::inputClassSelect(int key)
         case 's':
             classSelectCategory_ = (classSelectCategory_ + 1) % 3;
             break;
-        case 'a':
-            classSelectSubIdx_[classSelectCategory_] =
-                (classSelectSubIdx_[classSelectCategory_] + 1) % 2;
-            break;
-        case 'd':
-            classSelectSubIdx_[classSelectCategory_] =
-                (classSelectSubIdx_[classSelectCategory_] + 1) % 2;
-            break;
         case 27:
             menuPhase_ = MenuPhase::NameInput;
             break;
@@ -1534,15 +1522,9 @@ void Game::inputHudSelect(int key)
         if (secretEasterEgg_) {
             cls = (classSelectCategory_ == 0) ? PlayerClass::Halley : PlayerClass::Nato;
         } else {
-            // Mapear (categoría, subíndice) → PlayerClass
-            // categoría 0 (Física):    subIdx 0 → Warrior,    subIdx 1 → Picaro
-            // categoría 1 (Mágica):    subIdx 0 → Mage,       subIdx 1 → Necrofago
-            // categoría 2 (Distancia): subIdx 0 → Ranger,     subIdx 1 → Ballestero
-            int cat = classSelectCategory_;
-            int sub = classSelectSubIdx_[cat];
-            if (cat == 0) cls = (sub == 0) ? PlayerClass::Warrior    : PlayerClass::Picaro;
-            else if (cat == 1) cls = (sub == 0) ? PlayerClass::Mage  : PlayerClass::Necrofago;
-            else cls = (sub == 0) ? PlayerClass::Ranger : PlayerClass::Ballestero;
+            static const PlayerClass kNormal[3] = {
+                PlayerClass::Warrior, PlayerClass::Mage, PlayerClass::Ranger };
+            cls = kNormal[classSelectCategory_];
         }
         player_ = std::make_unique<Player>(playerName_, cls);
         // Dar 2 bombas iniciales (como 1 item con quantity=2)
@@ -1720,7 +1702,7 @@ void Game::render(TerminalScreen &scr)
                                     std::fmod(GetTime(), 0.8) < 0.4);
             break;
         case MenuPhase::ClassSelect:
-            Renderer::drawClassSelect(scr, classSelectCategory_, classSelectSubIdx_,
+            Renderer::drawClassSelect(scr, classSelectCategory_,
                                       secretEasterEgg_);
             break;
         case MenuPhase::HudSelect:
@@ -1896,7 +1878,6 @@ void Game::setState(GameState newState)
         secretEasterEgg_ = false;
         classSelection_ = 0;
         classSelectCategory_ = 0;
-        classSelectSubIdx_[0] = classSelectSubIdx_[1] = classSelectSubIdx_[2] = 0;
         hudSelection_ = 0;
         playerName_.clear();
         player_.reset();

@@ -49,11 +49,8 @@ static constexpr Color COL_COLD_BG = { 8, 10, 16, 255 };  // negro frío sutil
 const char* Renderer::className(const Player& p) {
     switch (p.getClass()) {
         case PlayerClass::Warrior:    return "Guerrero";
-        case PlayerClass::Picaro:     return "Pícaro";
         case PlayerClass::Mage:       return "Mago";
-        case PlayerClass::Necrofago:  return "Necrófago";
         case PlayerClass::Ranger:     return "Arquera";
-        case PlayerClass::Ballestero: return "Ballestero";
         case PlayerClass::Halley:     return "Halley";
         case PlayerClass::Nato:       return "Nato";
     }
@@ -208,11 +205,8 @@ void Renderer::drawStatBar(TerminalScreen& scr, int col, int row,
 Color Renderer::colorForPlayerClass(PlayerClass pc) {
     switch (pc) {
         case PlayerClass::Warrior:    return COL_YELLOW;
-        case PlayerClass::Picaro:     return COL_ORANGE;
         case PlayerClass::Mage:       return COL_CYAN;
-        case PlayerClass::Necrofago:  return COL_MAGENTA;
         case PlayerClass::Ranger:     return COL_GREEN;
-        case PlayerClass::Ballestero: return COL_DK_GREEN;
         case PlayerClass::Halley:     return COL_MAGENTA;
         case PlayerClass::Nato:       return COL_RED;
     }
@@ -222,11 +216,8 @@ Color Renderer::colorForPlayerClass(PlayerClass pc) {
 static const char* portraitForClass(PlayerClass pc) {
     switch (pc) {
         case PlayerClass::Warrior:    return "mini-warrior.xp";
-        case PlayerClass::Picaro:     return "mini-warrior.xp";  // placeholder
         case PlayerClass::Mage:       return "mini-wizard.xp";
-        case PlayerClass::Necrofago:  return "mini-wizard.xp";   // placeholder
         case PlayerClass::Ranger:     return "mini-ranger.xp";
-        case PlayerClass::Ballestero: return "mini-ranger.xp";   // placeholder
         case PlayerClass::Halley:     return "mini-halley.xp";
         case PlayerClass::Nato:       return "mini-nato.xp";
     }
@@ -831,27 +822,18 @@ struct ClassInfo {
     PlayerClass cls;
 };
 
-// Índices 0-5: clases normales (en 3 categorías de 2 subclases).
-// Índices 6-7: clases secretas (Halley, Nato).
-// category 0 → índices 0,1  (Física)
-// category 1 → índices 2,3  (Mágica)
-// category 2 → índices 4,5  (Distancia)
-static const ClassInfo kClasses[8] = {
+// Índices 0-2: clases normales (Física, Mágica, Distancia).
+// Índices 3-4: clases secretas (Halley, Nato).
+static const ClassInfo kClasses[5] = {
     // Física
     {"GUERRERO", "Física",    "Maestro del combate cuerpo a cuerpo.",
      "warrior.xp", 120,20,8,100, PlayerClass::Warrior},
-    {"PÍCARO",   "Física",    "Ágil y veloz. Golpes rápidos y trampas.",
-     "warrior.xp", 120,20,8,100, PlayerClass::Picaro},
     // Mágica
     {"MAGO",     "Mágica",    "Domina las artes mágicas. Poder devastador.",
      "mago.xp",   100,10,3,100, PlayerClass::Mage},
-    {"NECRÓFAGO","Mágica",    "Canaliza la muerte para fortalecerse.",
-     "mago.xp",   100,10,3,100, PlayerClass::Necrofago},
     // Distancia
     {"ARQUERA",  "Distancia", "Ágil y versátil. Experta en trampas y arco.",
      "ranger.xp",  100,12,5,50,  PlayerClass::Ranger},
-    {"BALLESTERO","Distancia","Perforante y preciso. Armadura pesada.",
-     "ranger.xp",  100,12,5,50,  PlayerClass::Ballestero},
     // Secretas
     {"HALLEY",   "Secreta",   "La balanza que todo lo iguala.",
      "halley.xp", 130,18,7,170, PlayerClass::Halley},
@@ -861,7 +843,7 @@ static const ClassInfo kClasses[8] = {
 
 static const char* kCategoryNames[3] = { "Física", "Mágica", "Distancia" };
 
-void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subIdx[3],
+void Renderer::drawClassSelect(TerminalScreen& scr, int category,
                                 bool secretUnlocked) {
     drawCentered(scr, 1, 0, scr.cols(), "T E N E B R A R I U M", COL_CYAN, CELL_BOLD);
     drawCentered(scr, 2, 0, scr.cols(), "Elige tu clase:", COL_WHITE);
@@ -888,12 +870,12 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
             drawCentered(scr, portY + portH, x - 1, portW + 2,
                          label, c, sel ? CELL_BOLD : 0);
         };
-        drawSecretClass(6, startX,                "HALLEY", secretSel == 0);
-        drawSecretClass(7, startX + portW + gap,  "NATO",   secretSel == 1);
+        drawSecretClass(3, startX,                "HALLEY", secretSel == 0);
+        drawSecretClass(4, startX + portW + gap,  "NATO",   secretSel == 1);
 
         // Ficha de información
         int cardY = portY + portH + 3;
-        const auto& ci = kClasses[6 + secretSel];
+        const auto& ci = kClasses[3 + secretSel];
         std::string stats = "HP:" + std::to_string(ci.hp) +
                             " ATK:" + std::to_string(ci.atk) +
                             " DEF:" + std::to_string(ci.def) +
@@ -916,16 +898,14 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
 
     } else {
         // ─── Modo clases normales: 3 filas (Física/Mágica/Distancia) + retrato ─
-        // Cada fila muestra la subclase seleccionada con indicadores ◄ ►
         static constexpr float kPortScale = 1.0f;
         static constexpr int kSrcSize = 60;
         int portW = kSrcSize;
         int portH = kSrcSize / 2;
 
         int listCol = 2;
-        // Ancho según la ficha más larga de las seis subclases normales
         int boxW = 36;
-        for (int k = 0; k < 6; k++) {
+        for (int k = 0; k < 3; k++) {
             const auto& c = kClasses[k];
             std::string st = "HP:" + std::to_string(c.hp) + " ATK:" + std::to_string(c.atk) +
                              " DEF:" + std::to_string(c.def) + " MP:" + std::to_string(c.mana);
@@ -936,8 +916,7 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
         int startRow = 4;
 
         for (int cat = 0; cat < 3; cat++) {
-            int kIdx = cat * 2 + subIdx[cat];  // índice en kClasses
-            const auto& ci = kClasses[kIdx];
+            const auto& ci = kClasses[cat];
             bool sel = (cat == category);
             Color tc = sel ? COL_YELLOW : COL_GRAY;
             uint8_t tf = sel ? CELL_BOLD : CELL_DIM;
@@ -949,14 +928,7 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
             scr.putStr(listCol + 2, br + 1,
                        std::string("[ ") + kCategoryNames[cat] + " ]", tc, COL_BLACK, CELL_DIM);
 
-            // Nombre con flechas A/D si está seleccionado
-            std::string nameLabel;
-            if (sel) {
-                nameLabel = std::string("\xe2\x97\x84 ") + ci.name + " \xe2\x96\xba";
-            } else {
-                nameLabel = std::string("  ") + ci.name + "  ";
-            }
-            scr.putStr(listCol + 2, br + 2, nameLabel, tc, COL_BLACK, tf);
+            scr.putStr(listCol + 2, br + 2, ci.name, tc, COL_BLACK, tf);
 
             // Separador
             for (int x = 0; x < boxW - 2; x++)
@@ -977,19 +949,17 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category, const int subI
             scr.putStr(listCol + 2, br + 5, ci.desc, tc, COL_BLACK, CELL_DIM);
         }
 
-        // Retrato de la subclase activa en la categoría seleccionada
-        int activeKIdx = category * 2 + subIdx[category];
         int spaceStart = listCol + boxW + 2;
         int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
         if (portCol < spaceStart) portCol = spaceStart;
         drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
-        drawPortrait(scr, portCol, 4, kClasses[activeKIdx].portrait, kPortScale);
+        drawPortrait(scr, portCol, 4, kClasses[category].portrait, kPortScale);
     }
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),
                  secretUnlocked
                      ? "A/D ◄► navegar  |  ENTER confirmar  |  ESC volver"
-                     : "W/S ▲▼ fila  |  A/D ◄► subclase  |  ENTER confirmar  |  ESC volver",
+                     : "W/S ▲▼ clase  |  ENTER confirmar  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 

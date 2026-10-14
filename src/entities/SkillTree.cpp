@@ -26,8 +26,6 @@ static const SkillTreeDef kWarriorTree = {
     }
 };
 
-static const SkillTreeDef kPicaroTree = kWarriorTree; // placeholder
-
 static const SkillTreeDef kMageTree = {
     PlayerClass::Mage,
     {
@@ -48,8 +46,6 @@ static const SkillTreeDef kMageTree = {
     }
 };
 
-static const SkillTreeDef kNecrofagoTree = kMageTree; // placeholder
-
 static const SkillTreeDef kRangerTree = {
     PlayerClass::Ranger,
     {
@@ -69,8 +65,6 @@ static const SkillTreeDef kRangerTree = {
         }},
     }
 };
-
-static const SkillTreeDef kBallesteroTree = kRangerTree; // placeholder
 
 static const SkillTreeDef kHalleyTree = {
     PlayerClass::Halley,
@@ -115,11 +109,8 @@ static const SkillTreeDef kNatoTree = {
 const SkillTreeDef& getSkillTree(PlayerClass cls) {
     switch (cls) {
         case PlayerClass::Warrior:    return kWarriorTree;
-        case PlayerClass::Picaro:     return kPicaroTree;
         case PlayerClass::Mage:       return kMageTree;
-        case PlayerClass::Necrofago:  return kNecrofagoTree;
         case PlayerClass::Ranger:     return kRangerTree;
-        case PlayerClass::Ballestero: return kBallesteroTree;
         case PlayerClass::Halley:     return kHalleyTree;
         case PlayerClass::Nato:       return kNatoTree;
     }

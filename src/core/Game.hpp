@@ -48,7 +48,6 @@ private:
     std::string   playerName_;
     int           classSelection_;
     int           classSelectCategory_{0};          // 0=Física 1=Mágica 2=Distancia
-    int           classSelectSubIdx_[3]{0, 0, 0};   // subclase seleccionada en cada categoría
     int           hudSelection_;
     int           settingsSelection_{0};
 

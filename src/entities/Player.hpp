@@ -11,16 +11,9 @@
 #include <optional>
 
 enum class PlayerClass {
-    // Física
     Warrior,   // alta vida y defensa, artes de cuerpo a cuerpo
-    Picaro,    // ágil, trampas y golpes rápidos
-    // Mágica
     Mage,      // baja vida, mucho mana, artes de área y control
-    Necrofago, // magia oscura, drenaje de vida
-    // Distancia
     Ranger,    // equilibrado, artes de DoT y múltiples golpes (Arquera en UI)
-    Ballestero,// distancia pesada, ataques perforantes
-    // Secretas
     Halley,    // clase secreta — Creador del Tenebrarium
     Nato,      // clase secreta — Equilibrio del Tenebrarium
 };

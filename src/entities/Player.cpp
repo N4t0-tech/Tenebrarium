@@ -51,11 +51,8 @@ void Player::refreshPendingSkillUnlock() {
 int Player::baseHp(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior:    return 120;
-        case PlayerClass::Picaro:     return 120;  // placeholder = Warrior
         case PlayerClass::Mage:       return 100;
-        case PlayerClass::Necrofago:  return 100;  // placeholder = Mage
         case PlayerClass::Ranger:     return 100;
-        case PlayerClass::Ballestero: return 100;  // placeholder = Ranger
         case PlayerClass::Halley:     return 130;
         case PlayerClass::Nato:       return 140;
     }
@@ -65,11 +62,8 @@ int Player::baseHp(PlayerClass c) {
 int Player::baseAttack(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior:    return 20;
-        case PlayerClass::Picaro:     return 20;  // placeholder = Warrior
         case PlayerClass::Mage:       return 10;
-        case PlayerClass::Necrofago:  return 10;  // placeholder = Mage
         case PlayerClass::Ranger:     return 12;
-        case PlayerClass::Ballestero: return 12;  // placeholder = Ranger
         case PlayerClass::Halley:     return 18;
         case PlayerClass::Nato:       return 22;
     }
@@ -79,11 +73,8 @@ int Player::baseAttack(PlayerClass c) {
 int Player::baseDefense(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior:    return 8;
-        case PlayerClass::Picaro:     return 8;   // placeholder = Warrior
         case PlayerClass::Mage:       return 3;
-        case PlayerClass::Necrofago:  return 3;   // placeholder = Mage
         case PlayerClass::Ranger:     return 5;
-        case PlayerClass::Ballestero: return 5;   // placeholder = Ranger
         case PlayerClass::Halley:     return 7;
         case PlayerClass::Nato:       return 8;
     }
@@ -250,21 +241,18 @@ std::vector<Art> Player::getAvailableArts() const {
     // Arts base por clase (antes de desbloquear árbol)
     switch (class_) {
         case PlayerClass::Warrior:
-        case PlayerClass::Picaro:
             return {
                 { "Golpe Demoledor", 2, 0,  ArtEffect::GolpeDemoledor, "ATK directo, ignora DEF" },
                 { "Grito de Guerra", 1, 10, ArtEffect::GritoDeGuerra,  "+ATK por 2 turnos" },
                 { "Escudo Total",    1, 5,  ArtEffect::EscudoTotal,    "-70% próximo golpe recibido" },
             };
         case PlayerClass::Mage:
-        case PlayerClass::Necrofago:
             return {
                 { "Bola de Fuego", 2, 20, ArtEffect::BolaDeFuego, "Daño mágico a TODOS" },
                 { "Congelar",      1, 10, ArtEffect::Congelar,    "Enemigo pierde 1 PA su turno" },
                 { "Drenaje",       3, 30, ArtEffect::Drenaje,     "Daño + recupera HP igual al daño" },
             };
         case PlayerClass::Ranger:
-        case PlayerClass::Ballestero:
             return {
                 { "Disparo Doble", 2, 0, ArtEffect::DisparoDoble, "2 ataques rápidos" },
                 { "Trampa",        1, 0, ArtEffect::Trampa,       "Daño retardado turno siguiente" },
@@ -302,11 +290,8 @@ bool Player::unlockSkill(int tier, int choiceIdx) {
 int Player::baseMana(PlayerClass c) {
     switch (c) {
         case PlayerClass::Warrior:    return 100;
-        case PlayerClass::Picaro:     return 100;  // placeholder = Warrior
         case PlayerClass::Mage:       return 100;
-        case PlayerClass::Necrofago:  return 100;  // placeholder = Mage
         case PlayerClass::Ranger:     return 50;
-        case PlayerClass::Ballestero: return 50;   // placeholder = Ranger
         case PlayerClass::Halley:     return 170;
         case PlayerClass::Nato:       return 130;
     }

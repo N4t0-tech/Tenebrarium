@@ -152,9 +152,9 @@ Item DungeonPopulator::pickWeapon(PlayerClass cls, int floor)
         {"Arco Celestial", "Bendecido por los dioses.", ItemType::Weapon, 80, 2, 8, 1},
     };
     const std::vector<Item>* pool = nullptr;
-    if (cls == PlayerClass::Warrior || cls == PlayerClass::Picaro)      pool = &warrior;
-    else if (cls == PlayerClass::Mage || cls == PlayerClass::Necrofago) pool = &mage;
-    else if (cls == PlayerClass::Ranger || cls == PlayerClass::Ballestero) pool = &ranger;
+    if (cls == PlayerClass::Warrior)     pool = &warrior;
+    else if (cls == PlayerClass::Mage)   pool = &mage;
+    else if (cls == PlayerClass::Ranger) pool = &ranger;
     else if (cls == PlayerClass::Halley) {
         static const std::vector<Item> halley = {
             {"Filo del Equilibrio", "Cortes justos y precisos.",     ItemType::Weapon, 50, 1, 4, 1},
@@ -193,12 +193,9 @@ Item DungeonPopulator::pickArmor(PlayerClass cls, int floor)
     };
     int ci = 0;
     switch (cls) {
-        case PlayerClass::Warrior:
-        case PlayerClass::Picaro:     ci = 0; break;
-        case PlayerClass::Mage:
-        case PlayerClass::Necrofago:  ci = 1; break;
-        case PlayerClass::Ranger:
-        case PlayerClass::Ballestero: ci = 2; break;
+        case PlayerClass::Warrior:    ci = 0; break;
+        case PlayerClass::Mage:       ci = 1; break;
+        case PlayerClass::Ranger:     ci = 2; break;
         case PlayerClass::Halley:     ci = 3; break;
         case PlayerClass::Nato:       ci = 4; break;
     }
