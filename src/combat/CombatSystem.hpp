@@ -34,6 +34,13 @@ enum class CombatPhase { PlayerTurn, EnemyTurn, CombatOver };
 
 class CombatSystem {
 public:
+    // Ningún golpe baja del kMinDamagePct% de su daño bruto, sea cual sea la DEF.
+    static constexpr int kMinDamagePct     = 25;
+    // Las habilidades ganan un kArtLevelScalePct% de poder por cada nivel del jugador.
+    static constexpr int kArtLevelScalePct = 4;
+    static int   mitigate(int raw, int def);
+    static float artLevelScale(int level);
+
     CombatSystem(Player& player, std::vector<std::unique_ptr<Enemy>> enemies);
 
     // ── State queries ────────────────────────────────────────────────────────
@@ -91,5 +98,6 @@ private:
     bool isPlayerAttackBoosted()  const;
     int  getPlayerAttackBoost()   const;
     int  getEffectiveAttack()     const;
+    int  artPower()               const;
     bool rollCritical()           const;
 };

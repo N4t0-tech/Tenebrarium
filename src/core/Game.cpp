@@ -2766,6 +2766,12 @@ void Game::inputAimMouse()
     }
 }
 
+// ATK del jugador con el mismo escalado por nivel que las artes del combate.
+static int mapAbilityPower(const Player& p)
+{
+    return static_cast<int>(p.getAttack() * CombatSystem::artLevelScale(p.getLevel()));
+}
+
 Game::AreaHit Game::damageEnemiesAround(Dungeon::Lock& acc, Position c, int radius,
                                         int pctNormal, int pctBoss, int flat, int freezeTicks)
 {
@@ -2960,7 +2966,7 @@ void Game::resolveCorpseImpact(int corpseIdx, Position at)
         corpse.carried = false;
         corpse.pos     = at;
         hit = damageEnemiesAround(acc, at, radius, heavy ? 25 : 15, heavy ? 10 : 5,
-                                  player_->getAttack());
+                                  mapAbilityPower(*player_));
     }
     triggerExplosion(at, radius, static_cast<int>(MapFxStyle::Impact));
     dungeon_->message = describeHit("¡El cadáver de " + name + " se estrella!", hit);
@@ -3020,7 +3026,7 @@ void Game::resolveSpellImpact(int spellIdx, Position at, bool alwaysReport)
     {
         auto acc = dungeon_->lock();
         hit = damageEnemiesAround(acc, at, sp.radius, sp.pctNormal, sp.pctBoss,
-                                  player_->getAttack() * sp.atkMult2 / 2, sp.freezeTicks);
+                                  mapAbilityPower(*player_) * sp.atkMult2 / 2, sp.freezeTicks);
     }
     triggerExplosion(at, sp.radius, static_cast<int>(sp.style));
     std::string msg = describeHit(std::string(sp.name) + ":", hit);
@@ -3048,7 +3054,7 @@ void Game::resolveTrapTriggers()
         if (triggered.empty()) return;
         for (Position tp : triggered) {
             triggerExplosion(tp, kTrapRadius, static_cast<int>(MapFxStyle::Fire));
-            AreaHit hit = damageEnemiesAround(acc, tp, kTrapRadius, 40, 15, player_->getAttack());
+            AreaHit hit = damageEnemiesAround(acc, tp, kTrapRadius, 40, 15, mapAbilityPower(*player_));
             msg = describeHit("¡Una trampa estalla!", hit);
         }
         triggered.clear();

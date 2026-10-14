@@ -59,7 +59,7 @@ void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
 
     int rawAtk = static_cast<int>(getEffectiveAttack() * atkMultiplier);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
-    int  dmg  = std::max(1, rawAtk - target->getDefense());
+    int  dmg  = mitigate(rawAtk, target->getDefense());
     bool crit = rollCritical();
     if (crit) dmg = dmg * 3 / 2;
     target->takeDamageRaw(dmg);
@@ -472,7 +472,8 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::GolpeDemoledor: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(getEffectiveAttack() * 1.4f) - target->getDefense() / 2);
+            int dmg = mitigate(static_cast<int>(getEffectiveAttack() * artLevelScale(player_.getLevel()) * 1.4f),
+                               target->getDefense() / 2);
             target->takeDamageRaw(dmg);
             logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
             if (!target->isAlive()) {
@@ -503,7 +504,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
         }
 
         case ArtEffect::BolaDeFuego: {
-            int dmg = player_.getAttack() + 10;
+            int dmg = artPower() + 10;
             logMessage("Bola de Fuego! " + ts(dmg) + " daño mágico a todos!");
             for (auto& e : enemies_) {
                 if (e->isAlive()) {
@@ -529,7 +530,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::Drenaje: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, player_.getAttack() - target->getDefense() + 5);
+            int dmg = mitigate(artPower() + 5, target->getDefense());
             target->takeDamageRaw(dmg);
             player_.heal(dmg);
             logMessage("Drenaje! " + ts(dmg) + " daño, recuperas " + ts(dmg) + " HP.");
@@ -544,7 +545,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             if (!target->isAlive()) break;
             for (int shot = 1; shot <= 2; shot++) {
                 if (!target->isAlive()) break;
-                int dmg = std::max(1, player_.getAttack() - target->getDefense());
+                int dmg = mitigate(artPower(), target->getDefense());
                 target->takeDamageRaw(dmg);
                 logMessage("Disparo " + ts(shot) + ": " + ts(dmg) + " daño.");
             }
@@ -567,7 +568,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             StatusEffect fx;
             fx.type      = StatusEffect::Type::TrapPending;
             fx.turnsLeft = 1;
-            fx.magnitude = player_.getAttack();
+            fx.magnitude = artPower();
             enemyEffects_[currentTarget_].push_back(fx);
             logMessage("Trampa colocada! " + target->getName()
                        + " recibirá " + ts(fx.magnitude) + " daño.");
@@ -586,7 +587,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             StatusEffect fx;
             fx.type      = StatusEffect::Type::Poisoned;
             fx.turnsLeft = 3;
-            fx.magnitude = std::max(1, player_.getAttack() / 3);
+            fx.magnitude = std::max(1, artPower() / 3);
             enemyEffects_[currentTarget_].push_back(fx);
             logMessage(target->getName() + " envenenado! "
                        + ts(fx.magnitude) + " daño/turno por 3 turnos.");
@@ -595,7 +596,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         // ─── Halley arts ─────────────────────────────────────────────────────
         case ArtEffect::LluviaEstelar: {
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.5f));
+            int dmg = std::max(1, static_cast<int>(artPower() * 1.5f));
             logMessage("Juicio Estelar! " + ts(dmg) + " daño divino a todos!");
             for (auto& e : enemies_) {
                 if (e->isAlive()) {
@@ -640,7 +641,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::VinculoEterno: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, player_.getAttack() - target->getDefense());
+            int dmg = mitigate(artPower(), target->getDefense());
             target->takeDamageRaw(dmg);
             int heal = static_cast<int>(dmg * 1.5f);
             player_.heal(heal);
@@ -654,7 +655,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::JuicioFinal: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 2.0f));
+            int dmg = std::max(1, static_cast<int>(artPower() * 2.0f));
             target->takeDamageRaw(dmg);
             logMessage("Juicio Final! " + ts(dmg) + " daño imparable.");
             if (!target->isAlive()) {
@@ -686,7 +687,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::Rayo: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.8f));
+            int dmg = std::max(1, static_cast<int>(artPower() * 1.8f));
             target->takeDamageRaw(dmg);
             logMessage("Rayo! " + ts(dmg) + " daño devastador (ignora DEF).");
             if (!target->isAlive()) {
@@ -697,7 +698,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
         }
 
         case ArtEffect::TormentaArcana: {
-            int dmg = std::max(1, player_.getAttack() / 2);
+            int dmg = std::max(1, artPower() / 2);
             logMessage("Tormenta Arcana! " + ts(dmg) + " daño a todos + congelados!");
             for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
                 if (enemies_[i]->isAlive()) {
@@ -736,7 +737,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
                     if (enemies_[i]->isAlive()) alive.push_back(i);
                 if (alive.empty()) break;
                 int idx = alive[std::rand() % alive.size()];
-                int dmg = std::max(1, static_cast<int>(player_.getAttack() * 0.6f) - enemies_[idx]->getDefense());
+                int dmg = mitigate(static_cast<int>(artPower() * 0.6f), enemies_[idx]->getDefense());
                 enemies_[idx]->takeDamageRaw(dmg);
                 logMessage("  Flecha " + ts(h + 1) + ": " + ts(dmg) + " a " + enemies_[idx]->getName());
                 if (!enemies_[idx]->isAlive())
@@ -748,7 +749,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::GolpeCritico: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 2.5f) - target->getDefense());
+            int dmg = mitigate(static_cast<int>(artPower() * 2.5f), target->getDefense());
             target->takeDamageRaw(dmg);
             logMessage("Golpe Crítico! " + ts(dmg) + " daño devastador.");
             if (!target->isAlive()) {
@@ -766,7 +767,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             fx.magnitude = 50;
             playerEffects_.push_back(fx);
             if (target->isAlive()) {
-                int dmg = std::max(1, player_.getAttack() - target->getDefense());
+                int dmg = mitigate(artPower(), target->getDefense());
                 target->takeDamageRaw(dmg);
                 logMessage("Sombra! " + ts(dmg) + " daño y postura evasiva.");
                 if (!target->isAlive()) {
@@ -810,7 +811,7 @@ void CombatSystem::resolveArt(ArtEffect effect) {
 
         case ArtEffect::ColapsoDimensional: {
             if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(player_.getAttack() * 1.5f));
+            int dmg = std::max(1, static_cast<int>(artPower() * 1.5f));
             target->takeDamageRaw(dmg);
             // Congela como debuff de stats
             StatusEffect fx;
@@ -826,6 +827,18 @@ void CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
     }
+}
+
+int CombatSystem::mitigate(int raw, int def) {
+    return std::max({ 1, raw * kMinDamagePct / 100, raw - def });
+}
+
+float CombatSystem::artLevelScale(int level) {
+    return 1.0f + kArtLevelScalePct * (level - 1) / 100.0f;
+}
+
+int CombatSystem::artPower() const {
+    return static_cast<int>(player_.getAttack() * artLevelScale(player_.getLevel()));
 }
 
 bool CombatSystem::rollCritical() const {
