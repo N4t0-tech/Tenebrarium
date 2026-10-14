@@ -563,6 +563,7 @@ void Renderer::drawHudPanel(TerminalScreen& scr, int col, int row,
       put("  I   mochila",  COL_GRAY, CELL_DIM);
       put("  M   misiones", COL_GRAY, CELL_DIM);
       put("  B   bestiario",COL_GRAY, CELL_DIM);
+      put("  H   habilidades",COL_GRAY, CELL_DIM);
       put("  Esc salir",   COL_GRAY, CELL_DIM);
      put("+/-   zoom " + std::to_string(mapZoom) + "x", COL_GRAY, CELL_DIM);
      put("  F   pantalla",  COL_GRAY, CELL_DIM);
@@ -648,7 +649,7 @@ void Renderer::drawHudBar(TerminalScreen& scr, int row, const Player& player, in
     scr.putStr(rpC, row + 6, std::string(arrowMovement ? "[▲◄▼►]Mover" : "[WASD]Mover") + "  [E]Bomba  [R]Tomar  [P]Poc  [I]Inv"
                + (player.getClass() == PlayerClass::Warrior ? "  [Q]Cadáver" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
-    scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
+    scr.putStr(rpC, row + 7, std::string("[M]Mis  [B]Best  [H]Hab  [Esc]Salir  [+/-]Zoom  [F]Pantalla")
                + (canUseMapAbility(player, ArtEffect::Trampa) ? "  [T]Trampa" : "")
                + (hasAnyMapSpell(player) ? "  [Q]Hechizo" : ""),
                COL_GRAY, COL_BLACK, CELL_DIM);
@@ -1905,6 +1906,55 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                                : "W/S ▲▼ navegar  |  ENTER comprar  |  V vender  |  ESC salir",
                       COL_GRAY, CELL_DIM });
     drawFitBox(scr, 1, lines, COL_ORANGE);
+}
+
+// ─── drawSkills ───────────────────────────────────────────────────────────────
+
+void Renderer::drawSkills(TerminalScreen& scr, const Player& player, int selection) {
+    const auto  known    = player.getKnownArts();
+    const auto& equipped = player.getEquippedArts();
+    const char* res      = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
+
+    int nameW = 0;
+    for (const auto& a : known) nameW = std::max(nameW, utf8Len(a.name));
+    auto cost = [&](const Art& a) {
+        return std::to_string(a.apCost) + " PA  " + padLeft(std::to_string(a.manaCost), 2) + " " + res;
+    };
+    auto slotOf = [&](ArtEffect e) {
+        for (int i = 0; i < static_cast<int>(equipped.size()); i++)
+            if (equipped[i] == e) return i;
+        return -1;
+    };
+
+    std::vector<BoxLine> lines;
+    lines.push_back({ "=== HABILIDADES ===", COL_CYAN, CELL_BOLD, false, true });
+    lines.push_back(BoxLine::separator());
+    lines.push_back({ "Equipadas (teclas 1-3 en combate):", COL_WHITE, CELL_BOLD });
+    auto equippedArts = player.getAvailableArts();
+    for (int i = 0; i < Player::kEquippedArtSlots; i++) {
+        if (i < static_cast<int>(equippedArts.size()))
+            lines.push_back({ "  [" + std::to_string(i + 1) + "] " + padRight(equippedArts[i].name, nameW)
+                              + "   " + cost(equippedArts[i]), COL_YELLOW });
+        else
+            lines.push_back({ "  [" + std::to_string(i + 1) + "] (vacía)", COL_GRAY, CELL_DIM });
+    }
+    lines.push_back(BoxLine::separator());
+    lines.push_back({ "Conocidas:", COL_WHITE, CELL_BOLD });
+    for (int i = 0; i < static_cast<int>(known.size()); i++) {
+        const Art& a = known[i];
+        int slot = slotOf(a.effect);
+        bool sel = i == selection;
+        std::string tag = slot >= 0 ? "[" + std::to_string(slot + 1) + "]" : "   ";
+        lines.push_back({ tag + " " + padRight(a.name, nameW) + "   " + cost(a) + "   " + a.description,
+                          sel ? COL_ORANGE : (slot >= 0 ? COL_GREEN : COL_GRAY),
+                          static_cast<uint8_t>(sel ? CELL_INVERTED : 0) });
+    }
+    lines.push_back(BoxLine::separator());
+    lines.push_back({ "Las marcadas [Q]/[T] también se usan en el mapa si están equipadas.",
+                      COL_GRAY, CELL_DIM });
+    lines.push_back({ "W/S ▲▼ elegir  |  1/2/3 equipar en esa ranura  |  ESC volver",
+                      COL_GRAY, CELL_DIM });
+    drawFitBox(scr, 2, lines, COL_CYAN, 50);
 }
 
 void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,

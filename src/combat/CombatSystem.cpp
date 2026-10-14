@@ -59,10 +59,10 @@ void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
 
     int rawAtk = static_cast<int>(getEffectiveAttack() * atkMultiplier);
     if (isPlayerAttackBoosted()) rawAtk += getPlayerAttackBoost();
-    int  dmg  = mitigate(rawAtk, target->getDefense());
+    int  dmg  = mitigate(rawAtk, enemyDefense(currentTarget_));
     bool crit = rollCritical();
     if (crit) dmg = dmg * 3 / 2;
-    target->takeDamageRaw(dmg);
+    dmg = hitEnemy(currentTarget_, dmg);
 
     std::string prefix = crit ? "CRITICO! " : "";
     logMessage(prefix + player_.getName() + " " + actionName + " a " +
@@ -106,7 +106,14 @@ void CombatSystem::doArt(int idx) {
     }
 
     logMessage(player_.getName() + " usa " + art.name + "!");
-    resolveArt(art.effect);
+    if (!resolveArt(art.effect)) {
+        player_.restoreMana(art.manaCost);
+        return;
+    }
+    if (art.effect != ArtEffect::Paradoja) {
+        lastArt_    = art.effect;
+        hasLastArt_ = true;
+    }
 
     currentAp_ -= art.apCost;
     checkCombatOver();
@@ -210,12 +217,12 @@ void CombatSystem::doLoot() {
     } else if (roll < partialThreshold) {
         Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
         player_.getInventory().addItem(loot);
-        int dmg = std::max(1, target->getAttack() - player_.getDefense()) / 2;
-        player_.takeDamageRaw(dmg);
+        int dmg = std::max(1, enemyAttack(currentTarget_) - playerDefense()) / 2;
+        hurtPlayer(dmg);
         logMessage("Saqueas pero " + target->getName() + " te golpea! Recibes " + ts(dmg) + " daño.");
     } else {
-        int dmg = std::max(1, target->getAttack() - player_.getDefense());
-        player_.takeDamageRaw(dmg);
+        int dmg = std::max(1, enemyAttack(currentTarget_) - playerDefense());
+        hurtPlayer(dmg);
         logMessage("No logras saquear! " + target->getName() + " te golpea por " + ts(dmg) + " daño.");
     }
 
@@ -333,9 +340,20 @@ void CombatSystem::processEnemyTurn() {
         }
 
         for (int pa = 0; pa < attackCount; pa++) {
-            if (!player_.isAlive()) break;
+            if (!player_.isAlive() || !enemy->isAlive()) break;
 
-            int rawDmg = std::max(1, enemy->getAttack() - player_.getDefense());
+            // Paso Sombrío: esquiva el golpe y contraataca
+            auto evadeIt = std::find_if(playerEffects_.begin(), playerEffects_.end(),
+                [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Evading; });
+            if (evadeIt != playerEffects_.end()) {
+                playerEffects_.erase(evadeIt);
+                int counter = hitEnemy(i, mitigate(artPower(), enemyDefense(i)));
+                logMessage("Esquivas a " + enemy->getName() + " y contraatacas por " + ts(counter) + " daño!");
+                if (!enemy->isAlive()) logMessage("  " + enemy->getName() + " derrotado!");
+                continue;
+            }
+
+            int rawDmg = std::max(1, enemyAttack(i) - playerDefense());
 
             // Orco: 2 ataques por turno pero cada golpe es al 60%
             if (enemy->getType() == EnemyType::Orc) {
@@ -358,9 +376,9 @@ void CombatSystem::processEnemyTurn() {
                 }
             }
 
-            player_.takeDamageRaw(rawDmg);
             logMessage(enemy->getName() + " ataca a " + player_.getName()
                        + " por " + ts(rawDmg) + " daño.");
+            hurtPlayer(rawDmg);
 
             // Araña: envenena al golpear
             if (enemy->getType() == EnemyType::Spider) {
@@ -388,24 +406,32 @@ void CombatSystem::processEnemyTurn() {
     }
 
     // Tick effects de duración después de los ataques (Defending, AttackBoosted)
-    for (auto& fx : playerEffects_) {
-        if (fx.type == StatusEffect::Type::AttackBoosted) {
-            fx.turnsLeft--;
-        }
-    }
+    auto timed = [](StatusEffect::Type t) {
+        using T = StatusEffect::Type;
+        return t == T::AttackBoosted || t == T::Exposed || t == T::DefenseBoosted
+            || t == T::Undying || t == T::Evading;
+    };
+    for (auto& fx : playerEffects_)
+        if (timed(fx.type)) fx.turnsLeft--;
     playerEffects_.erase(
         std::remove_if(playerEffects_.begin(), playerEffects_.end(),
-            [](const StatusEffect& fx) {
+            [&](const StatusEffect& fx) {
                 return fx.type == StatusEffect::Type::Defending
-                    || (fx.type == StatusEffect::Type::AttackBoosted && fx.turnsLeft <= 0);
+                    || (timed(fx.type) && fx.turnsLeft <= 0);
             }),
         playerEffects_.end());
 
-    // Eliminar Frozen del enemigo (expiró tras este turno)
+    // Efectos de enemigo con duración: Congelado, Rompecorazas, Colapso, Maldición/Marca
+    auto enemyTimed = [](StatusEffect::Type t) {
+        using T = StatusEffect::Type;
+        return t == T::Frozen || t == T::Sundered || t == T::Weakened || t == T::Vulnerable;
+    };
     for (auto& fxv : enemyEffects_) {
+        for (auto& fx : fxv)
+            if (enemyTimed(fx.type)) fx.turnsLeft--;
         fxv.erase(
             std::remove_if(fxv.begin(), fxv.end(),
-                [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Frozen; }),
+                [&](const StatusEffect& fx) { return enemyTimed(fx.type) && fx.turnsLeft <= 0; }),
             fxv.end());
     }
 
@@ -417,16 +443,28 @@ void CombatSystem::processEnemyTurn() {
 }
 
 void CombatSystem::tickPlayerEffects() {
+    int poison = 0;
     for (auto& fx : playerEffects_) {
         if (fx.type == StatusEffect::Type::Poisoned) {
-            player_.takeDamageRaw(fx.magnitude);
-            logMessage(player_.getName() + " sufre " + ts(fx.magnitude) + " daño por veneno.");
+            poison += fx.magnitude;
+            fx.turnsLeft--;
+        }
+        if (fx.type == StatusEffect::Type::Regen) {
+            player_.heal(fx.magnitude);
+            logMessage(player_.getName() + " regenera " + ts(fx.magnitude) + " HP.");
             fx.turnsLeft--;
         }
     }
+    if (poison > 0) {
+        logMessage(player_.getName() + " sufre " + ts(poison) + " daño por veneno.");
+        hurtPlayer(poison);
+    }
     playerEffects_.erase(
         std::remove_if(playerEffects_.begin(), playerEffects_.end(),
-            [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Poisoned && fx.turnsLeft <= 0; }),
+            [](const StatusEffect& fx) {
+                return (fx.type == StatusEffect::Type::Poisoned ||
+                        fx.type == StatusEffect::Type::Regen) && fx.turnsLeft <= 0;
+            }),
         playerEffects_.end());
 }
 
@@ -464,369 +502,456 @@ void CombatSystem::tickEnemyEffects() {
     }
 }
 
-void CombatSystem::resolveArt(ArtEffect effect) {
+// ─── helpers de efectos ──────────────────────────────────────────────────────
+
+int CombatSystem::enemyDefense(int idx) const {
+    int def = enemies_[idx]->getDefense();
+    for (const auto& fx : enemyEffects_[idx])
+        if (fx.type == StatusEffect::Type::Sundered)
+            def = def * (100 - fx.magnitude) / 100;
+    return def;
+}
+
+int CombatSystem::enemyAttack(int idx) const {
+    int atk = enemies_[idx]->getAttack();
+    for (const auto& fx : enemyEffects_[idx])
+        if (fx.type == StatusEffect::Type::Weakened)
+            atk = atk * (100 - fx.magnitude) / 100;
+    return std::max(1, atk);
+}
+
+int CombatSystem::playerDefense() const {
+    int def = player_.getDefense();
+    for (const auto& fx : playerEffects_) {
+        if (fx.type == StatusEffect::Type::Exposed)
+            def = def * (100 - fx.magnitude) / 100;
+        if (fx.type == StatusEffect::Type::DefenseBoosted)
+            def += fx.magnitude;
+    }
+    return def;
+}
+
+int CombatSystem::hitEnemy(int idx, int dmg) {
+    int bonus = 0;
+    for (const auto& fx : enemyEffects_[idx])
+        if (fx.type == StatusEffect::Type::Vulnerable)
+            bonus = std::max(bonus, fx.magnitude);
+    dmg = std::max(1, dmg * (100 + bonus) / 100);
+    enemies_[idx]->takeDamageRaw(dmg);
+    return dmg;
+}
+
+void CombatSystem::hurtPlayer(int dmg) {
+    if (playerHas(StatusEffect::Type::Undying) && player_.getHp() - dmg < 1) {
+        dmg = std::max(0, player_.getHp() - 1);
+        logMessage("Último Bastión! Resistes en pie.");
+    }
+    player_.takeDamageRaw(dmg);
+    if (player_.isAlive()) return;
+    auto it = std::find_if(playerEffects_.begin(), playerEffects_.end(),
+        [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Revive; });
+    if (it == playerEffects_.end()) return;
+    int heal = std::max(1, player_.getMaxHp() * it->magnitude / 100);
+    playerEffects_.erase(it);
+    player_.heal(heal);
+    logMessage("Génesis! Renaces con " + ts(heal) + " HP.");
+}
+
+void CombatSystem::addEnemyEffect(int idx, StatusEffect::Type type, int turns, int magnitude) {
+    // Reaplicar el mismo efecto renueva su duración en vez de acumularlo
+    for (auto& fx : enemyEffects_[idx]) {
+        if (fx.type == type) {
+            fx.turnsLeft = std::max(fx.turnsLeft, turns);
+            fx.magnitude = std::max(fx.magnitude, magnitude);
+            return;
+        }
+    }
+    enemyEffects_[idx].push_back({ type, turns, magnitude });
+}
+
+void CombatSystem::addPlayerEffect(StatusEffect::Type type, int turns, int magnitude) {
+    for (auto& fx : playerEffects_) {
+        if (fx.type == type) {
+            fx.turnsLeft = std::max(fx.turnsLeft, turns);
+            fx.magnitude = std::max(fx.magnitude, magnitude);
+            return;
+        }
+    }
+    playerEffects_.push_back({ type, turns, magnitude });
+}
+
+bool CombatSystem::playerHas(StatusEffect::Type type) const {
+    return std::any_of(playerEffects_.begin(), playerEffects_.end(),
+        [type](const StatusEffect& fx) { return fx.type == type; });
+}
+
+// ─── resolveArt ──────────────────────────────────────────────────────────────
+
+bool CombatSystem::resolveArt(ArtEffect effect) {
+    using T = StatusEffect::Type;
     if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
-    auto& target = enemies_[currentTarget_];
+    const int ti = currentTarget_;
+    auto& target = enemies_[ti];
+    const int n  = static_cast<int>(enemies_.size());
+
+    // Los avisos de "derrotado" se dan al final, después del mensaje del arte
+    std::vector<bool> wasAlive(n);
+    for (int i = 0; i < n; i++) wasAlive[i] = enemies_[i]->isAlive();
+
+    auto selfOnly = [](ArtEffect e) {
+        switch (e) {
+            case ArtEffect::GritoDeGuerra: case ArtEffect::EscudoTotal:
+            case ArtEffect::Creacion:      case ArtEffect::PresenciaDivina:
+            case ArtEffect::BerserkWarrior: case ArtEffect::Fortaleza:
+            case ArtEffect::EscudoArcano:  case ArtEffect::UltimoBastion:
+            case ArtEffect::Sombra:        case ArtEffect::Bendicion:
+            case ArtEffect::Genesis:       case ArtEffect::MundoNuevo:
+            case ArtEffect::Paradoja:
+                return true;
+            default:
+                return false;
+        }
+    };
+    if (!selfOnly(effect) && !target->isAlive()) {
+        logMessage("No hay objetivos vivos.");
+        return false;
+    }
+
+    const int power = artPower();
+    auto single = [&](int dmg) { return hitEnemy(ti, dmg); };
+    auto allEnemies = [&](auto dmgFor) {
+        for (int i = 0; i < n; i++)
+            if (enemies_[i]->isAlive()) hitEnemy(i, dmgFor(i));
+    };
+    // Pérdida de PA: los jefes solo pierden 1 para que no queden sin turno siempre
+    auto stun = [&](int idx, int pa, int turns) {
+        int lost = enemies_[idx]->isBoss() ? 1 : pa;
+        addEnemyEffect(idx, T::Frozen, turns, lost);
+        return lost;
+    };
 
     switch (effect) {
 
+        // ─── Guerrero ────────────────────────────────────────────────────────
         case ArtEffect::GolpeDemoledor: {
-            if (!target->isAlive()) break;
-            int dmg = mitigate(static_cast<int>(getEffectiveAttack() * artLevelScale(player_.getLevel()) * 1.4f),
-                               target->getDefense() / 2);
-            target->takeDamageRaw(dmg);
+            int raw = static_cast<int>(getEffectiveAttack() * artLevelScale(player_.getLevel()) * 1.4f);
+            int dmg = single(mitigate(raw, enemyDefense(ti) / 2));
             logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
             break;
         }
-
         case ArtEffect::GritoDeGuerra: {
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::AttackBoosted;
-            fx.turnsLeft = 2;
-            fx.magnitude = player_.getAttack() / 3 + 2;  // ~30% ATK bonus
-            playerEffects_.push_back(fx);
-            logMessage("Grito de Guerra! ATK +" + ts(fx.magnitude) + " por 2 turnos.");
+            int mag = player_.getAttack() / 3 + 2;
+            addPlayerEffect(T::AttackBoosted, 2, mag);
+            logMessage("Grito de Guerra! ATK +" + ts(mag) + " por 2 turnos.");
             break;
         }
-
         case ArtEffect::EscudoTotal: {
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::DefendingHeavy;
-            fx.turnsLeft = 1;
-            fx.magnitude = 70;
-            playerEffects_.push_back(fx);
+            addPlayerEffect(T::DefendingHeavy, 1, 70);
             logMessage("Escudo Total! -70% daño en el próximo golpe.");
             break;
         }
-
-        case ArtEffect::BolaDeFuego: {
-            int dmg = artPower() + 10;
-            logMessage("Bola de Fuego! " + ts(dmg) + " daño mágico a todos!");
-            for (auto& e : enemies_) {
-                if (e->isAlive()) {
-                    e->takeDamageRaw(dmg);
-                    if (!e->isAlive())
-                        logMessage("  " + e->getName() + " derrotado!");
-                }
-            }
-            advanceTarget();
+        case ArtEffect::BerserkWarrior: {
+            int mag = player_.getAttack() / 2;
+            addPlayerEffect(T::AttackBoosted, 3, mag);
+            addPlayerEffect(T::Exposed, 3, 30);
+            logMessage("Furia Berserker! ATK +" + ts(mag) + " y DEF -30% por 3 turnos.");
+            break;
+        }
+        case ArtEffect::Fortaleza: {
+            if (playerHas(T::Regen)) { logMessage("Ya te estás regenerando."); return false; }
+            int mag = std::max(1, player_.getMaxHp() / 10);
+            addPlayerEffect(T::Regen, 3, mag);
+            logMessage("Fortaleza! Regeneras " + ts(mag) + " HP por turno durante 3 turnos.");
+            break;
+        }
+        case ArtEffect::Terremoto: {
+            int raw = static_cast<int>(power * 1.2f);
+            logMessage("Terremoto! La tierra golpea a todos.");
+            allEnemies([&](int i) { return mitigate(raw, enemyDefense(i)); });
+            break;
+        }
+        case ArtEffect::Ejecutar: {
+            bool low = target->getHp() * 100 < target->getMaxHp() * 30;
+            int raw  = static_cast<int>(power * 1.5f) * (low ? 3 : 1);
+            int dmg  = single(mitigate(raw, enemyDefense(ti)));
+            logMessage(std::string(low ? "EJECUCIÓN! " : "Ejecutar: ") + ts(dmg) + " daño.");
+            break;
+        }
+        case ArtEffect::Rompecorazas: {
+            int dmg = single(mitigate(power, enemyDefense(ti)));
+            addEnemyEffect(ti, T::Sundered, 3, 50);
+            logMessage("Rompecorazas! " + ts(dmg) + " daño y " + target->getName()
+                       + " pierde la mitad de su DEF por 3 turnos.");
+            break;
+        }
+        case ArtEffect::UltimoBastion: {
+            addPlayerEffect(T::Undying, 2, 1);
+            logMessage("Último Bastión! Tu vida no bajará de 1 durante 2 turnos.");
             break;
         }
 
+        // ─── Mago ────────────────────────────────────────────────────────────
+        case ArtEffect::BolaDeFuego: {
+            int dmg = power + 10;
+            logMessage("Bola de Fuego! " + ts(dmg) + " daño mágico a todos!");
+            allEnemies([&](int) { return dmg; });
+            break;
+        }
         case ArtEffect::Congelar: {
-            if (!target->isAlive()) break;
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::Frozen;
-            fx.turnsLeft = 1;
-            fx.magnitude = 1;
-            enemyEffects_[currentTarget_].push_back(fx);
+            stun(ti, 1, 1);
             logMessage(target->getName() + " congelado! -1 PA en su turno.");
             break;
         }
-
         case ArtEffect::Drenaje: {
-            if (!target->isAlive()) break;
-            int dmg = mitigate(artPower() + 5, target->getDefense());
-            target->takeDamageRaw(dmg);
+            int dmg = single(mitigate(power + 5, enemyDefense(ti)));
             player_.heal(dmg);
             logMessage("Drenaje! " + ts(dmg) + " daño, recuperas " + ts(dmg) + " HP.");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
+            break;
+        }
+        case ArtEffect::Rayo: {
+            int dmg = single(std::max(1, static_cast<int>(power * 1.8f)));
+            logMessage("Rayo! " + ts(dmg) + " daño devastador (ignora DEF).");
+            break;
+        }
+        case ArtEffect::TormentaArcana: {
+            int dmg = std::max(1, power / 2);
+            logMessage("Tormenta Arcana! " + ts(dmg) + " daño a todos y congelados!");
+            for (int i = 0; i < n; i++) {
+                if (!enemies_[i]->isAlive()) continue;
+                hitEnemy(i, dmg);
+                stun(i, 1, 1);
             }
             break;
         }
+        case ArtEffect::EscudoArcano: {
+            addPlayerEffect(T::DefendingHeavy, 1, 100);
+            logMessage("Escudo Arcano! El próximo golpe será absorbido.");
+            break;
+        }
+        case ArtEffect::CadenaRayos: {
+            int dmg = std::max(1, static_cast<int>(power * 1.4f));
+            int first = single(dmg);
+            logMessage("Cadena de Rayos! " + ts(first) + " a " + target->getName() + ".");
+            int jumps = 0;
+            for (int i = 0; i < n && jumps < 2; i++) {
+                if (i == ti || !enemies_[i]->isAlive()) continue;
+                dmg = std::max(1, dmg * 7 / 10);
+                int d = hitEnemy(i, dmg);
+                logMessage("  Salta a " + enemies_[i]->getName() + ": " + ts(d) + " daño.");
+                jumps++;
+            }
+            break;
+        }
+        case ArtEffect::Meteoro: {
+            int raw = static_cast<int>(power * 2.2f);
+            logMessage("Meteoro! El cielo cae sobre todos.");
+            allEnemies([&](int i) { return mitigate(raw, enemyDefense(i)); });
+            break;
+        }
+        case ArtEffect::Maldicion: {
+            addEnemyEffect(ti, T::Vulnerable, 3, 30);
+            logMessage(target->getName() + " maldito! Recibe +30% de daño por 3 turnos.");
+            break;
+        }
 
+        // ─── Arquera ─────────────────────────────────────────────────────────
         case ArtEffect::DisparoDoble: {
-            if (!target->isAlive()) break;
-            for (int shot = 1; shot <= 2; shot++) {
-                if (!target->isAlive()) break;
-                int dmg = mitigate(artPower(), target->getDefense());
-                target->takeDamageRaw(dmg);
+            for (int shot = 1; shot <= 2 && target->isAlive(); shot++) {
+                int dmg = single(mitigate(power, enemyDefense(ti)));
                 logMessage("Disparo " + ts(shot) + ": " + ts(dmg) + " daño.");
             }
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
             break;
         }
-
         case ArtEffect::Trampa: {
-            if (!target->isAlive()) break;
-            bool already = std::any_of(enemyEffects_[currentTarget_].begin(),
-                enemyEffects_[currentTarget_].end(),
+            bool already = std::any_of(enemyEffects_[ti].begin(), enemyEffects_[ti].end(),
                 [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::TrapPending; });
-            if (already) {
-                logMessage(target->getName() + " ya tiene una trampa activa.");
-                break;
-            }
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::TrapPending;
-            fx.turnsLeft = 1;
-            fx.magnitude = artPower();
-            enemyEffects_[currentTarget_].push_back(fx);
-            logMessage("Trampa colocada! " + target->getName()
-                       + " recibirá " + ts(fx.magnitude) + " daño.");
+            if (already) { logMessage(target->getName() + " ya tiene una trampa activa."); return false; }
+            enemyEffects_[ti].push_back({ T::TrapPending, 1, power });
+            logMessage("Trampa colocada! " + target->getName() + " recibirá " + ts(power) + " daño.");
             break;
         }
-
         case ArtEffect::Veneno: {
-            if (!target->isAlive()) break;
-            bool already = std::any_of(enemyEffects_[currentTarget_].begin(),
-                enemyEffects_[currentTarget_].end(),
+            bool already = std::any_of(enemyEffects_[ti].begin(), enemyEffects_[ti].end(),
                 [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Poisoned; });
-            if (already) {
-                logMessage(target->getName() + " ya está envenenado.");
-                break;
+            if (already) { logMessage(target->getName() + " ya está envenenado."); return false; }
+            int mag = std::max(1, power / 3);
+            enemyEffects_[ti].push_back({ T::Poisoned, 3, mag });
+            logMessage(target->getName() + " envenenado! " + ts(mag) + " daño/turno por 3 turnos.");
+            break;
+        }
+        case ArtEffect::FlechaPerforante: {
+            int dmg = single(std::max(1, static_cast<int>(power * 1.6f)));
+            logMessage("Flecha Perforante! " + ts(dmg) + " daño (ignora DEF).");
+            break;
+        }
+        case ArtEffect::GolpeCritico: {
+            int dmg = single(mitigate(static_cast<int>(power * 2.5f), enemyDefense(ti)));
+            logMessage("Tiro Certero! " + ts(dmg) + " daño crítico.");
+            break;
+        }
+        case ArtEffect::Red: {
+            int lost = stun(ti, 1, 2);
+            logMessage(target->getName() + " atrapado en la red! -" + ts(lost) + " PA durante 2 turnos.");
+            break;
+        }
+        case ArtEffect::LluviaFlechas: {
+            logMessage("Lluvia de Flechas! 3 impactos aleatorios!");
+            for (int h = 0; h < 3; h++) {
+                std::vector<int> alive;
+                for (int i = 0; i < n; i++)
+                    if (enemies_[i]->isAlive()) alive.push_back(i);
+                if (alive.empty()) break;
+                int idx = alive[std::rand() % alive.size()];
+                int dmg = hitEnemy(idx, mitigate(static_cast<int>(power * 0.6f), enemyDefense(idx)));
+                logMessage("  Flecha " + ts(h + 1) + ": " + ts(dmg) + " a " + enemies_[idx]->getName());
             }
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::Poisoned;
-            fx.turnsLeft = 3;
-            fx.magnitude = std::max(1, artPower() / 3);
-            enemyEffects_[currentTarget_].push_back(fx);
-            logMessage(target->getName() + " envenenado! "
-                       + ts(fx.magnitude) + " daño/turno por 3 turnos.");
+            break;
+        }
+        case ArtEffect::MarcaCazador: {
+            addEnemyEffect(ti, T::Vulnerable, 3, 50);
+            logMessage(target->getName() + " marcado! Recibe +50% de daño por 3 turnos.");
+            break;
+        }
+        case ArtEffect::Sombra: {
+            addPlayerEffect(T::Evading, 1, 1);
+            logMessage("Paso Sombrío! Esquivarás el próximo golpe y contraatacarás.");
             break;
         }
 
-        // ─── Halley arts ─────────────────────────────────────────────────────
+        // ─── Halley ──────────────────────────────────────────────────────────
+        case ArtEffect::DistorsionTemporal: {
+            int lost = stun(ti, 10, 1);
+            logMessage("Distorsión Temporal! " + target->getName()
+                       + (lost == 1 ? " pierde 1 PA (resiste)." : " pierde todos sus PA."));
+            break;
+        }
+        case ArtEffect::VinculoEterno: {
+            int dmg = single(mitigate(power, enemyDefense(ti)));
+            int heal = dmg * 3 / 2;
+            player_.heal(heal);
+            logMessage("Vínculo Eterno! " + ts(dmg) + " daño, recuperas " + ts(heal) + " HP.");
+            break;
+        }
+        case ArtEffect::JuicioFinal: {
+            int dmg = single(std::max(1, power * 2));
+            logMessage("Juicio Final! " + ts(dmg) + " daño imparable.");
+            break;
+        }
+        case ArtEffect::AbsorbVida: {
+            int pct    = target->isBoss() ? 10 : 30;
+            int stolen = single(std::max(1, target->getHp() * pct / 100));
+            player_.heal(stolen);
+            logMessage("Absorber Vida! Robas " + ts(stolen) + " HP a " + target->getName() + ".");
+            break;
+        }
+        case ArtEffect::CampoEquilibrio: {
+            int avg  = (player_.getHp() + target->getHp()) / 2;
+            int diff = avg - player_.getHp();
+            if (diff > 0) player_.heal(diff);
+            else          hurtPlayer(-diff);
+            int enemyDmg = std::max(0, target->getHp() - avg);
+            if (enemyDmg > 0) target->takeDamageRaw(enemyDmg);
+            logMessage("Campo de Equilibrio! Vuestras vidas se igualan en " + ts(avg) + ".");
+            break;
+        }
+        case ArtEffect::ColapsoDimensional: {
+            int dmg = single(std::max(1, static_cast<int>(power * 1.5f)));
+            addEnemyEffect(ti, T::Sundered, 3, 30);
+            addEnemyEffect(ti, T::Weakened, 3, 30);
+            logMessage("Colapso Dimensional! " + ts(dmg) + " daño; " + target->getName()
+                       + " pierde 30% de ATK y DEF por 3 turnos.");
+            break;
+        }
+        case ArtEffect::DetenerTiempo: {
+            logMessage("Detener el Tiempo! Los enemigos se ralentizan.");
+            for (int i = 0; i < n; i++)
+                if (enemies_[i]->isAlive()) stun(i, 2, 1);
+            break;
+        }
+        case ArtEffect::Paradoja: {
+            if (!hasLastArt_) { logMessage("Paradoja: no hay habilidad que repetir."); return false; }
+            logMessage("Paradoja! El tiempo se repite...");
+            return resolveArt(lastArt_);
+        }
+        case ArtEffect::Sentencia: {
+            int missing = target->getMaxHp() - target->getHp();
+            int pct     = target->isBoss() ? 20 : 50;
+            int dmg     = single(std::max(1, missing * pct / 100 + power));
+            logMessage("Sentencia! " + ts(dmg) + " daño (castiga las heridas).");
+            break;
+        }
+
+        // ─── Nato ────────────────────────────────────────────────────────────
         case ArtEffect::LluviaEstelar: {
-            int dmg = std::max(1, static_cast<int>(artPower() * 1.5f));
+            int dmg = std::max(1, static_cast<int>(power * 1.5f));
             logMessage("Juicio Estelar! " + ts(dmg) + " daño divino a todos!");
-            for (auto& e : enemies_) {
-                if (e->isAlive()) {
-                    e->takeDamageRaw(dmg);
-                    if (!e->isAlive())
-                        logMessage("  " + e->getName() + " derrotado!");
-                }
-            }
-            advanceTarget();
+            allEnemies([&](int) { return dmg; });
             break;
         }
-
         case ArtEffect::Creacion: {
             int heal = player_.getMaxHp() / 2;
             player_.heal(heal);
             logMessage("Creación! Recuperas " + ts(heal) + " HP.");
             break;
         }
-
         case ArtEffect::PresenciaDivina: {
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::AttackBoosted;
-            fx.turnsLeft = 3;
-            fx.magnitude = player_.getAttack() / 2 + 5;
-            playerEffects_.push_back(fx);
-            logMessage("Presencia Divina! ATK +" + ts(fx.magnitude) + " por 3 turnos.");
+            int mag = player_.getAttack() / 2 + 5;
+            addPlayerEffect(T::AttackBoosted, 3, mag);
+            logMessage("Presencia Divina! ATK +" + ts(mag) + " por 3 turnos.");
             break;
         }
-
-        // ─── Nato arts ───────────────────────────────────────────────────────
-        case ArtEffect::DistorsionTemporal: {
-            if (!target->isAlive()) break;
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::Frozen;
-            fx.turnsLeft = 1;
-            fx.magnitude = 10; // suficiente para cubrir cualquier PA
-            enemyEffects_[currentTarget_].push_back(fx);
-            logMessage("Distorsión Temporal! " + target->getName()
-                       + " pierde todos sus PA.");
+        case ArtEffect::LanzaLuz: {
+            int dmg = single(mitigate(power * 2, enemyDefense(ti) / 2));
+            logMessage("Lanza de Luz! " + ts(dmg) + " daño (ignora mitad DEF).");
             break;
         }
-
-        case ArtEffect::VinculoEterno: {
-            if (!target->isAlive()) break;
-            int dmg = mitigate(artPower(), target->getDefense());
-            target->takeDamageRaw(dmg);
-            int heal = static_cast<int>(dmg * 1.5f);
+        case ArtEffect::Bendicion: {
+            int regen = std::max(1, player_.getMaxHp() * 8 / 100);
+            int def   = player_.getDefense() / 2 + 3;
+            addPlayerEffect(T::Regen, 3, regen);
+            addPlayerEffect(T::DefenseBoosted, 3, def);
+            logMessage("Bendición! +" + ts(regen) + " HP por turno y DEF +" + ts(def) + " por 3 turnos.");
+            break;
+        }
+        case ArtEffect::Exilio: {
+            int lost = stun(ti, 10, 2);
+            logMessage("Exilio! " + target->getName()
+                       + (lost == 1 ? " resiste: -1 PA durante 2 turnos." : " pierde sus turnos durante 2 turnos."));
+            break;
+        }
+        case ArtEffect::Supernova: {
+            int dmg = std::max(1, power * 2);
+            logMessage("Supernova! " + ts(dmg) + " daño a todos (ignora DEF).");
+            allEnemies([&](int) { return dmg; });
+            break;
+        }
+        case ArtEffect::Genesis: {
+            if (playerHas(T::Revive)) { logMessage("Génesis ya te protege."); return false; }
+            addPlayerEffect(T::Revive, 1, 50);
+            logMessage("Génesis! Si caes en este combate, renacerás.");
+            break;
+        }
+        case ArtEffect::MundoNuevo: {
+            int heal = player_.getMaxHp() / 4;
             player_.heal(heal);
-            logMessage("Vínculo Eterno! " + ts(dmg) + " daño, recuperas " + ts(heal) + " HP.");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        case ArtEffect::JuicioFinal: {
-            if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(artPower() * 2.0f));
-            target->takeDamageRaw(dmg);
-            logMessage("Juicio Final! " + ts(dmg) + " daño imparable.");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        // ─── Nuevos efectos del árbol de habilidades ──────────────────────────
-        case ArtEffect::BerserkWarrior: {
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::AttackBoosted;
-            fx.turnsLeft = 3;
-            fx.magnitude = player_.getAttack() / 2;
-            playerEffects_.push_back(fx);
-            // Reducción temporal de defensa: la simulamos con un log (mecánica stub)
-            logMessage("Berserk! ATK +" + ts(fx.magnitude) + " por 3 turnos (DEF reducida).");
-            break;
-        }
-
-        case ArtEffect::Fortaleza: {
-            // Regen: aplicamos el 10% del HP máximo directamente (stub simple)
-            int heal = std::max(1, player_.getMaxHp() / 10);
-            player_.heal(heal);
-            logMessage("Fortaleza! Recuperas " + ts(heal) + " HP (regen).");
-            break;
-        }
-
-        case ArtEffect::Rayo: {
-            if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(artPower() * 1.8f));
-            target->takeDamageRaw(dmg);
-            logMessage("Rayo! " + ts(dmg) + " daño devastador (ignora DEF).");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        case ArtEffect::TormentaArcana: {
-            int dmg = std::max(1, artPower() / 2);
-            logMessage("Tormenta Arcana! " + ts(dmg) + " daño a todos + congelados!");
-            for (int i = 0; i < static_cast<int>(enemies_.size()); i++) {
-                if (enemies_[i]->isAlive()) {
-                    enemies_[i]->takeDamageRaw(dmg);
-                    StatusEffect fx;
-                    fx.type      = StatusEffect::Type::Frozen;
-                    fx.turnsLeft = 1;
-                    fx.magnitude = 1;
-                    enemyEffects_[i].push_back(fx);
-                    if (!enemies_[i]->isAlive())
-                        logMessage("  " + enemies_[i]->getName() + " derrotado!");
-                }
-            }
-            advanceTarget();
-            break;
-        }
-
-        case ArtEffect::EscudoArcano: {
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::DefendingHeavy;
-            fx.turnsLeft = 1;
-            fx.magnitude = 100; // absorbe completamente el golpe
-            playerEffects_.push_back(fx);
-            logMessage("Escudo Arcano! El próximo golpe será absorbido.");
-            break;
-        }
-
-        case ArtEffect::LluviaFlechas: {
-            if (!target->isAlive()) break;
-            int hits = 3;
-            logMessage("Lluvia de Flechas! " + ts(hits) + " impactos aleatorios!");
-            for (int h = 0; h < hits; h++) {
-                // Elegir objetivo aleatorio entre los vivos
-                std::vector<int> alive;
-                for (int i = 0; i < static_cast<int>(enemies_.size()); i++)
-                    if (enemies_[i]->isAlive()) alive.push_back(i);
-                if (alive.empty()) break;
-                int idx = alive[std::rand() % alive.size()];
-                int dmg = mitigate(static_cast<int>(artPower() * 0.6f), enemies_[idx]->getDefense());
-                enemies_[idx]->takeDamageRaw(dmg);
-                logMessage("  Flecha " + ts(h + 1) + ": " + ts(dmg) + " a " + enemies_[idx]->getName());
-                if (!enemies_[idx]->isAlive())
-                    logMessage("  " + enemies_[idx]->getName() + " derrotado!");
-            }
-            advanceTarget();
-            break;
-        }
-
-        case ArtEffect::GolpeCritico: {
-            if (!target->isAlive()) break;
-            int dmg = mitigate(static_cast<int>(artPower() * 2.5f), target->getDefense());
-            target->takeDamageRaw(dmg);
-            logMessage("Golpe Crítico! " + ts(dmg) + " daño devastador.");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        case ArtEffect::Sombra: {
-            // Stub: esquiva y contraataca — por ahora aplica daño + efecto defensivo
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::Defending;
-            fx.turnsLeft = 1;
-            fx.magnitude = 50;
-            playerEffects_.push_back(fx);
-            if (target->isAlive()) {
-                int dmg = mitigate(artPower(), target->getDefense());
-                target->takeDamageRaw(dmg);
-                logMessage("Sombra! " + ts(dmg) + " daño y postura evasiva.");
-                if (!target->isAlive()) {
-                    logMessage("  " + target->getName() + " derrotado!");
-                    advanceTarget();
-                }
-            }
-            break;
-        }
-
-        case ArtEffect::AbsorbVida: {
-            if (!target->isAlive()) break;
-            int stolen = std::max(1, target->getHp() * 30 / 100);
-            target->takeDamageRaw(stolen);
-            player_.heal(stolen);
-            logMessage("Absorber Vida! Robas " + ts(stolen) + " HP a " + target->getName() + ".");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        case ArtEffect::CampoEquilibrio: {
-            // Iguala HP entre jugador y objetivo (promedio)
-            if (!target->isAlive()) break;
-            int avg = (player_.getHp() + target->getHp()) / 2;
-            int playerDiff = avg - player_.getHp();
-            if (playerDiff > 0) player_.heal(playerDiff);
-            else player_.takeDamageRaw(-playerDiff);
-            // El enemigo recibe la diferencia inversa como daño
-            int enemyDmg = std::max(0, target->getHp() - avg);
-            if (enemyDmg > 0) target->takeDamageRaw(enemyDmg);
-            logMessage("Campo de Equilibrio! HP promedio = " + ts(avg) + ".");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
-            break;
-        }
-
-        case ArtEffect::ColapsoDimensional: {
-            if (!target->isAlive()) break;
-            int dmg = std::max(1, static_cast<int>(artPower() * 1.5f));
-            target->takeDamageRaw(dmg);
-            // Congela como debuff de stats
-            StatusEffect fx;
-            fx.type      = StatusEffect::Type::Frozen;
-            fx.turnsLeft = 2;
-            fx.magnitude = 1;
-            enemyEffects_[currentTarget_].push_back(fx);
-            logMessage("Colapso Dimensional! " + ts(dmg) + " daño + stats reducidos.");
-            if (!target->isAlive()) {
-                logMessage("  " + target->getName() + " derrotado!");
-                advanceTarget();
-            }
+            playerEffects_.erase(
+                std::remove_if(playerEffects_.begin(), playerEffects_.end(),
+                    [](const StatusEffect& fx) {
+                        return fx.type == StatusEffect::Type::Poisoned
+                            || fx.type == StatusEffect::Type::Exposed;
+                    }),
+                playerEffects_.end());
+            currentAp_ += 2;
+            logMessage("Mundo Nuevo! +" + ts(heal) + " HP, efectos negativos eliminados y +2 PA.");
             break;
         }
     }
+
+    for (int i = 0; i < n; i++)
+        if (wasAlive[i] && !enemies_[i]->isAlive())
+            logMessage("  " + enemies_[i]->getName() + " derrotado!");
+    if (!enemies_[currentTarget_]->isAlive()) advanceTarget();
+    return true;
 }
 
 int CombatSystem::mitigate(int raw, int def) {

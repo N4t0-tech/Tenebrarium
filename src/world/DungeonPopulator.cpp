@@ -99,6 +99,7 @@ std::unique_ptr<Enemy> DungeonPopulator::makeEnemy(EnemyType t, int depth, int i
         }
     }
     auto enemy = std::make_unique<Enemy>(name, hp, atk, def, xp, t, pa);
+    enemy->setBoss(isBoss);
     if (t == EnemyType::Slime && !isBoss)
         enemy->setSplitsOnDeath(true);
     return enemy;

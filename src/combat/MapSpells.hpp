@@ -1,30 +1,16 @@
 #pragma once
 
-// MapSpells — habilidades del árbol que también se usan en el mapa (fuera de
-// combate), con la tecla Q. La mayoría son proyectiles; las selfCast estallan
-// alrededor del jugador sin apuntar. Se desbloquean con la misma habilidad del
-// árbol: tener el efecto en Player::hasSkill() habilita su versión de mapa.
+// MapSpells — habilidades que también se usan en el mapa (fuera de combate),
+// con la tecla Q. La mayoría son proyectiles; las selfCast estallan alrededor
+// del jugador sin apuntar. Funcionan si la habilidad está equipada ([H]).
 
 #include "Art.hpp"
 #include "entities/Player.hpp"
 #include "entities/SkillTree.hpp"
 #include <raylib.h>
 
-// DEPURACIÓN: true desbloquea, sin importar el nivel, las habilidades del mapa
-// (hechizos y trampas) del árbol de la clase del jugador. Dejar en false para jugar normal.
-inline constexpr bool kDebugUnlockMapAbilities = true;
-
-inline bool classTreeHasSkill(PlayerClass cls, ArtEffect effect) {
-    for (const auto& tier : getSkillTree(cls).tiers)
-        for (const auto& choice : tier.choices)
-            if (choice.effect == effect) return true;
-    return false;
-}
-
-// true si el jugador puede usar en el mapa la habilidad con ese efecto.
 inline bool canUseMapAbility(const Player& p, ArtEffect effect) {
-    if (kDebugUnlockMapAbilities && classTreeHasSkill(p.getClass(), effect)) return true;
-    return p.hasSkill(effect);
+    return p.hasEquippedArt(effect);
 }
 
 enum class MapFxStyle { Fire, Ice, Lightning, Drain, Impact };

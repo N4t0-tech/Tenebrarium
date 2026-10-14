@@ -24,6 +24,17 @@ struct StatusEffect {
         Defending,      // jugador recibe 50% menos daño durante 1 turno enemigo
         DefendingHeavy, // jugador recibe 70% menos daño en el PRIMER golpe y se consume
         TrapPending,    // enemigo recibe daño retardado al inicio del turno enemigo
+        // Jugador
+        Exposed,        // DEF del jugador -magnitude% (Furia Berserker)
+        Regen,          // cura magnitude HP al inicio de cada turno enemigo
+        DefenseBoosted, // DEF del jugador +magnitude
+        Undying,        // la vida del jugador no baja de 1
+        Evading,        // esquiva el próximo golpe y contraataca
+        Revive,         // al morir revive con magnitude% de vida (se consume)
+        // Enemigo
+        Sundered,       // DEF del enemigo -magnitude%
+        Weakened,       // ATK del enemigo -magnitude%
+        Vulnerable,     // el enemigo recibe +magnitude% de daño
     };
     Type type;
     int  turnsLeft;
@@ -81,6 +92,8 @@ private:
     std::vector<StatusEffect>             playerEffects_;
     std::vector<std::vector<StatusEffect>> enemyEffects_;
     std::vector<int>                      lootAttempts_;
+    ArtEffect                             lastArt_{};
+    bool                                  hasLastArt_ = false;
 
     // ── Internal helpers ─────────────────────────────────────────────────────
     bool hasEnoughAp(int amount) const { return currentAp_ >= amount; }
@@ -92,7 +105,16 @@ private:
     void processEnemyTurn();
     void tickPlayerEffects();
     void tickEnemyEffects();
-    void resolveArt(ArtEffect effect);
+    bool resolveArt(ArtEffect effect);  // false si no tuvo efecto: no se cobra PA ni MP
+
+    int  enemyDefense(int idx) const;   // DEF con Rompecorazas/Colapso aplicados
+    int  enemyAttack(int idx)  const;   // ATK con Colapso aplicado
+    int  playerDefense()       const;   // DEF con Berserker/Bendición aplicados
+    int  hitEnemy(int idx, int dmg);    // aplica Vulnerable; devuelve el daño final
+    void hurtPlayer(int dmg);           // respeta Último Bastión y Génesis
+    void addEnemyEffect(int idx, StatusEffect::Type type, int turns, int magnitude);
+    void addPlayerEffect(StatusEffect::Type type, int turns, int magnitude);
+    bool playerHas(StatusEffect::Type type) const;
     void handleSlimeSplits();
 
     bool isPlayerAttackBoosted()  const;

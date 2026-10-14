@@ -106,7 +106,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 11 << '\n'; // version 11: tier de los objetos
+    f << 12 << '\n'; // version 12: habilidades equipadas
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -222,6 +222,13 @@ void GameSerializer::save(Game& g)
         f << us.tier << ' ' << us.choiceIdx << '\n';
     f << static_cast<int>(g.player_->hasPendingSkillUnlock()) << '\n';
 
+    // Habilidades equipadas (v12)
+    const auto& equipped = g.player_->getEquippedArts();
+    f << equipped.size() << '\n';
+    for (ArtEffect e : equipped)
+        f << static_cast<int>(e) << ' ';
+    f << '\n';
+
     // Trampas y HP restante de enemigos (v7)
     if (inDungeon) {
         auto acc = g.dungeon_->lock();
@@ -245,7 +252,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 11)
+    if (!(f >> version) || version < 1 || version > 12)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -503,6 +510,17 @@ bool GameSerializer::load(Game& g)
         }
         int pending;
         if (!(f >> pending)) return false;
+    }
+
+    // Habilidades equipadas (v12); antes se llevaban siempre las 3 base
+    if (version >= 12 && g.player_) {
+        size_t count;
+        if (!(f >> count) || count > static_cast<size_t>(Player::kEquippedArtSlots)) return false;
+        for (size_t i = 0; i < count; i++) {
+            int e;
+            if (!(f >> e) || e < 0 || e > static_cast<int>(ArtEffect::MundoNuevo)) return false;
+            g.player_->equipArt(static_cast<int>(i), static_cast<ArtEffect>(e));
+        }
     }
     if (g.player_)
         g.player_->refreshPendingSkillUnlock();

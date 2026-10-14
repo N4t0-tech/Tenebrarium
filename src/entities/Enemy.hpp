@@ -20,10 +20,13 @@ public:
     int       getBasePa()        const { return basePa_; }
     bool      getSplitsOnDeath() const { return splitsOnDeath_; }
     void      setSplitsOnDeath(bool v)  { splitsOnDeath_ = v; }
+    bool      isBoss()           const { return boss_; }
+    void      setBoss(bool v)           { boss_ = v; }
 
 private:
     int       xpReward_;
     EnemyType type_;
     int       basePa_;
     bool      splitsOnDeath_ = false;
+    bool      boss_          = false;
 };

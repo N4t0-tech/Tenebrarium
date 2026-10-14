@@ -95,6 +95,8 @@ private:
     GameState     preSkillTreeState_{GameState::Exploration};
     int           skillTreeTierCursor_{0};
     int           skillTreeChoiceCursor_{0};
+    GameState     preSkillsState_{GameState::Exploration};
+    int           skillsSelection_{0};             // habilidad conocida resaltada en [H]
 
     // Apuntado en el mapa (trampas de la Arquera, hechizos del Mago).
     // Mientras se apunta, la IA queda en pausa.
@@ -194,6 +196,8 @@ private:
     void inputShop(int key);
     void inputQuestLog(int key);
     void inputBestiary(int key);
+    void inputSkills(int key);
+    void openSkills();
     void inputSettings(int key);
     void inputVillage(int key);
     void inputSkillTree(int key);

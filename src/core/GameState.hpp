@@ -20,4 +20,5 @@ enum class GameState {
     Shop,        // tienda del pueblo
     QuitDialog,  // confirmación de salida (ESC cancela sin regenerar el mapa)
     SkillTree,   // árbol de habilidades — se abre al subir nivel múltiplo de 5
+    Skills,      // habilidades equipadas: elegir las 3 que se llevan (tecla H)
 };

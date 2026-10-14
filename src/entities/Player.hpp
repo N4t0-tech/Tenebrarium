@@ -43,7 +43,15 @@ public:
     void gainXp(int amount);               // acumula XP; llama levelUp() si supera el umbral
     bool useMana(int amount);             // retorna false y no descuenta si no hay mana suficiente
     void restoreMana(int amount);
-    std::vector<Art> getAvailableArts() const;  // lista de habilidades desbloqueadas
+    // ── Habilidades: 3 base + las aprendidas en el árbol; se llevan 3 equipadas ──
+    static constexpr int kEquippedArtSlots = 3;
+    std::vector<Art> getAvailableArts() const;  // las equipadas, en orden de ranura (teclas 1-3)
+    std::vector<Art> getKnownArts() const;      // base + árbol, en orden
+    bool knowsArt(ArtEffect effect) const;
+    bool hasEquippedArt(ArtEffect effect) const;
+    bool equipArt(int slot, ArtEffect effect);  // si ya estaba equipada en otra ranura, se intercambian
+    void resetEquippedArts();                   // vuelve a las 3 base
+    const std::vector<ArtEffect>& getEquippedArts() const { return equippedArts_; }
 
     // ── Árbol de habilidades ─────────────────────────────────────────────────
     struct UnlockedSkill {
@@ -56,7 +64,6 @@ public:
     void refreshPendingSkillUnlock();          // recalcula según nivel y tiers ya elegidos
     bool unlockSkill(int tier, int choiceIdx); // false si ya desbloqueado o inválido
     const std::vector<UnlockedSkill>& getUnlockedSkills() const { return unlockedSkills_; }
-    bool hasSkill(ArtEffect effect) const;     // true si alguna habilidad del árbol elegida tiene ese efecto
 
     void addCoins(int amount);            // puede ser negativo (compra)
     void descendFloor();                  // incrementa dungeonFloor_
@@ -96,6 +103,7 @@ private:
     Inventory inventory_;
 
     std::vector<UnlockedSkill> unlockedSkills_;
+    std::vector<ArtEffect>     equippedArts_;
     bool pendingSkillUnlock_ = false;
 
     void levelUp();

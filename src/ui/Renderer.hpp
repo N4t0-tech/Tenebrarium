@@ -61,6 +61,7 @@ public:
                            bool isBoss = false, int flashIdx = -1);
     static void drawInventory(TerminalScreen& scr, const Player& player, int selection);
     static void drawQuestLog(TerminalScreen& scr, const std::vector<Quest>& quests, int selection);
+    static void drawSkills(TerminalScreen& scr, const Player& player, int selection);
     static void drawBestiary(TerminalScreen& scr,
                              const std::array<BestiaryEntry, kBestiaryEntryCount>& bestiary,
                              int selection);

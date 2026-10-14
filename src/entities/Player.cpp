@@ -15,7 +15,9 @@ Player::Player(const std::string& name, PlayerClass playerClass)
       baseAttack_(baseAttack(playerClass)),
       baseDefense_(baseDefense(playerClass)),
       inventory_(20)
-{}
+{
+    resetEquippedArts();
+}
 
 void Player::gainXp(int amount) {
     xp_ += amount;
@@ -209,69 +211,56 @@ void Player::restoreMana(int amount) {
     mana_ = std::min(maxMana_, mana_ + amount);
 }
 
-bool Player::hasSkill(ArtEffect effect) const {
-    const SkillTreeDef& tree = getSkillTree(class_);
-    for (const auto& us : unlockedSkills_) {
-        if (us.tier >= static_cast<int>(tree.tiers.size())) continue;
-        const SkillTier& tier = tree.tiers[us.tier];
-        if (us.choiceIdx < static_cast<int>(tier.choices.size())
-            && tier.choices[us.choiceIdx].effect == effect)
-            return true;
-    }
-    return false;
+static Art toArt(const SkillChoice& sc) {
+    return { sc.name, sc.apCost, sc.manaCost, sc.effect, sc.desc };
 }
 
 std::vector<Art> Player::getAvailableArts() const {
-    // Si hay habilidades desbloqueadas del árbol, usarlas
-    if (!unlockedSkills_.empty()) {
-        const SkillTreeDef& tree = getSkillTree(class_);
-        std::vector<Art> arts;
-        for (const auto& us : unlockedSkills_) {
-            if (us.tier < static_cast<int>(tree.tiers.size())) {
-                const SkillTier& tier = tree.tiers[us.tier];
-                if (us.choiceIdx < static_cast<int>(tier.choices.size())) {
-                    const SkillChoice& sc = tier.choices[us.choiceIdx];
-                    arts.push_back({ sc.name, sc.apCost, sc.manaCost, sc.effect, sc.desc });
-                }
-            }
-        }
-        if (!arts.empty()) return arts;
-    }
+    std::vector<Art> arts;
+    for (ArtEffect e : equippedArts_)
+        if (const SkillChoice* sc = findClassSkill(class_, e))
+            arts.push_back(toArt(*sc));
+    return arts;
+}
 
-    // Arts base por clase (antes de desbloquear árbol)
-    switch (class_) {
-        case PlayerClass::Warrior:
-            return {
-                { "Golpe Demoledor", 2, 0,  ArtEffect::GolpeDemoledor, "ATK directo, ignora DEF" },
-                { "Grito de Guerra", 1, 10, ArtEffect::GritoDeGuerra,  "+ATK por 2 turnos" },
-                { "Escudo Total",    1, 5,  ArtEffect::EscudoTotal,    "-70% próximo golpe recibido" },
-            };
-        case PlayerClass::Mage:
-            return {
-                { "Bola de Fuego", 2, 20, ArtEffect::BolaDeFuego, "Daño mágico a TODOS" },
-                { "Congelar",      1, 10, ArtEffect::Congelar,    "Enemigo pierde 1 PA su turno" },
-                { "Drenaje",       3, 30, ArtEffect::Drenaje,     "Daño + recupera HP igual al daño" },
-            };
-        case PlayerClass::Ranger:
-            return {
-                { "Disparo Doble", 2, 0, ArtEffect::DisparoDoble, "2 ataques rápidos" },
-                { "Trampa",        1, 0, ArtEffect::Trampa,       "Daño retardado turno siguiente" },
-                { "Veneno",        1, 0, ArtEffect::Veneno,       "DoT 3 turnos" },
-            };
-        case PlayerClass::Halley:
-            return {
-                { "Distorsión Temporal", 2, 20, ArtEffect::DistorsionTemporal, "Enemigo pierde TODOS sus PA" },
-                { "Vínculo Eterno",      1, 10, ArtEffect::VinculoEterno,      "Daño ATK + cura 150% del daño" },
-                { "Juicio Final",        3, 30, ArtEffect::JuicioFinal,        "ATK*2.0 ignora DEF" },
-            };
-        case PlayerClass::Nato:
-            return {
-                { "Juicio Estelar",   3, 25, ArtEffect::LluviaEstelar,   "ATK*1.5 a TODOS los enemigos" },
-                { "Creación",         1, 20, ArtEffect::Creacion,        "Recupera 50% HP máximo" },
-                { "Presencia Divina", 2, 25, ArtEffect::PresenciaDivina, "+ATK/2+5 por 3 turnos" },
-            };
+std::vector<Art> Player::getKnownArts() const {
+    std::vector<Art> arts;
+    for (const auto& sc : getBaseSkills(class_))
+        arts.push_back(toArt(sc));
+    const SkillTreeDef& tree = getSkillTree(class_);
+    for (const auto& us : unlockedSkills_) {
+        if (us.tier < 0 || us.tier >= static_cast<int>(tree.tiers.size())) continue;
+        const SkillTier& tier = tree.tiers[us.tier];
+        if (us.choiceIdx >= 0 && us.choiceIdx < static_cast<int>(tier.choices.size()))
+            arts.push_back(toArt(tier.choices[us.choiceIdx]));
     }
-    return {};
+    return arts;
+}
+
+bool Player::knowsArt(ArtEffect effect) const {
+    for (const auto& a : getKnownArts())
+        if (a.effect == effect) return true;
+    return false;
+}
+
+bool Player::hasEquippedArt(ArtEffect effect) const {
+    return std::find(equippedArts_.begin(), equippedArts_.end(), effect) != equippedArts_.end();
+}
+
+bool Player::equipArt(int slot, ArtEffect effect) {
+    if (slot < 0 || slot >= kEquippedArtSlots || !knowsArt(effect)) return false;
+    if (slot >= static_cast<int>(equippedArts_.size())) equippedArts_.resize(slot + 1, effect);
+    // Si ya estaba en otra ranura, las dos se intercambian
+    auto it = std::find(equippedArts_.begin(), equippedArts_.end(), effect);
+    if (it != equippedArts_.end()) *it = equippedArts_[slot];
+    equippedArts_[slot] = effect;
+    return true;
+}
+
+void Player::resetEquippedArts() {
+    equippedArts_.clear();
+    for (const auto& sc : getBaseSkills(class_))
+        equippedArts_.push_back(sc.effect);
 }
 
 bool Player::unlockSkill(int tier, int choiceIdx) {

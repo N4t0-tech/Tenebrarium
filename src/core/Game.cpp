@@ -1043,7 +1043,7 @@ void Game::dispatchInput(int key)
         {
             if (!canUseMapAbility(*player_, ArtEffect::Trampa)) {
                 dungeon_->message = player_->getClass() == PlayerClass::Ranger
-                    ? "Aprende Trampa en el árbol de habilidades (Nv 5)."
+                    ? "Equipa Trampa con [H] para usarla en el mapa."
                     : "No sabes colocar trampas.";
             } else if (static_cast<int>(dungeon_->lock().traps().size()) >= kTrapMaxActive) {
                 dungeon_->message = "Ya tienes " + std::to_string(kTrapMaxActive) + " trampas activas.";
@@ -1070,7 +1070,7 @@ void Game::dispatchInput(int key)
             if (spells.empty()) {
                 dungeon_->message = player_->getClass() == PlayerClass::Ranger
                     ? "Tu habilidad de mapa es la trampa: usa T."
-                    : "Desbloquea tu habilidad de mapa en el árbol (Nv 5).";
+                    : "Equipa un hechizo de mapa con [H] para usarlo con Q.";
                 dungeon_->messageEndTime = GetTime() + 2.0;
                 break;
             }
@@ -1111,6 +1111,12 @@ void Game::dispatchInput(int key)
         {
             bestiarySelection_ = 0;
             setState(GameState::Bestiary);
+            break;
+        }
+
+        if (key == 'h' || key == 'H')
+        {
+            openSkills();
             break;
         }
 
@@ -1294,6 +1300,9 @@ void Game::dispatchInput(int key)
         break;
     case GameState::SkillTree:
         inputSkillTree(key);
+        break;
+    case GameState::Skills:
+        inputSkills(key);
         break;
     }
 }
@@ -1569,8 +1578,9 @@ void Game::inputSkillTree(int key)
             skillTreeChoiceCursor_ = (skillTreeChoiceCursor_ + 1) % choiceCount;
         break;
     case '\n':
-        if (pendingTier >= 0) {
-            player_->unlockSkill(pendingTier, skillTreeChoiceCursor_);
+        if (pendingTier >= 0 && player_->unlockSkill(pendingTier, skillTreeChoiceCursor_)) {
+            const auto& choice = tiers[pendingTier].choices[skillTreeChoiceCursor_];
+            showMessage("Nueva habilidad: " + choice.name + ". Equípala con [H].", 3.0);
         }
         // Volver al estado anterior
         state_.store(preSkillTreeState_);
@@ -1810,6 +1820,10 @@ void Game::render(TerminalScreen &scr)
         if (player_)
             Renderer::drawSkillTree(scr, *player_,
                                     skillTreeTierCursor_, skillTreeChoiceCursor_);
+        break;
+    case GameState::Skills:
+        if (player_)
+            Renderer::drawSkills(scr, *player_, skillsSelection_);
         break;
     }
 }
@@ -2126,6 +2140,38 @@ void Game::inputBestiary(int key)
     }
 }
 
+void Game::openSkills()
+{
+    preSkillsState_  = state_.load();
+    skillsSelection_ = 0;
+    setState(GameState::Skills);
+}
+
+void Game::inputSkills(int key)
+{
+    if (!player_) return;
+    auto known = player_->getKnownArts();
+    int n = static_cast<int>(known.size());
+    switch (key)
+    {
+    case 'w':
+    case 's':
+        navV(key, skillsSelection_, n);
+        break;
+    case '1': case '2': case '3':
+        if (skillsSelection_ >= 0 && skillsSelection_ < n)
+            player_->equipArt(key - '1', known[skillsSelection_].effect);
+        break;
+    case 27:
+    case 'q':
+    case 'Q':
+    case 'h':
+    case 'H':
+        state_ = preSkillsState_;
+        break;
+    }
+}
+
 void Game::inputVillage(int key)
 {
     if (!player_ || !village_) return;
@@ -2234,6 +2280,7 @@ void Game::inputVillage(int key)
     if (key == 'i' || key == 'I') { inventorySelection_ = 0; setState(GameState::Inventory); return; }
     if (key == 'm' || key == 'M') { questLogSelection_ = 0;  setState(GameState::QuestLog);  return; }
     if (key == 'b' || key == 'B') { bestiarySelection_ = 0;  setState(GameState::Bestiary);  return; }
+    if (key == 'h' || key == 'H') { openSkills(); return; }
 
     if (key == 'p' || key == 'P') {
         int healed = player_->useConsumable();
@@ -2516,10 +2563,8 @@ static int chebyshev(Position a, Position b)
 
 static int skillManaCost(PlayerClass cls, ArtEffect effect)
 {
-    for (const auto& tier : getSkillTree(cls).tiers)
-        for (const auto& c : tier.choices)
-            if (c.effect == effect) return c.manaCost;
-    return 0;
+    const SkillChoice* sc = findClassSkill(cls, effect);
+    return sc ? sc->manaCost : 0;
 }
 
 std::string Game::trapPlacementError(const Dungeon::Lock& acc, Position p) const
