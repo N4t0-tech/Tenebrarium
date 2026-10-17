@@ -37,7 +37,7 @@ public:
                               int tierCursor, int choiceCursor);
     static void drawHudSelect(TerminalScreen& scr, int selection);
     static void drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                             int mapZoom, bool shaderOn, bool arrowMovement);
+                             int mapZoom, bool shaderOn, bool arrowMovement, int sfxVolume);
 
     // ── Pantallas de juego ───────────────────────────────────────────────────
     static void drawExploration(TerminalScreen& scr, const Map& map,

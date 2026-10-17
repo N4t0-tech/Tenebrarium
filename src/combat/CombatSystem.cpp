@@ -1,5 +1,6 @@
 #include "CombatSystem.hpp"
 #include "../world/DungeonPopulator.hpp"
+#include "audio/Sfx.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
@@ -63,6 +64,7 @@ void CombatSystem::doAttackBase(float atkMultiplier, int apCost, int manaCost,
     bool crit = rollCritical();
     if (crit) dmg = dmg * 3 / 2;
     dmg = hitEnemy(currentTarget_, dmg);
+    Sfx::play(crit ? SfxId::Crit : SfxId::Hit);
 
     std::string prefix = crit ? "CRITICO! " : "";
     logMessage(prefix + player_.getName() + " " + actionName + " a " +
@@ -113,6 +115,7 @@ void CombatSystem::doArt(int idx) {
         player_.restoreMana(art.manaCost);
         return;
     }
+    Sfx::play(artSelf_ ? SfxId::Buff : SfxId::Spell);
     if (art.effect != ArtEffect::Paradoja) {
         lastArt_    = art.effect;
         hasLastArt_ = true;
@@ -141,6 +144,7 @@ void CombatSystem::doDefend() {
     fx.magnitude = 50;
     playerEffects_.push_back(fx);
     logMessage(player_.getName() + " adopta postura defensiva (-50% daño).");
+    Sfx::play(SfxId::Defend);
 
     currentAp_--;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
@@ -159,6 +163,7 @@ void CombatSystem::doUseItem() {
     }
     logMessage(player_.getName() + " usa una poción y recupera " +
                std::to_string(healed) + " HP.");
+    Sfx::play(SfxId::Drink);
     currentAp_--;
     if (currentAp_ <= 0) { logMessage("Sin PA. Turno enemigo..."); processEnemyTurn(); }
 }
@@ -181,9 +186,11 @@ void CombatSystem::doFlee() {
     if ((std::rand() % 100) < 45) {
         fled_ = true;
         logMessage(player_.getName() + " huye del combate!");
+        Sfx::play(SfxId::Flee);
         phase_ = CombatPhase::CombatOver;
     } else {
         logMessage("!" + player_.getName() + " intenta huir pero falla!");
+        Sfx::play(SfxId::FleeFail);
         if (currentAp_ <= 0) processEnemyTurn();
     }
 }
@@ -217,11 +224,15 @@ void CombatSystem::doLoot() {
         Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
         player_.getInventory().addItem(loot);
         logMessage("Saqueo exitoso! Obtienes " + loot.name + ".");
+        Sfx::play(SfxId::Coin);
     } else if (roll < partialThreshold) {
         Item loot = DungeonPopulator::pickPotion(player_.getDungeonFloor());
         player_.getInventory().addItem(loot);
         int dmg = std::max(1, enemyAttack(currentTarget_) - playerDefense()) / 2;
+        Sfx::play(SfxId::Coin);
+        sfxDelay_ = 0.2f;
         hurtPlayer(dmg);
+        sfxDelay_ = 0.0f;
         logMessage("Saqueas pero " + target->getName() + " te golpea! Recibes " + ts(dmg) + " daño.");
     } else {
         int dmg = std::max(1, enemyAttack(currentTarget_) - playerDefense());
@@ -306,6 +317,7 @@ void CombatSystem::checkCombatOver() {
     if (allDead) {
         phase_ = CombatPhase::CombatOver;
         logMessage("=== Victoria! Todos los enemigos derrotados. ===");
+        Sfx::play(SfxId::Victory, sfxDelay_ + 0.4f);
     }
 }
 
@@ -320,6 +332,7 @@ void CombatSystem::processEnemyTurn() {
     if (phase_ == CombatPhase::CombatOver) return;
     phase_ = CombatPhase::EnemyTurn;
     logMessage("--- Turno enemigo ---");
+    sfxDelay_ = 0.35f;
 
     tickPlayerEffects();
     tickEnemyEffects();
@@ -351,6 +364,8 @@ void CombatSystem::processEnemyTurn() {
             if (evadeIt != playerEffects_.end()) {
                 playerEffects_.erase(evadeIt);
                 int counter = hitEnemy(i, mitigate(artPower(), enemyDefense(i)));
+                Sfx::play(SfxId::Hit, sfxDelay_);
+                sfxDelay_ += 0.3f;
                 logMessage("Esquivas a " + enemy->getName() + " y contraatacas por " + ts(counter) + " daño!");
                 if (!enemy->isAlive()) logMessage("  " + enemy->getName() + " derrotado!");
                 continue;
@@ -370,18 +385,21 @@ void CombatSystem::processEnemyTurn() {
                 rawDmg = std::max(1, rawDmg * 30 / 100);
                 playerEffects_.erase(heavyIt);
                 logMessage("Escudo Total! Daño reducido 70%.");
+                Sfx::play(SfxId::Blocked, sfxDelay_);
             } else {
                 bool defending = std::any_of(playerEffects_.begin(), playerEffects_.end(),
                     [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Defending; });
                 if (defending) {
                     rawDmg = std::max(1, rawDmg / 2);
                     logMessage("Postura defensiva! Daño reducido 50%.");
+                    Sfx::play(SfxId::Blocked, sfxDelay_);
                 }
             }
 
             logMessage(enemy->getName() + " ataca a " + player_.getName()
                        + " por " + ts(rawDmg) + " daño.");
             hurtPlayer(rawDmg);
+            sfxDelay_ += 0.3f;
 
             // Araña: envenena al golpear
             if (enemy->getType() == EnemyType::Spider) {
@@ -443,6 +461,7 @@ void CombatSystem::processEnemyTurn() {
     logMessage("--- Turno del jugador  PA: " + ts(currentAp_) + "/" + ts(maxAp_) + " ---");
     phase_ = CombatPhase::PlayerTurn;
     checkCombatOver();
+    sfxDelay_ = 0.0f;
 }
 
 void CombatSystem::tickPlayerEffects() {
@@ -540,7 +559,10 @@ int CombatSystem::hitEnemy(int idx, int dmg) {
         if (fx.type == StatusEffect::Type::Vulnerable)
             bonus = std::max(bonus, fx.magnitude);
     dmg = std::max(1, dmg * (100 + bonus) / 100);
+    bool wasAlive = enemies_[idx]->isAlive();
     enemies_[idx]->takeDamageRaw(dmg);
+    if (wasAlive && !enemies_[idx]->isAlive())
+        Sfx::play(enemies_[idx]->isBoss() ? SfxId::BossDie : SfxId::EnemyDie, sfxDelay_ + 0.1f);
     return dmg;
 }
 
@@ -550,10 +572,15 @@ void CombatSystem::hurtPlayer(int dmg) {
         logMessage("Último Bastión! Resistes en pie.");
     }
     player_.takeDamageRaw(dmg);
+    Sfx::play(SfxId::PlayerHurt, sfxDelay_);
     if (player_.isAlive()) return;
     auto it = std::find_if(playerEffects_.begin(), playerEffects_.end(),
         [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Revive; });
-    if (it == playerEffects_.end()) return;
+    if (it == playerEffects_.end()) {
+        Sfx::play(SfxId::Defeat, sfxDelay_ + 0.3f);
+        return;
+    }
+    Sfx::play(SfxId::Heal, sfxDelay_ + 0.3f);
     int heal = std::max(1, player_.getMaxHp() * it->magnitude / 100);
     playerEffects_.erase(it);
     player_.heal(heal);
@@ -619,6 +646,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         logMessage("No hay objetivos vivos.");
         return false;
     }
+    artSelf_ = selfOnly(effect);
 
     const int power = artPower();
     auto single = [&](int dmg) { return hitEnemy(ti, dmg); };

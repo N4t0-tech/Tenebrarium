@@ -1,5 +1,6 @@
 #include "Game.hpp"
 #include "GameSerializer.hpp"
+#include "audio/Sfx.hpp"
 #include "core/Assets.hpp"
 #include "ai/EnemyAI.hpp"
 #include "ui/Renderer.hpp"
@@ -25,6 +26,30 @@ static constexpr int GKEY_BACKSPACE = 0x1005;
 static inline void navV(int key, int& sel, int n) {
     if (key == 'w') sel = (sel - 1 + n) % n;
     if (key == 's') sel = (sel + 1) % n;
+}
+
+// Sonido genérico de menú; las acciones con sonido propio (combate, tienda,
+// inventario) se excluyen para no solaparse.
+static void menuSfx(GameState st, MenuPhase phase, bool villageMenuOpen, int key) {
+    bool nav = key == 'w' || key == 's' || key == 'a' || key == 'd';
+    switch (st) {
+    case GameState::Exploration:
+    case GameState::Combat:
+        return;
+    case GameState::Village:
+        if (!villageMenuOpen) return;
+        break;
+    case GameState::MainMenu:
+        if (phase == MenuPhase::NameInput) return;   // inputNameInput pone su propio sonido
+        if (phase == MenuPhase::Settings && (key == 'a' || key == 'd')) return;
+        break;
+    default:
+        break;
+    }
+    bool allowSelect = st != GameState::Shop && st != GameState::Inventory;
+    if (nav)                               Sfx::play(SfxId::MenuMove);
+    else if (key == 27)                    Sfx::play(SfxId::MenuBack);
+    else if (key == '\n' && allowSelect)   Sfx::play(SfxId::MenuSelect);
 }
 
 // Entidades situacionales de la aldea (tienda, forja, entrenamiento, escalera y farolas)
@@ -100,6 +125,7 @@ void Game::run()
 
     // Ruta de assets relativa al ejecutable (funciona sin importar dónde esté el binario)
     assetsDir() = std::string(GetApplicationDirectory()) + "assets/";
+    Sfx::init();
 
     // Limpiar capturas viejas de Raylib que hayan quedado de ejecuciones anteriores
     for (int i = 0; i < 1000; i++) {
@@ -373,6 +399,7 @@ static constexpr int kPadX = 1;
 
         processInput();
         update();
+        Sfx::update();
 
         // Recalcular grid tras processInput (puede haber cambiado tamaño con F/fullscreen)
         int screenW = GetScreenWidth();
@@ -777,7 +804,17 @@ static constexpr int kPadX = 1;
     UnloadShader(crtShader);
     for (auto& [size, f] : fontCache)
         UnloadFont(f);
+    Sfx::shutdown();
     CloseWindow();
+}
+
+void Game::changeZoom(int delta)
+{
+    int z = std::clamp(mapZoom_ + delta, 1, 3);
+    if (z == mapZoom_) return;
+    mapZoom_ = z;
+    saveSettings();
+    Sfx::play(delta > 0 ? SfxId::ZoomIn : SfxId::ZoomOut);
 }
 
 void Game::processInput()
@@ -811,8 +848,8 @@ void Game::processInput()
         {325, '6'},            // KEY_KP_6
     };
     // Zoom del mapa: numpad primero (antes del loop para capturar 333/334)
-    if (IsKeyPressed(334)) { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; } // KP_ADD
-    if (IsKeyPressed(333)) { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; } // KP_SUBTRACT
+    if (IsKeyPressed(334)) { changeZoom(+1); return; } // KP_ADD
+    if (IsKeyPressed(333)) { changeZoom(-1); return; } // KP_SUBTRACT
 
     if (aiming_.load() && state_.load() == GameState::Exploration)
         inputAimMouse();
@@ -868,8 +905,8 @@ void Game::processInput()
         cp = GetCharPressed();
         if (cp > 0 && cp < 128) cp = std::tolower(cp);
     }
-    if (cp == '+') { mapZoom_ = std::min(3, mapZoom_ + 1); saveSettings(); return; }
-    if (cp == '-') { mapZoom_ = std::max(1, mapZoom_ - 1); saveSettings(); return; }
+    if (cp == '+') { changeZoom(+1); return; }
+    if (cp == '-') { changeZoom(-1); return; }
     if (cp == 'f') {
         if (fullscreen_) {
             ClearWindowState(FLAG_BORDERLESS_WINDOWED_MODE);
@@ -953,6 +990,7 @@ bool Game::processHeldMovement()
 
 void Game::dispatchInput(int key)
 {
+    menuSfx(state_.load(), menuPhase_, villageMenu_ != VillageMenu::None, key);
     switch (state_)
     {
     case GameState::MainMenu:
@@ -1003,6 +1041,7 @@ void Game::dispatchInput(int key)
         if (key == 'p' || key == 'P')
         {
             int healed = player_->useConsumable();
+            Sfx::play(healed > 0 ? SfxId::Drink : SfxId::Denied);
             if (healed > 0)
                 dungeon_->message = "Usas una poción: +" + std::to_string(healed) + " HP!";
             else if (player_->countConsumables() > 0)
@@ -1024,6 +1063,7 @@ void Game::dispatchInput(int key)
                     int restored = player_->getMaxMana() / 2;
                     player_->restoreMana(restored);
                     player_->getInventory().removeItem(item.name);
+                    Sfx::play(player_->getClass() == PlayerClass::Warrior ? SfxId::Drink : SfxId::Mana);
                     std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
                     dungeon_->message = "Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!";
                     dungeon_->messageEndTime = GetTime() + 2.0;
@@ -1031,6 +1071,8 @@ void Game::dispatchInput(int key)
                     break;
                 }
             }
+            if (!used)
+                Sfx::play(SfxId::Denied);
             if (!used)
                 dungeon_->message = player_->getClass() == PlayerClass::Warrior
                     ? "No tienes cerveza." : "No tienes poción de mana.";
@@ -1145,6 +1187,7 @@ void Game::dispatchInput(int key)
                         dungeon_->message = "BOOM! La pared se hace polvo!";
                     } else {
                         dungeon_->message = "No tienes bombas.";
+                        Sfx::play(SfxId::Denied);
                         dungeon_->messageEndTime = GetTime() + 2.0;
                         return;
                     }
@@ -1185,6 +1228,7 @@ void Game::dispatchInput(int key)
                 acc.lockedDoorPos().x == nx && acc.lockedDoorPos().y == ny)
             {
                 dungeon_->message = "La puerta permanece sellada. Algo en las sombras aún respira.";
+                Sfx::play(SfxId::Denied);
                 dungeon_->messageEndTime = GetTime() + 2.0;
                 break;
             }
@@ -1204,6 +1248,7 @@ void Game::dispatchInput(int key)
             {
                 acc.setPlayerPos(nx, ny);
                 acc.map().updateFov();
+                Sfx::play(SfxId::Step);
             }
         }
         if (combatTriggered)
@@ -1386,16 +1431,26 @@ void Game::inputCredits(int key)
 
 void Game::inputSettings(int key)
 {
-    static constexpr int n = 5;
+    static constexpr int n = 6;
+    static constexpr int kVolumeRow = 4;
     switch (key)
     {
     case 'w':
-    case 'a':
         settingsSelection_ = (settingsSelection_ - 1 + n) % n;
         break;
     case 's':
-    case 'd':
         settingsSelection_ = (settingsSelection_ + 1) % n;
+        break;
+    case 'a':
+    case 'd':
+        if (settingsSelection_ == kVolumeRow) {
+            Sfx::setVolume(Sfx::volume() + (key == 'd' ? 10 : -10));
+            saveSettings();
+            Sfx::play(SfxId::MenuMove);
+        } else {
+            Sfx::play(SfxId::MenuMove);
+            settingsSelection_ = (settingsSelection_ + (key == 'd' ? 1 : n - 1)) % n;
+        }
         break;
     case '\n':
     case ' ':
@@ -1403,13 +1458,15 @@ void Game::inputSettings(int key)
             hudLayout_ = (hudLayout_ == HudLayout::Sidebar) ? HudLayout::Bottom : HudLayout::Sidebar;
             saveSettings();
         } else if (settingsSelection_ == 1) {
-            mapZoom_ = (mapZoom_ % 3) + 1;
-            saveSettings();
+            changeZoom(mapZoom_ == 3 ? -2 : +1);
         } else if (settingsSelection_ == 2) {
             shaderEnabled_ = !shaderEnabled_;
             saveSettings();
         } else if (settingsSelection_ == 3) {
             arrowMovement_ = !arrowMovement_;
+            saveSettings();
+        } else if (settingsSelection_ == kVolumeRow) {
+            Sfx::setVolume(Sfx::volume() >= 100 ? 0 : Sfx::volume() + 10);
             saveSettings();
         } else {
             menuSelection_ = 0;
@@ -1453,6 +1510,7 @@ void Game::inputNameInput(int key)
 {
     if (key == '\n')
     {
+        Sfx::play(playerName_.empty() ? SfxId::Denied : SfxId::KeyEnter);
         if (!playerName_.empty())
         {
             secretEasterEgg_ = (playerName_ == "halley" || playerName_ == "nato"
@@ -1465,17 +1523,22 @@ void Game::inputNameInput(int key)
     }
     if (key == GKEY_BACKSPACE || key == 127 || key == 8)
     {
-        if (!playerName_.empty())
+        if (!playerName_.empty()) {
             playerName_.pop_back();
+            Sfx::play(SfxId::Key);
+        }
         return;
     }
     if (key == 27)
     {
+        Sfx::play(SfxId::MenuBack);
         menuPhase_ = MenuPhase::Title;
         return;
     }
-    if (key >= 32 && key <= 126 && static_cast<int>(playerName_.size()) < 16)
+    if (key >= 32 && key <= 126 && static_cast<int>(playerName_.size()) < 16) {
         playerName_ += static_cast<char>(key);
+        Sfx::play(SfxId::Key);
+    }
 }
 
 void Game::inputClassSelect(int key)
@@ -1609,6 +1672,14 @@ void Game::update()
         villageHour_ = advanceHour(villageHour_, GetFrameTime() * 24.0f / kDayLengthSeconds);
     checkQuestProgress();
 
+    if (player_) {
+        if (player_->getLevel() > lastLevel_ && lastLevel_ > 0)
+            Sfx::play(SfxId::LevelUp, 0.3f);
+        lastLevel_ = player_->getLevel();
+    } else {
+        lastLevel_ = 0;
+    }
+
     // Abrir árbol de habilidades cuando hay un desbloqueo pendiente
     if (player_ && player_->hasPendingSkillUnlock()
         && state_.load() != GameState::SkillTree
@@ -1689,6 +1760,7 @@ void Game::checkQuestProgress()
             player_->gainXp(q.xpReward);
             player_->addCoins(q.goldReward);
             dungeon_->message = "Misión completada: " + q.title + "!";
+            Sfx::play(SfxId::Quest);
             dungeon_->messageEndTime = GetTime() + 2.0;
         }
     }
@@ -1720,7 +1792,7 @@ void Game::render(TerminalScreen &scr)
             break;
         case MenuPhase::Settings:
             Renderer::drawSettings(scr, settingsSelection_, hudLayout_, mapZoom_, shaderEnabled_,
-                                   arrowMovement_);
+                                   arrowMovement_, Sfx::volume());
             break;
         }
         break;
@@ -1900,6 +1972,8 @@ void Game::setState(GameState newState)
         combat_.reset();
     }
 
+    if (newState == GameState::Village && state_.load() == GameState::Exploration)
+        Sfx::play(SfxId::Stairs);
     if (newState == GameState::Village)
     {
         // Pueblo hub: no hay mazmorra ni IA activa mientras estás aquí.
@@ -1929,6 +2003,7 @@ void Game::setState(GameState newState)
 
         dungeon_ = std::make_shared<Dungeon>();
         dungeon_->generate(floor, cls, inc);
+        Sfx::play(SfxId::Stairs);
     }
 
     if (newState == GameState::Combat && player_ && dungeon_)
@@ -1979,6 +2054,7 @@ void Game::setState(GameState newState)
             enemies.push_back(DungeonPopulator::makeEnemy(EnemyType::Skeleton, fl, inc));
         }
         combat_ = std::make_unique<CombatSystem>(*player_, std::move(enemies));
+        Sfx::play(SfxId::CombatStart);
 
         // Bestiary: marcar enemigos como encontrados
         for (const auto& e : combat_->getEnemies()) {
@@ -2005,6 +2081,7 @@ void Game::openChest(WorldChest& chest)
     chest.opened = true;
     if (!dungeon_) return;
     dungeon_->chestsOpened++;
+    Sfx::play(chest.loot == ChestLoot::Coins ? SfxId::Coin : SfxId::Chest);
 
     switch (chest.loot)
     {
@@ -2064,6 +2141,7 @@ void Game::inputInventory(int key)
         if (bagIdx >= 0 && bagIdx < bagSize)
         {
             player_->equipItem(bagIdx);
+            Sfx::play(SfxId::Equip);
             int newSize = static_cast<int>(player_->getInventory().items().size());
             if (inventorySelection_ >= newSize)
                 inventorySelection_ = std::max(0, newSize - 1);
@@ -2085,6 +2163,7 @@ void Game::inputInventory(int key)
                     std::string itemName = item.name;
                     player_->heal(healed);
                     player_->getInventory().removeItem(itemName);
+                    Sfx::play(SfxId::Drink);
                     if (dungeon_) {
                         dungeon_->message = "Usas " + itemName + ": +" + std::to_string(healed) + " HP!";
                         dungeon_->messageEndTime = GetTime() + 2.0;
@@ -2309,6 +2388,7 @@ void Game::inputVillage(int key)
 
     if (key == 'p' || key == 'P') {
         int healed = player_->useConsumable();
+        Sfx::play(healed > 0 ? SfxId::Drink : SfxId::Denied);
         if (healed > 0)               showMessage("Usas una poción: +" + std::to_string(healed) + " HP!");
         else if (player_->countConsumables() > 0) showMessage("Ya tienes la vida al máximo!");
         else                          showMessage("No tienes pociones.");
@@ -2321,12 +2401,15 @@ void Game::inputVillage(int key)
                 int restored = player_->getMaxMana() / 2;
                 player_->restoreMana(restored);
                 player_->getInventory().removeItem(item.name);
+                Sfx::play(player_->getClass() == PlayerClass::Warrior ? SfxId::Drink : SfxId::Mana);
                 std::string label = player_->getClass() == PlayerClass::Warrior ? "Aguante" : "MP";
                 showMessage("Bebes " + item.name + ": +" + std::to_string(restored) + " " + label + "!");
                 used = true;
                 break;
             }
         }
+        if (!used)
+            Sfx::play(SfxId::Denied);
         if (!used)
             showMessage(player_->getClass() == PlayerClass::Warrior
                 ? "No tienes cerveza." : "No tienes poción de mana.");
@@ -2344,6 +2427,7 @@ void Game::inputVillage(int key)
 
     if (!village_->map.isWalkable(nx, ny)) return;
     village_->map.setPlayerPos(nx, ny);
+    Sfx::play(SfxId::Step);
 
     if (nx == village_->shop.x && ny == village_->shop.y) {
         generateShopStock();
@@ -2419,6 +2503,7 @@ void Game::inputShop(int key)
                     std::string itemName = item.name;
                     player_->addCoins(sellPrice);
                     player_->getInventory().removeItem(itemName);
+                    Sfx::play(SfxId::Coin);
                     showMessage("Vendiste " + itemName + " por " +
                                 std::to_string(sellPrice) + " monedas!");
                     if (shopSellSelection_ >= static_cast<int>(inv.size()))
@@ -2453,11 +2538,13 @@ void Game::inputShop(int key)
         if (s.sold)
         {
             showMessage("Ya vendido.");
+            Sfx::play(SfxId::Denied);
             break;
         }
         if (player_->getCoins() < s.price)
         {
             showMessage("No tienes suficiente oro.");
+            Sfx::play(SfxId::Denied);
             break;
         }
         player_->addCoins(-s.price);
@@ -2466,6 +2553,7 @@ void Game::inputShop(int key)
         else
             player_->pickupItem(s.item);
         s.sold = true;
+        Sfx::play(SfxId::Buy);
         showMessage("Compraste: " + s.item.name + "!");
         break;
     }
@@ -2734,6 +2822,8 @@ void Game::inputAiming(int key)
                 }
             }
             if (err.empty())
+                Sfx::play(SfxId::Trap);
+            if (err.empty())
                 endAim("Trampa colocada. (-" + std::to_string(kTrapManaCost) + " MP)", 2.0);
             else
                 showError(err);
@@ -2905,6 +2995,7 @@ std::string Game::describeHit(const std::string& prefix, const AreaHit& hit)
 
 void Game::triggerExplosion(Position c, int radius, int style)
 {
+    Sfx::play(SfxId::Explosion);
     dungeon_->explosionActive  = true;
     dungeon_->explosionEndTime = GetTime() + 0.5;
     dungeon_->explosionX       = c.x;
@@ -2935,6 +3026,7 @@ void Game::castSpell(Position target)
     pr.spellIdx = spellSelection_;
     player_->useMana(player_->artManaCost(sp.effect));
     projectiles_.push_back(std::move(pr));
+    Sfx::play(SfxId::Spell);
     endAim(std::string("¡") + sp.name + "!", 1.0);
 }
 
@@ -3023,6 +3115,7 @@ void Game::throwCorpse(Position target)
     pr.start = GetTime();
     pr.speed = kCorpseSpeed;
     projectiles_.push_back(std::move(pr));
+    Sfx::play(SfxId::Throw);
     endAim("¡Allá va!", 1.0);
 }
 
@@ -3230,6 +3323,7 @@ void Game::inputCombat(int key)
         case 'w':
         case 's':
             navV(key, combatArtSelection_, n);
+            Sfx::play(SfxId::MenuMove);
             break;
         case '1': case '2': case '3': {
             int idx = key - '1';
@@ -3248,6 +3342,7 @@ void Game::inputCombat(int key)
             combatShowingArts_ = false;
             break;
         case 27: // ESC
+            Sfx::play(SfxId::MenuBack);
             combatShowingArts_ = false;
             break;
         }
@@ -3268,6 +3363,7 @@ void Game::inputCombat(int key)
         combatFlashEndTime_ = GetTime() + 0.25;
         break;
     case '3':
+        Sfx::play(SfxId::MenuSelect);
         combatShowingArts_ = true;
         combatArtSelection_ = 0;
         break;
@@ -3289,6 +3385,7 @@ void Game::inputCombat(int key)
         combat_->doEndTurn();
         break;
     case '\t': // TAB
+        Sfx::play(SfxId::MenuMove);
         combat_->cycleTarget();
         break;
     }
@@ -3312,6 +3409,7 @@ void Game::saveSettings() const {
         f << "shaderEnabled=" << static_cast<int>(shaderEnabled_) << "\n";
         f << "fullscreen=" << static_cast<int>(fullscreen_) << "\n";
         f << "arrowMovement=" << static_cast<int>(arrowMovement_) << "\n";
+        f << "sfxVolume=" << Sfx::volume() << "\n";
     }
 }
 
@@ -3333,6 +3431,9 @@ void Game::loadSettings() {
             catch (...) {}
         } else if (line.rfind("arrowMovement=", 0) == 0) {
             try { arrowMovement_ = std::stoi(line.substr(14)) != 0; }
+            catch (...) {}
+        } else if (line.rfind("sfxVolume=", 0) == 0) {
+            try { Sfx::setVolume(std::stoi(line.substr(10))); }
             catch (...) {}
         }
     }

@@ -95,6 +95,8 @@ private:
     ArtEffect                             lastArt_{};
     bool                                  hasLastArt_ = false;
     int                                   artRank_    = 1;   // rango del arte que se está resolviendo
+    float                                 sfxDelay_   = 0.0f; // escalona los sonidos del turno enemigo
+    bool                                  artSelf_    = false; // el último arte resuelto era sobre uno mismo
 
     // ── Internal helpers ─────────────────────────────────────────────────────
     bool hasEnoughAp(int amount) const { return currentAp_ >= amount; }

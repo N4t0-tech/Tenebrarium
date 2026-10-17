@@ -1056,7 +1056,7 @@ void Renderer::drawHudSelect(TerminalScreen& scr, int selection) {
 // ─── drawSettings ──────────────────────────────────────────────────────────────
 
 void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
-                            int mapZoom, bool shaderOn, bool arrowMovement) {
+                            int mapZoom, bool shaderOn, bool arrowMovement, int sfxVolume) {
     int cy = scr.rows() / 2;
     drawCentered(scr, cy - 6, 0, scr.cols(), "T E N E B R A R I U M",
                  COL_CYAN, CELL_BOLD);
@@ -1071,12 +1071,15 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     const char* zoomVal = (mapZoom == 1) ? "1x" : (mapZoom == 2) ? "2x" : "3x";
     const char* shaderVal = shaderOn ? "On" : "Off";
     const char* moveVal = arrowMovement ? "Flechas" : "WASD";
+    std::string sfxStr  = "◄ " + std::string(sfxVolume / 10, '|') + std::string(10 - sfxVolume / 10, '.')
+                        + (sfxVolume == 0 ? " Off" : " " + std::to_string(sfxVolume) + "%") + " ►";
 
     Setting items[] = {
         {"Estilo HUD",   hudVal},
         {"Zoom Mapa",    zoomVal},
         {"Shader CRT",   shaderVal},
         {"Movimiento",   moveVal},
+        {"Efectos",      sfxStr.c_str()},
         {"Volver",       ""},
     };
 
@@ -1095,7 +1098,7 @@ void Renderer::drawSettings(TerminalScreen& scr, int selection, HudLayout hud,
     drawFitBox(scr, cy - 2, lines, COL_GRAY, 34);
 
     drawCentered(scr, cy + 7, 0, scr.cols(),
-                 "W/S ▲▼ navegar  |  ENTER cambiar  |  ESC volver",
+                 "W/S ▲▼ navegar  |  ENTER cambiar  |  A/D ◄► volumen  |  ESC volver",
                  COL_GRAY, CELL_DIM);
 }
 

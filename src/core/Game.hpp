@@ -163,6 +163,7 @@ private:
     int                bestiarySelection_{0};
 
     int                   inventorySelection_{0};
+    int                   lastLevel_{0};   // para sonar al subir de nivel
 
     void saveGame();
     bool loadGame();
@@ -175,6 +176,7 @@ private:
     // dispatchInput() enruta al handler del estado actual.
     void dispatchInput(int key);
     void processInput();
+    void changeZoom(int delta);   // ±niveles de zoom del mapa (1–3), con sonido
     bool processHeldMovement();
     void update();
     void render(TerminalScreen& scr);
