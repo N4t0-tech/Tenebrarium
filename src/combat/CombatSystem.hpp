@@ -94,6 +94,7 @@ private:
     std::vector<int>                      lootAttempts_;
     ArtEffect                             lastArt_{};
     bool                                  hasLastArt_ = false;
+    int                                   artRank_    = 1;   // rango del arte que se está resolviendo
 
     // ── Internal helpers ─────────────────────────────────────────────────────
     bool hasEnoughAp(int amount) const { return currentAp_ >= amount; }
@@ -121,5 +122,6 @@ private:
     int  getPlayerAttackBoost()   const;
     int  getEffectiveAttack()     const;
     int  artPower()               const;
+    int  ranked(int value)        const;   // aplica el bonus del rango del arte actual
     bool rollCritical()           const;
 };

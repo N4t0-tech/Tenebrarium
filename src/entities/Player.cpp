@@ -211,28 +211,46 @@ void Player::restoreMana(int amount) {
     mana_ = std::min(maxMana_, mana_ + amount);
 }
 
-static Art toArt(const SkillChoice& sc) {
-    return { sc.name, sc.apCost, sc.manaCost, sc.effect, sc.desc };
+Art Player::makeArt(const SkillChoice& sc) const {
+    return { sc.name, sc.apCost, artManaCost(sc.effect), sc.effect, sc.desc, getArtRank(sc.effect) };
+}
+
+int Player::getArtRank(ArtEffect effect) const {
+    int i = static_cast<int>(effect);
+    return (i >= 0 && i < static_cast<int>(artRanks_.size())) ? artRanks_[i] : 1;
+}
+
+bool Player::upgradeArt(ArtEffect effect) {
+    int i = static_cast<int>(effect);
+    if (i < 0 || i >= static_cast<int>(artRanks_.size()) || artRanks_[i] >= kMaxArtRank) return false;
+    artRanks_[i]++;
+    return true;
+}
+
+int Player::artManaCost(ArtEffect effect) const {
+    const SkillChoice* sc = findClassSkill(class_, effect);
+    if (!sc) return 0;
+    return getArtRank(effect) >= 3 ? sc->manaCost * 75 / 100 : sc->manaCost;
 }
 
 std::vector<Art> Player::getAvailableArts() const {
     std::vector<Art> arts;
     for (ArtEffect e : equippedArts_)
         if (const SkillChoice* sc = findClassSkill(class_, e))
-            arts.push_back(toArt(*sc));
+            arts.push_back(makeArt(*sc));
     return arts;
 }
 
 std::vector<Art> Player::getKnownArts() const {
     std::vector<Art> arts;
     for (const auto& sc : getBaseSkills(class_))
-        arts.push_back(toArt(sc));
+        arts.push_back(makeArt(sc));
     const SkillTreeDef& tree = getSkillTree(class_);
     for (const auto& us : unlockedSkills_) {
         if (us.tier < 0 || us.tier >= static_cast<int>(tree.tiers.size())) continue;
         const SkillTier& tier = tree.tiers[us.tier];
         if (us.choiceIdx >= 0 && us.choiceIdx < static_cast<int>(tier.choices.size()))
-            arts.push_back(toArt(tier.choices[us.choiceIdx]));
+            arts.push_back(makeArt(tier.choices[us.choiceIdx]));
     }
     return arts;
 }

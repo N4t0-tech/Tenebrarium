@@ -57,10 +57,25 @@ enum class ArtEffect {
     MundoNuevo,          // Nato: cura 25%, quita efectos negativos y +2 PA
 };
 
+inline constexpr int kArtEffectCount = static_cast<int>(ArtEffect::MundoNuevo) + 1;
+
+// Rangos de habilidad (sala de entrenamiento): I base, II +20% efecto,
+// III +40% efecto y -25% de coste de maná.
+inline constexpr int kMaxArtRank = 3;
+inline int artRankBonusPct(int rank)      { return rank >= 3 ? 40 : rank == 2 ? 20 : 0; }
+inline int artRankRequiredLevel(int rank) { return rank >= 3 ? 20 : rank == 2 ? 10 : 1; }
+inline const char* artRankRoman(int rank) { return rank >= 3 ? "III" : rank == 2 ? "II" : "I"; }
+
 struct Art {
     std::string name;
     int         apCost;
-    int         manaCost;
+    int         manaCost;     // ya con el descuento del rango III
     ArtEffect   effect;
     std::string description;
+    int         rank = 1;
+
+    // Nombre con el rango cuando está mejorada: "Bola de Fuego II"
+    std::string label() const {
+        return rank > 1 ? name + " " + artRankRoman(rank) : name;
+    }
 };

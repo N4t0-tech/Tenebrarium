@@ -332,6 +332,12 @@ int trainingCost(int option, int incursions)
     }
 }
 
+int artRankCost(int nextRank, int incursions)
+{
+    const int inc = std::max(1, incursions);
+    return nextRank >= 3 ? 400 + 100 * inc : 150 + 50 * inc;
+}
+
 VillageLayout buildVillage()
 {
     VillageLayout v;

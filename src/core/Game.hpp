@@ -64,6 +64,7 @@ private:
     bool         villageConfirmDescend_{false};  // pisó la escalera, espera ENTER
     float        villageHour_{kStartHour};       // hora del pueblo (0–24), ver DayCycle.hpp
     int          villageSelection_{0};
+    int          trainingTab_{0};        // entrenamiento: 0 = estadísticas, 1 = habilidades
     std::string  villageMessage_;
     double       villageMessageEndTime_{0.0};
     bool                           combatShowingArts_;  // true = submenú de habilidades abierto

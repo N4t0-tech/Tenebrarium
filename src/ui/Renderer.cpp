@@ -1359,7 +1359,7 @@ void Renderer::drawCombat(TerminalScreen& scr, const CombatSystem& combat,
             bool canAfford = (ap >= art.apCost) && (player.getMana() >= art.manaCost);
             bool sel = (i == artSelection);
             std::string mpUnit = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
-            std::string line = "[" + std::to_string(i + 1) + "] " + art.name +
+            std::string line = "[" + std::to_string(i + 1) + "] " + art.label() +
                 "  " + std::to_string(art.apCost) + "PA  " +
                 std::to_string(art.manaCost) + mpUnit + "  " + art.description;
             Color rc = canAfford ? COL_WHITE : COL_GRAY;
@@ -1916,7 +1916,7 @@ void Renderer::drawSkills(TerminalScreen& scr, const Player& player, int selecti
     const char* res      = player.getClass() == PlayerClass::Warrior ? "AG" : "MP";
 
     int nameW = 0;
-    for (const auto& a : known) nameW = std::max(nameW, utf8Len(a.name));
+    for (const auto& a : known) nameW = std::max(nameW, utf8Len(a.label()));
     auto cost = [&](const Art& a) {
         return std::to_string(a.apCost) + " PA  " + padLeft(std::to_string(a.manaCost), 2) + " " + res;
     };
@@ -1933,7 +1933,7 @@ void Renderer::drawSkills(TerminalScreen& scr, const Player& player, int selecti
     auto equippedArts = player.getAvailableArts();
     for (int i = 0; i < Player::kEquippedArtSlots; i++) {
         if (i < static_cast<int>(equippedArts.size()))
-            lines.push_back({ "  [" + std::to_string(i + 1) + "] " + padRight(equippedArts[i].name, nameW)
+            lines.push_back({ "  [" + std::to_string(i + 1) + "] " + padRight(equippedArts[i].label(), nameW)
                               + "   " + cost(equippedArts[i]), COL_YELLOW });
         else
             lines.push_back({ "  [" + std::to_string(i + 1) + "] (vacía)", COL_GRAY, CELL_DIM });
@@ -1945,7 +1945,7 @@ void Renderer::drawSkills(TerminalScreen& scr, const Player& player, int selecti
         int slot = slotOf(a.effect);
         bool sel = i == selection;
         std::string tag = slot >= 0 ? "[" + std::to_string(slot + 1) + "]" : "   ";
-        lines.push_back({ tag + " " + padRight(a.name, nameW) + "   " + cost(a) + "   " + a.description,
+        lines.push_back({ tag + " " + padRight(a.label(), nameW) + "   " + cost(a) + "   " + a.description,
                           sel ? COL_ORANGE : (slot >= 0 ? COL_GREEN : COL_GRAY),
                           static_cast<uint8_t>(sel ? CELL_INVERTED : 0) });
     }
@@ -1958,7 +1958,7 @@ void Renderer::drawSkills(TerminalScreen& scr, const Player& player, int selecti
 }
 
 void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
-                               const Player& player, int incursions) {
+                               const Player& player, int incursions, int trainingTab) {
     std::vector<BoxLine> lines;
     lines.push_back({ menu == VillageMenu::Forge ? "=== FORJA ===" : "=== ENTRENAMIENTO ===",
                       COL_ORANGE, CELL_BOLD });
@@ -1982,7 +1982,26 @@ void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int select
         slotRow("[ARMA]     ", player.getEquippedWeapon(), "(sin arma)", "ATK");
         slotRow("[ARMADURA] ", player.getEquippedArmor(), "(sin armadura)", "DEF");
         help = "ENTER forjar +1  |  ESC salir";
+    } else if (trainingTab == 1) {
+        lines.push_back({ "  Estadísticas  [ HABILIDADES ]", COL_WHITE, CELL_BOLD });
+        lines.push_back({ "  II: +20% efecto (Nv 10)   III: +40% efecto y -25% maná (Nv 20)",
+                          COL_GRAY, CELL_DIM });
+        lines.push_back(BoxLine::separator());
+        for (const auto& art : player.getKnownArts()) {
+            if (art.rank >= kMaxArtRank) {
+                rows.push_back({ art.name + "  " + artRankRoman(art.rank) + "  (máximo)", 0, false });
+                continue;
+            }
+            int next = art.rank + 1;
+            bool lvlOk = player.getLevel() >= artRankRequiredLevel(next);
+            std::string text = art.name + "  " + artRankRoman(art.rank) + " -> " + artRankRoman(next);
+            if (!lvlOk) text += "  (Nv " + std::to_string(artRankRequiredLevel(next)) + ")";
+            rows.push_back({ text, artRankCost(next, incursions), lvlOk });
+        }
+        help = "ENTER mejorar  |  A/D pestaña  |  ESC salir";
     } else {
+        lines.push_back({ "[ ESTADÍSTICAS ]  Habilidades", COL_WHITE, CELL_BOLD });
+        lines.push_back(BoxLine::separator());
         auto stat = [](const char* label, int cur, int next) {
             return std::string(label) + "  (" + std::to_string(cur) + " -> " +
                    std::to_string(next) + ")";
@@ -1995,7 +2014,7 @@ void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int select
                          trainingCost(2, incursions), true });
         rows.push_back({ stat("+5  Mana Max", player.getMaxMana(), player.getMaxMana() + 5),
                          trainingCost(3, incursions), true });
-        help = "ENTER entrenar  |  ESC salir";
+        help = "ENTER entrenar  |  A/D pestaña  |  ESC salir";
     }
 
     int textW = 0, costW = 0;
@@ -2006,10 +2025,11 @@ void Renderer::drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int select
     for (int i = 0; i < static_cast<int>(rows.size()); i++) {
         const Row& r = rows[i];
         bool sel = (i == selection);
-        Color fg = r.enabled ? (sel ? COL_ORANGE : COL_WHITE) : COL_GRAY;
-        uint8_t fl = r.enabled ? (sel ? CELL_INVERTED : 0) : CELL_DIM;
-        lines.push_back({ padRight(r.text, textW) + "   " +
-                          padLeft(std::to_string(r.cost), costW) + " $", fg, fl });
+        Color fg = sel ? COL_ORANGE : (r.enabled ? COL_WHITE : COL_GRAY);
+        uint8_t fl = sel ? CELL_INVERTED : (r.enabled ? 0 : CELL_DIM);
+        std::string price = r.cost > 0 ? padLeft(std::to_string(r.cost), costW) + " $"
+                                       : std::string(costW + 2, ' ');
+        lines.push_back({ padRight(r.text, textW) + "   " + price, fg, fl });
     }
     lines.push_back(BoxLine::separator());
     lines.push_back({ help, COL_GRAY, CELL_DIM });

@@ -72,7 +72,7 @@ public:
                          const std::string& message,
                          bool sellMode = false, int sellSelection = 0);
     static void drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
-                                const Player& player, int incursions);
+                                const Player& player, int incursions, int trainingTab = 0);
 
 private:
     // Línea de una ventana auto-ajustable (drawFitBox). sep dibuja ╠═╣.

@@ -106,7 +106,10 @@ void CombatSystem::doArt(int idx) {
     }
 
     logMessage(player_.getName() + " usa " + art.name + "!");
-    if (!resolveArt(art.effect)) {
+    artRank_ = art.rank;
+    bool ok  = resolveArt(art.effect);
+    artRank_ = 1;
+    if (!ok) {
         player_.restoreMana(art.manaCost);
         return;
     }
@@ -634,13 +637,13 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
 
         // ─── Guerrero ────────────────────────────────────────────────────────
         case ArtEffect::GolpeDemoledor: {
-            int raw = static_cast<int>(getEffectiveAttack() * artLevelScale(player_.getLevel()) * 1.4f);
+            int raw = ranked(static_cast<int>(getEffectiveAttack() * artLevelScale(player_.getLevel()) * 1.4f));
             int dmg = single(mitigate(raw, enemyDefense(ti) / 2));
             logMessage("Golpe Demoledor! " + ts(dmg) + " daño (ignora mitad DEF).");
             break;
         }
         case ArtEffect::GritoDeGuerra: {
-            int mag = player_.getAttack() / 3 + 2;
+            int mag = ranked(player_.getAttack() / 3 + 2);
             addPlayerEffect(T::AttackBoosted, 2, mag);
             logMessage("Grito de Guerra! ATK +" + ts(mag) + " por 2 turnos.");
             break;
@@ -651,7 +654,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::BerserkWarrior: {
-            int mag = player_.getAttack() / 2;
+            int mag = ranked(player_.getAttack() / 2);
             addPlayerEffect(T::AttackBoosted, 3, mag);
             addPlayerEffect(T::Exposed, 3, 30);
             logMessage("Furia Berserker! ATK +" + ts(mag) + " y DEF -30% por 3 turnos.");
@@ -659,7 +662,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         }
         case ArtEffect::Fortaleza: {
             if (playerHas(T::Regen)) { logMessage("Ya te estás regenerando."); return false; }
-            int mag = std::max(1, player_.getMaxHp() / 10);
+            int mag = std::max(1, ranked(player_.getMaxHp() / 10));
             addPlayerEffect(T::Regen, 3, mag);
             logMessage("Fortaleza! Regeneras " + ts(mag) + " HP por turno durante 3 turnos.");
             break;
@@ -679,7 +682,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         }
         case ArtEffect::Rompecorazas: {
             int dmg = single(mitigate(power, enemyDefense(ti)));
-            addEnemyEffect(ti, T::Sundered, 3, 50);
+            addEnemyEffect(ti, T::Sundered, 3, std::min(90, ranked(50)));
             logMessage("Rompecorazas! " + ts(dmg) + " daño y " + target->getName()
                        + " pierde la mitad de su DEF por 3 turnos.");
             break;
@@ -749,8 +752,9 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::Maldicion: {
-            addEnemyEffect(ti, T::Vulnerable, 3, 30);
-            logMessage(target->getName() + " maldito! Recibe +30% de daño por 3 turnos.");
+            int pct = ranked(30);
+            addEnemyEffect(ti, T::Vulnerable, 3, pct);
+            logMessage(target->getName() + " maldito! Recibe +" + ts(pct) + "% de daño por 3 turnos.");
             break;
         }
 
@@ -808,8 +812,9 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::MarcaCazador: {
-            addEnemyEffect(ti, T::Vulnerable, 3, 50);
-            logMessage(target->getName() + " marcado! Recibe +50% de daño por 3 turnos.");
+            int pct = ranked(50);
+            addEnemyEffect(ti, T::Vulnerable, 3, pct);
+            logMessage(target->getName() + " marcado! Recibe +" + ts(pct) + "% de daño por 3 turnos.");
             break;
         }
         case ArtEffect::Sombra: {
@@ -838,7 +843,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::AbsorbVida: {
-            int pct    = target->isBoss() ? 10 : 30;
+            int pct    = ranked(target->isBoss() ? 10 : 30);
             int stolen = single(std::max(1, target->getHp() * pct / 100));
             player_.heal(stolen);
             logMessage("Absorber Vida! Robas " + ts(stolen) + " HP a " + target->getName() + ".");
@@ -856,10 +861,11 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         }
         case ArtEffect::ColapsoDimensional: {
             int dmg = single(std::max(1, static_cast<int>(power * 1.5f)));
-            addEnemyEffect(ti, T::Sundered, 3, 30);
-            addEnemyEffect(ti, T::Weakened, 3, 30);
+            int pct = ranked(30);
+            addEnemyEffect(ti, T::Sundered, 3, pct);
+            addEnemyEffect(ti, T::Weakened, 3, pct);
             logMessage("Colapso Dimensional! " + ts(dmg) + " daño; " + target->getName()
-                       + " pierde 30% de ATK y DEF por 3 turnos.");
+                       + " pierde " + ts(pct) + "% de ATK y DEF por 3 turnos.");
             break;
         }
         case ArtEffect::DetenerTiempo: {
@@ -875,7 +881,7 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         }
         case ArtEffect::Sentencia: {
             int missing = target->getMaxHp() - target->getHp();
-            int pct     = target->isBoss() ? 20 : 50;
+            int pct     = ranked(target->isBoss() ? 20 : 50);
             int dmg     = single(std::max(1, missing * pct / 100 + power));
             logMessage("Sentencia! " + ts(dmg) + " daño (castiga las heridas).");
             break;
@@ -889,13 +895,13 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::Creacion: {
-            int heal = player_.getMaxHp() / 2;
+            int heal = ranked(player_.getMaxHp() / 2);
             player_.heal(heal);
             logMessage("Creación! Recuperas " + ts(heal) + " HP.");
             break;
         }
         case ArtEffect::PresenciaDivina: {
-            int mag = player_.getAttack() / 2 + 5;
+            int mag = ranked(player_.getAttack() / 2 + 5);
             addPlayerEffect(T::AttackBoosted, 3, mag);
             logMessage("Presencia Divina! ATK +" + ts(mag) + " por 3 turnos.");
             break;
@@ -906,8 +912,8 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
             break;
         }
         case ArtEffect::Bendicion: {
-            int regen = std::max(1, player_.getMaxHp() * 8 / 100);
-            int def   = player_.getDefense() / 2 + 3;
+            int regen = std::max(1, ranked(player_.getMaxHp() * 8 / 100));
+            int def   = ranked(player_.getDefense() / 2 + 3);
             addPlayerEffect(T::Regen, 3, regen);
             addPlayerEffect(T::DefenseBoosted, 3, def);
             logMessage("Bendición! +" + ts(regen) + " HP por turno y DEF +" + ts(def) + " por 3 turnos.");
@@ -927,12 +933,12 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         }
         case ArtEffect::Genesis: {
             if (playerHas(T::Revive)) { logMessage("Génesis ya te protege."); return false; }
-            addPlayerEffect(T::Revive, 1, 50);
+            addPlayerEffect(T::Revive, 1, std::min(100, ranked(50)));
             logMessage("Génesis! Si caes en este combate, renacerás.");
             break;
         }
         case ArtEffect::MundoNuevo: {
-            int heal = player_.getMaxHp() / 4;
+            int heal = ranked(player_.getMaxHp() / 4);
             player_.heal(heal);
             playerEffects_.erase(
                 std::remove_if(playerEffects_.begin(), playerEffects_.end(),
@@ -963,7 +969,11 @@ float CombatSystem::artLevelScale(int level) {
 }
 
 int CombatSystem::artPower() const {
-    return static_cast<int>(player_.getAttack() * artLevelScale(player_.getLevel()));
+    return ranked(static_cast<int>(player_.getAttack() * artLevelScale(player_.getLevel())));
+}
+
+int CombatSystem::ranked(int value) const {
+    return value * (100 + artRankBonusPct(artRank_)) / 100;
 }
 
 bool CombatSystem::rollCritical() const {

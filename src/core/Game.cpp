@@ -1766,7 +1766,7 @@ void Game::render(TerminalScreen &scr)
         {
             if (villageMenu_ != VillageMenu::None) {
                 Renderer::drawVillageMenu(scr, villageMenu_, villageSelection_,
-                                          *player_, player_->getIncursions());
+                                          *player_, player_->getIncursions(), trainingTab_);
             } else {
                 Renderer::drawExploration(scr, village_->map, *player_, hudLayout_,
                                           villageEntities(*village_), villageTorches(*village_),
@@ -2239,13 +2239,38 @@ void Game::inputVillage(int key)
     // Submenú de entrenamiento: gastar oro en mejoras permanentes
     if (villageMenu_ == VillageMenu::Training)
     {
+        auto known = player_->getKnownArts();
+        int rowCount = trainingTab_ == 0 ? kTrainingOptions : static_cast<int>(known.size());
         switch (key)
         {
         case 'w':
         case 's':
-            navV(key, villageSelection_, kTrainingOptions);
+            navV(key, villageSelection_, rowCount);
+            break;
+        case 'a':
+        case 'd':
+            trainingTab_ = 1 - trainingTab_;
+            villageSelection_ = 0;
             break;
         case '\n':
+            if (trainingTab_ == 1) {
+                if (villageSelection_ >= rowCount) break;
+                const Art& art = known[villageSelection_];
+                int next = art.rank + 1;
+                if (art.rank >= kMaxArtRank) {
+                    showMessage(art.name + " ya está al máximo.");
+                } else if (player_->getLevel() < artRankRequiredLevel(next)) {
+                    showMessage("Necesitas nivel " + std::to_string(artRankRequiredLevel(next))
+                                + " para el rango " + artRankRoman(next) + ".");
+                } else if (player_->getCoins() < artRankCost(next, inc)) {
+                    showMessage("No tienes suficiente oro para entrenar.");
+                } else {
+                    player_->addCoins(-artRankCost(next, inc));
+                    player_->upgradeArt(art.effect);
+                    showMessage("Entrenas: " + art.name + " sube a rango " + artRankRoman(next) + "!");
+                }
+                break;
+            }
         {
             int sel = villageSelection_;
             int cost = trainingCost(sel, inc);
@@ -2335,6 +2360,7 @@ void Game::inputVillage(int key)
     }
     if (nx == village_->training.x && ny == village_->training.y) {
         villageSelection_ = 0;
+        trainingTab_ = 0;
         villageMenu_ = VillageMenu::Training;
         return;
     }
@@ -2561,12 +2587,6 @@ static int chebyshev(Position a, Position b)
     return std::max(std::abs(a.x - b.x), std::abs(a.y - b.y));
 }
 
-static int skillManaCost(PlayerClass cls, ArtEffect effect)
-{
-    const SkillChoice* sc = findClassSkill(cls, effect);
-    return sc ? sc->manaCost : 0;
-}
-
 std::string Game::trapPlacementError(const Dungeon::Lock& acc, Position p) const
 {
     Position pp = acc.playerPos();
@@ -2622,7 +2642,7 @@ std::vector<Position> Game::spellPath(const Dungeon::Lock& acc, Position target)
 std::string Game::spellTargetError(const Dungeon::Lock& acc, Position p) const
 {
     const MapSpellDef& sp = kMapSpells[spellSelection_];
-    if (player_->getMana() < skillManaCost(player_->getClass(), sp.effect))
+    if (player_->getMana() < player_->artManaCost(sp.effect))
         return "No tienes suficiente MP.";
     if (sp.selfCast)
         return "";
@@ -2644,7 +2664,7 @@ std::string Game::aimHint() const
         return "Lanzar cadáver: apunta con el mouse  |  clic lanzar  |  clic der. cancelar";
     const MapSpellDef& sp = kMapSpells[spellSelection_];
     std::string s = std::string(sp.name) + " ("
-                  + std::to_string(skillManaCost(player_->getClass(), sp.effect))
+                  + std::to_string(player_->artManaCost(sp.effect))
                   + (sp.selfCast ? " MP)  |  clic usar" : " MP)  |  clic lanzar");
     if (unlockedMapSpells().size() > 1) s += "  |  Q cambiar";
     return s + "  |  clic der. cancelar";
@@ -2824,10 +2844,12 @@ void Game::inputAimMouse()
     }
 }
 
-// ATK del jugador con el mismo escalado por nivel que las artes del combate.
-static int mapAbilityPower(const Player& p)
+// ATK del jugador con el mismo escalado por nivel que las artes del combate,
+// más el bonus del rango de la habilidad (si la hay; los cadáveres no tienen).
+static int mapAbilityPower(const Player& p, int rankBonusPct = 0)
 {
-    return static_cast<int>(p.getAttack() * CombatSystem::artLevelScale(p.getLevel()));
+    int power = static_cast<int>(p.getAttack() * CombatSystem::artLevelScale(p.getLevel()));
+    return power * (100 + rankBonusPct) / 100;
 }
 
 Game::AreaHit Game::damageEnemiesAround(Dungeon::Lock& acc, Position c, int radius,
@@ -2895,7 +2917,7 @@ void Game::castSpell(Position target)
 {
     const MapSpellDef& sp = kMapSpells[spellSelection_];
     if (sp.selfCast) {
-        player_->useMana(skillManaCost(player_->getClass(), sp.effect));
+        player_->useMana(player_->artManaCost(sp.effect));
         aiming_.store(false);
         resolveSpellImpact(spellSelection_, dungeon_->lock().playerPos(), true);
         return;
@@ -2911,7 +2933,7 @@ void Game::castSpell(Position target)
     pr.glyph    = sp.glyph;
     pr.color    = sp.color;
     pr.spellIdx = spellSelection_;
-    player_->useMana(skillManaCost(player_->getClass(), sp.effect));
+    player_->useMana(player_->artManaCost(sp.effect));
     projectiles_.push_back(std::move(pr));
     endAim(std::string("¡") + sp.name + "!", 1.0);
 }
@@ -3084,7 +3106,8 @@ void Game::resolveSpellImpact(int spellIdx, Position at, bool alwaysReport)
     {
         auto acc = dungeon_->lock();
         hit = damageEnemiesAround(acc, at, sp.radius, sp.pctNormal, sp.pctBoss,
-                                  mapAbilityPower(*player_) * sp.atkMult2 / 2, sp.freezeTicks);
+                                  mapAbilityPower(*player_, artRankBonusPct(player_->getArtRank(sp.effect))) * sp.atkMult2 / 2,
+                                  sp.freezeTicks);
     }
     triggerExplosion(at, sp.radius, static_cast<int>(sp.style));
     std::string msg = describeHit(std::string(sp.name) + ":", hit);
@@ -3112,7 +3135,8 @@ void Game::resolveTrapTriggers()
         if (triggered.empty()) return;
         for (Position tp : triggered) {
             triggerExplosion(tp, kTrapRadius, static_cast<int>(MapFxStyle::Fire));
-            AreaHit hit = damageEnemiesAround(acc, tp, kTrapRadius, 40, 15, mapAbilityPower(*player_));
+            AreaHit hit = damageEnemiesAround(acc, tp, kTrapRadius, 40, 15,
+                mapAbilityPower(*player_, artRankBonusPct(player_->getArtRank(ArtEffect::Trampa))));
             msg = describeHit("¡Una trampa estalla!", hit);
         }
         triggered.clear();

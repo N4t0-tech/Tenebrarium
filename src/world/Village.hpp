@@ -41,3 +41,4 @@ VillageLayout buildVillage();
 inline constexpr int kTrainingOptions = 4;
 int forgeCost(int statBonus, int incursions);
 int trainingCost(int option, int incursions);
+int artRankCost(int nextRank, int incursions);  // subir una habilidad al rango nextRank

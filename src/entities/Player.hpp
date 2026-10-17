@@ -7,6 +7,7 @@
 #include "Entity.hpp"
 #include "inventory/Inventory.hpp"
 #include "combat/Art.hpp"
+#include "SkillTree.hpp"
 #include <vector>
 #include <optional>
 
@@ -52,6 +53,9 @@ public:
     bool equipArt(int slot, ArtEffect effect);  // si ya estaba equipada en otra ranura, se intercambian
     void resetEquippedArts();                   // vuelve a las 3 base
     const std::vector<ArtEffect>& getEquippedArts() const { return equippedArts_; }
+    int  getArtRank(ArtEffect effect) const;
+    bool upgradeArt(ArtEffect effect);          // +1 rango; false si ya está al máximo
+    int  artManaCost(ArtEffect effect) const;   // coste con el descuento del rango
 
     // ── Árbol de habilidades ─────────────────────────────────────────────────
     struct UnlockedSkill {
@@ -104,6 +108,8 @@ private:
 
     std::vector<UnlockedSkill> unlockedSkills_;
     std::vector<ArtEffect>     equippedArts_;
+    std::vector<int>           artRanks_ = std::vector<int>(kArtEffectCount, 1);
+    Art makeArt(const SkillChoice& sc) const;
     bool pendingSkillUnlock_ = false;
 
     void levelUp();

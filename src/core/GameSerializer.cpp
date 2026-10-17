@@ -106,7 +106,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 12 << '\n'; // version 12: habilidades equipadas
+    f << 13 << '\n'; // version 13: rangos de habilidad
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -229,6 +229,16 @@ void GameSerializer::save(Game& g)
         f << static_cast<int>(e) << ' ';
     f << '\n';
 
+    // Rangos de habilidad (v13): solo las mejoradas
+    std::vector<std::pair<int, int>> ranks;
+    for (int e = 0; e < kArtEffectCount; e++) {
+        int rank = g.player_->getArtRank(static_cast<ArtEffect>(e));
+        if (rank > 1) ranks.push_back({ e, rank });
+    }
+    f << ranks.size() << '\n';
+    for (const auto& [e, rank] : ranks)
+        f << e << ' ' << rank << '\n';
+
     // Trampas y HP restante de enemigos (v7)
     if (inDungeon) {
         auto acc = g.dungeon_->lock();
@@ -252,7 +262,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 12)
+    if (!(f >> version) || version < 1 || version > 13)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -520,6 +530,19 @@ bool GameSerializer::load(Game& g)
             int e;
             if (!(f >> e) || e < 0 || e > static_cast<int>(ArtEffect::MundoNuevo)) return false;
             g.player_->equipArt(static_cast<int>(i), static_cast<ArtEffect>(e));
+        }
+    }
+
+    // Rangos de habilidad (v13)
+    if (version >= 13 && g.player_) {
+        size_t count;
+        if (!(f >> count) || count > static_cast<size_t>(kArtEffectCount)) return false;
+        for (size_t i = 0; i < count; i++) {
+            int e, rank;
+            if (!(f >> e >> rank) || e < 0 || e >= kArtEffectCount || rank < 1 || rank > kMaxArtRank)
+                return false;
+            for (int r = 1; r < rank; r++)
+                g.player_->upgradeArt(static_cast<ArtEffect>(e));
         }
     }
     if (g.player_)
