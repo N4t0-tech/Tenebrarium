@@ -9,3 +9,4 @@ AGENTS.md
 .directory
 *.png
 *.xlsx
+.claude/
