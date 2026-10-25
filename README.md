@@ -14,13 +14,20 @@ RPG de mazmorras por turnos con estética TUI, ejecutable como aplicación nativ
 - **Combate múltiple**: enemigos cercanos en área 5×5 se unen a la pelea (máx. 5)
 - **Hasta 3 enemigos por sala** en pisos profundos
 - **Antorchas decorativas** con luz dinámica que parpadea y respeta paredes
-- 3 clases: Guerrero, Mago, Ranger — cada una con 3 artes únicas
+- 3 clases: Guerrero, Mago, Arquera — y clases secretas por descubrir
+- **Árbol de habilidades** por clase: 3 habilidades base y 6 desbloqueables al subir de nivel, con 3 equipables a la vez (`H`)
+- **Hechizos de mapa**: trampas de la Arquera colocables con el mouse y lanzamiento de cadáveres
+- **Aldea** con tienda, forja para mejorar el equipo y sala de entrenamiento para subir los rangos de las habilidades (I–III)
+- **Ciclo día/noche** con hora persistente
+- Equipo con 4 rarezas: Común, Raro, Épico y Legendario
 - Inventario por slots, equipo, pociones, cofres, llaves y salas secretas
-- Tienda con mercader por piso
+- Tienda con mercader por piso y compra por cantidad
 - **20 pisos** con escalado de dificultad — jefes cada 5 pisos
 - Diario de misiones
+- Efectos de sonido tenebrosos con volumen ajustable
 - Retratos de clase en truecolor (REXPaint `.xp`)
 - 2 modos de HUD: panel lateral o barra inferior
+- Movimiento con WASD o flechas, configurable en ajustes
 - Zoom del mapa ajustable en tiempo real (`+` / `-`), se guarda entre sesiones
 - Guardado automático al bajar de piso — continúa desde el menú principal
 
@@ -97,3 +104,8 @@ assets/
   fonts/      mono.ttf (Hack Regular)
   art/        Retratos .xp por clase (mago.xp, warrior.xp)
 ```
+
+## Créditos
+
+- **Nato** — Ascii Forager
+- **Halley** — Diseñadora de retratos independiente
