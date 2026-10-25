@@ -69,40 +69,57 @@ cmake --build build -j$(nproc)
 
 | Tecla | Acción |
 | --- | --- |
-| `W A S D` / flechas / `H J K L` | Moverse |
-| `E` | Buscar paredes secretas |
+| `W A S D` o flechas | Moverse (se elige en Configuración) |
+| `E` | Buscar paredes secretas (usa una bomba si tienes) |
+| `P` | Beber poción de vida |
+| `R` | Beber poción de maná (cerveza para el Guerrero) |
+| `Q` | Habilidad de mapa: lanzar hechizo, o levantar y lanzar cadáveres (Guerrero) |
+| `T` | Colocar trampa (Arquera) |
+| `H` | Habilidades: equipar en las ranuras `1` `2` `3` |
 | `I` | Inventario |
 | `M` | Diario de misiones |
-| `Q` | Menú de salida |
+| `B` | Bestiario |
 | `+` / `-` | Zoom del mapa (1×–3×) |
+| `F` | Pantalla completa |
+| `Esc` | Menú de salida |
+
+Al apuntar un hechizo o una trampa: mueve el cursor con las teclas de movimiento o el mouse, confirma con `Enter` o clic izquierdo y cancela con `Esc` o clic derecho. Con varios hechizos, `Q` o `1`–`4` cambian entre ellos.
+
+En la aldea basta con caminar hasta la tienda, la forja o la sala de entrenamiento para abrir su menú.
 
 ### Combate
 
 | Tecla | Acción | Coste |
 | --- | --- | --- |
-| `A` | Atacar | 1 PA |
-| `F` | Ataque Fuerte | 2 PA |
-| `D` | Defender | 1 PA |
-| `U` | Usar poción | 1 PA |
-| `H` | Menú de Artes | — |
-| `Space` | Terminar turno | — |
-| `R` | Huir | 3 PA |
+| `1` | Atacar | 1 PA |
+| `2` | Ataque Fuerte | 2 PA |
+| `3` | Habilidades (luego `1`–`3` o `Enter`) | variable |
+| `4` | Defender | 1 PA |
+| `5` | Usar poción | 1 PA |
+| `6` | Huir | 3 PA |
+| `7` | Saquear al objetivo | 1 PA |
 | `Tab` | Cambiar objetivo | — |
+| `Space` | Terminar turno | — |
 
 ## Estructura
 
 ```text
 src/
-  core/       Game loop, estados, input
-  entities/   Player, Enemy
-  combat/     CombatSystem, Arts, StatusEffects
+  core/       Game loop, estados, input, guardado
+  entities/   Player, Enemy, SkillTree
+  combat/     CombatSystem, Arts, hechizos de mapa
+  ai/         EnemyAI, Pathfinding
   inventory/  Inventory, Item
-  world/      Map, BSPDungeon, FOV
+  world/      Map, BSPDungeon, Dungeon, Village, DayCycle
   ui/         Renderer, TerminalScreen, XpLoader
+  audio/      Efectos de sonido (Sfx)
+  bestiary/   Datos del bestiario
   quests/     Sistema de misiones
 assets/
-  fonts/      mono.ttf (Hack Regular)
-  art/        Retratos .xp por clase (mago.xp, warrior.xp)
+  fonts/      mono.ttf (Hack Regular), atlas CP437
+  art/        Retratos .xp por clase
+  maps/       Mapa de la aldea (aldea.xp)
+  shaders/    Shader CRT
 ```
 
 ## Créditos
