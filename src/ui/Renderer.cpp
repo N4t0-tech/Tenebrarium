@@ -1849,7 +1849,7 @@ void Renderer::drawFitBox(TerminalScreen& scr, int row,
 void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
                          const std::string& message,
-                         bool sellMode, int sellSelection) {
+                         bool sellMode, int sellSelection, int quantity) {
     std::vector<BoxLine> lines;
     lines.push_back({ sellMode ? "=== VENDER ===" : "=== TIENDA DEL PUEBLO ===",
                       COL_ORANGE, CELL_BOLD });
@@ -1883,17 +1883,31 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
         if (!any)
             lines.push_back({ "(nada que vender)", COL_GRAY, CELL_DIM });
     } else {
-        int nameW = 0, priceW = 0;
+        int nameW = 0, priceW = 0, totalW = 0;
         for (const auto& s : stock) {
             nameW  = std::max(nameW, utf8Len(s.item.name));
             priceW = std::max(priceW, static_cast<int>(std::to_string(s.price).size()));
+            totalW = std::max(totalW, static_cast<int>(std::to_string(s.price * s.item.quantity).size()));
         }
+        // Columna de cantidad con ancho fijo para que la descripción no baile
+        auto qtyColumn = [&](const ShopItem& s, bool sel) {
+            if (s.sold || s.item.quantity <= 1) return std::string();
+            std::string col = "  quedan " + padLeft(std::to_string(s.item.quantity), 2);
+            if (sel)
+                return col + "   ◄ " + padLeft(std::to_string(quantity), 2) + " ► = " +
+                       padLeft(std::to_string(s.price * quantity), totalW) + " $";
+            return col;
+        };
+        int qtyW = 0;
+        for (int i = 0; i < static_cast<int>(stock.size()); i++)
+            qtyW = std::max(qtyW, utf8Len(qtyColumn(stock[i], true)));
         for (int i = 0; i < static_cast<int>(stock.size()); i++) {
             const auto& s = stock[i];
             bool sel = (i == selection);
             std::string line = (s.sold ? "[VENDIDO] " : "          ") +
                                padRight(s.item.name, nameW) + "   " +
-                               padLeft(std::to_string(s.price), priceW) + " $";
+                               padLeft(std::to_string(s.price), priceW) + " $" +
+                               padRight(qtyColumn(s, sel), qtyW);
             if (!s.item.description.empty())
                 line += "   " + s.item.description;
             lines.push_back({ line,
@@ -1906,7 +1920,7 @@ void Renderer::drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
     // Línea de mensaje siempre reservada: la ventana no cambia de alto al comprar
     lines.push_back({ message, COL_GREEN, CELL_BOLD });
     lines.push_back({ sellMode ? "W/S ▲▼ navegar  |  ENTER vender  |  V comprar  |  ESC salir"
-                               : "W/S ▲▼ navegar  |  ENTER comprar  |  V vender  |  ESC salir",
+                               : "W/S ▲▼ navegar  |  A/D ◄► cantidad  |  ENTER comprar  |  V vender  |  ESC salir",
                       COL_GRAY, CELL_DIM });
     drawFitBox(scr, 1, lines, COL_ORANGE);
 }

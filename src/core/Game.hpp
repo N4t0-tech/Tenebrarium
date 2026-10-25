@@ -153,6 +153,7 @@ private:
 
     std::vector<ShopItem>   shopStock_;
     int                     shopSelection_{0};
+    int                     shopQuantity_{1};
     bool                    shopSellMode_{false};
     int                     shopSellSelection_{0};
 

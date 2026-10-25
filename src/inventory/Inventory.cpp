@@ -11,7 +11,7 @@ bool Inventory::addItem(const Item& item) {
     if (item.type == ItemType::Consumable || item.type == ItemType::Bomb) {
         for (auto& it : items_) {
             if (it.name == item.name && it.type == item.type) {
-                it.quantity++;
+                it.quantity += item.quantity;
                 return true;
             }
         }

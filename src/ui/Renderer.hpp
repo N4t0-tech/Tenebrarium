@@ -70,7 +70,8 @@ public:
     static void drawShop(TerminalScreen& scr, const std::vector<ShopItem>& stock,
                          int selection, const Player& player,
                          const std::string& message,
-                         bool sellMode = false, int sellSelection = 0);
+                         bool sellMode = false, int sellSelection = 0,
+                         int quantity = 1);
     static void drawVillageMenu(TerminalScreen& scr, VillageMenu menu, int selection,
                                 const Player& player, int incursions, int trainingTab = 0);
 

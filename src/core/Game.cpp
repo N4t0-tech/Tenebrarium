@@ -79,6 +79,7 @@ static constexpr int kTrapManaCost  = 10;
 static constexpr int kTrapMaxActive = 3;
 static constexpr int kTrapRange     = 5;   // distancia Chebyshev desde el jugador
 static constexpr int kTrapRadius    = 1;   // la explosión alcanza las 8 casillas vecinas
+static constexpr int kShopBulkStock = 9;   // unidades de maná/cerveza y bombas por incursión
 
 // Cadáveres que lanza el Guerrero
 static constexpr int   kCorpseRange = 6;
@@ -1870,7 +1871,7 @@ void Game::render(TerminalScreen &scr)
         if (player_)
             Renderer::drawShop(scr, shopStock_, shopSelection_,
                                *player_, dungeon_ ? dungeon_->message : villageMessage_,
-                               shopSellMode_, shopSellSelection_);
+                               shopSellMode_, shopSellSelection_, shopQuantity_);
         break;
     case GameState::Inventory:
         if (player_)
@@ -2432,6 +2433,7 @@ void Game::inputVillage(int key)
     if (nx == village_->shop.x && ny == village_->shop.y) {
         generateShopStock();
         shopSelection_ = 0;
+        shopQuantity_ = 1;
         shopSellMode_ = false;
         setState(GameState::Shop);
         return;
@@ -2531,7 +2533,20 @@ void Game::inputShop(int key)
     case 'w':
     case 's':
         navV(key, shopSelection_, n);
+        shopQuantity_ = 1;
         break;
+    case 'a':
+    case 'd':
+    {
+        const auto &s = shopStock_[shopSelection_];
+        // Tope: lo que queda en la tienda y lo que alcanza el oro (al menos 1)
+        int affordable = s.price > 0 ? player_->getCoins() / s.price : s.item.quantity;
+        int maxQty = std::max(1, std::min(s.item.quantity, affordable));
+        shopQuantity_ += (key == 'd') ? 1 : -1;
+        if (shopQuantity_ < 1) shopQuantity_ = maxQty;
+        if (shopQuantity_ > maxQty) shopQuantity_ = 1;
+        break;
+    }
     case '\n':
     {
         auto &s = shopStock_[shopSelection_];
@@ -2541,20 +2556,32 @@ void Game::inputShop(int key)
             Sfx::play(SfxId::Denied);
             break;
         }
-        if (player_->getCoins() < s.price)
+        int qty = std::clamp(shopQuantity_, 1, std::max(1, s.item.quantity));
+        int cost = s.price * qty;
+        if (player_->getCoins() < cost)
         {
             showMessage("No tienes suficiente oro.");
             Sfx::play(SfxId::Denied);
             break;
         }
-        player_->addCoins(-s.price);
-        if (s.item.type == ItemType::Consumable || s.item.type == ItemType::Bomb)
-            player_->getInventory().addItem(s.item);
-        else
-            player_->pickupItem(s.item);
-        s.sold = true;
+        Item bought = s.item;
+        bought.quantity = qty;
+        bool added = (s.item.type == ItemType::Consumable || s.item.type == ItemType::Bomb)
+                         ? player_->getInventory().addItem(bought)
+                         : player_->pickupItem(bought);
+        if (!added)
+        {
+            showMessage("Inventario lleno.");
+            Sfx::play(SfxId::Denied);
+            break;
+        }
+        player_->addCoins(-cost);
+        s.item.quantity -= qty;
+        if (s.item.quantity <= 0)
+            s.sold = true;
+        shopQuantity_ = 1;
         Sfx::play(SfxId::Buy);
-        showMessage("Compraste: " + s.item.name + "!");
+        showMessage("Compraste: " + (qty > 1 ? std::to_string(qty) + "x " : "") + s.item.name + "!");
         break;
     }
     case 'v':
@@ -2596,16 +2623,16 @@ void Game::generateShopStock()
     shopStock_.push_back({p2, p2.value, false});
     if (cls == PlayerClass::Warrior) {
         Item beer = DungeonPopulator::pickBeer();
-        beer.quantity = 3;
-        shopStock_.push_back({beer, 5, false});
+        beer.quantity = kShopBulkStock;
+        shopStock_.push_back({beer, 2, false});
     } else {
         Item manaPot = DungeonPopulator::pickManaPotion();
-        manaPot.quantity = 3;
-        shopStock_.push_back({manaPot, 8, false});
+        manaPot.quantity = kShopBulkStock;
+        shopStock_.push_back({manaPot, 3, false});
     }
     Item bomb = DungeonPopulator::pickBomb(tier);
-    bomb.quantity = 3; // Vender en grupos de 3
-    shopStock_.push_back({bomb, bomb.value, false});
+    bomb.quantity = kShopBulkStock;
+    shopStock_.push_back({bomb, std::max(1, bomb.value / 3), false});
     Item shovel = DungeonPopulator::pickShovel(tier);
     shopStock_.push_back({shovel, shovel.value, false});
     // La tienda vende comunes y raros; de vez en cuando, un épico

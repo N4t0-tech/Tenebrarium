@@ -11,6 +11,7 @@
 #include "Game.hpp"
 #include "world/DungeonPopulator.hpp"
 #include <raylib.h>
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <sstream>
@@ -106,7 +107,7 @@ void GameSerializer::save(Game& g)
 
     const bool inDungeon = (g.dungeon_ != nullptr);
 
-    f << 13 << '\n'; // version 13: rangos de habilidad
+    f << 14 << '\n'; // version 14: la tienda vende por unidad
     f << (inDungeon ? 1 : 0) << '\n'; // lastPlace: 1 = mazmorra, 0 = pueblo
 
     // Player
@@ -262,7 +263,7 @@ bool GameSerializer::load(Game& g)
     if (!f) return false;
 
     int version;
-    if (!(f >> version) || version < 1 || version > 13)
+    if (!(f >> version) || version < 1 || version > 14)
         return false;
 
     // v5+: lastPlace (1 = mazmorra, 0 = pueblo). v1-4 siempre mazmorra.
@@ -462,6 +463,9 @@ bool GameSerializer::load(Game& g)
         if (!(f >> sold >> s.price)) return false;
         s.sold = sold;
         if (!ritem(f, s.item, version)) return false;
+        // Antes de v14 los paquetes de 3 tenían precio por paquete
+        if (version < 14 && s.item.quantity > 1)
+            s.price = std::max(1, s.price / s.item.quantity);
     }
 
     // Quests
