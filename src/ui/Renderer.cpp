@@ -796,7 +796,11 @@ void Renderer::drawCredits(TerminalScreen& scr) {
     drawCentered(scr, ty++, 0, scr.cols(), "~ Créditos ~", COL_WHITE);
 
     int y = ty + 1;
-    drawCentered(scr, y++, 0, scr.cols(), "Halley & Nato Co.", COL_WHITE);
+    drawCentered(scr, y++, 0, scr.cols(), "Nato", COL_YELLOW, CELL_BOLD);
+    drawCentered(scr, y++, 0, scr.cols(), "Ascii Forager", COL_GRAY);
+    y++;
+    drawCentered(scr, y++, 0, scr.cols(), "Halley", COL_YELLOW, CELL_BOLD);
+    drawCentered(scr, y++, 0, scr.cols(), "Diseñadora de retratos independiente", COL_GRAY);
     y++;
     drawCentered(scr, y,   0, scr.cols(), "ESC para volver", COL_GRAY, CELL_DIM);
 }
@@ -1772,7 +1776,8 @@ void Renderer::drawGameOver(TerminalScreen& scr, bool victory) {
     if (victory) {
         drawCentered(scr, ty + 1, 0, scr.cols(), "Gracias por jugar Tenebrarium.", COL_CYAN, 0);
         drawCentered(scr, ty + 2, 0, scr.cols(), "~ Créditos ~", COL_WHITE, CELL_BOLD);
-        drawCentered(scr, ty + 3, 0, scr.cols(), "Halley & Nato Co.", COL_YELLOW, 0);
+        drawCentered(scr, ty + 3, 0, scr.cols(), "Nato - Ascii Forager", COL_YELLOW, 0);
+        drawCentered(scr, ty + 4, 0, scr.cols(), "Halley - Diseñadora de retratos independiente", COL_YELLOW, 0);
     }
     drawCentered(scr, scr.rows() - 3, 0, scr.cols(),
                  "ENTER para volver al menu",
