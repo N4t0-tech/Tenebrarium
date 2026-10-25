@@ -281,6 +281,18 @@ void Player::resetEquippedArts() {
         equippedArts_.push_back(sc.effect);
 }
 
+int Player::nextPendingTier() const {
+    if (!pendingSkillUnlock_) return -1;
+    int tiers = static_cast<int>(getSkillTree(class_).tiers.size());
+    for (int t = 0; t < tiers; t++) {
+        bool already = false;
+        for (const auto& us : unlockedSkills_)
+            if (us.tier == t) { already = true; break; }
+        if (!already) return t;
+    }
+    return -1;
+}
+
 bool Player::unlockSkill(int tier, int choiceIdx) {
     // Verificar que el tier no esté ya desbloqueado
     for (const auto& us : unlockedSkills_) {

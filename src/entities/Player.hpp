@@ -66,6 +66,7 @@ public:
     bool hasPendingSkillUnlock() const { return pendingSkillUnlock_; }
     void setPendingSkillUnlock(bool v) { pendingSkillUnlock_ = v; }
     void refreshPendingSkillUnlock();          // recalcula según nivel y tiers ya elegidos
+    int  nextPendingTier() const;              // primer tier sin elegir, o -1 si no hay pendiente
     bool unlockSkill(int tier, int choiceIdx); // false si ya desbloqueado o inválido
     const std::vector<UnlockedSkill>& getUnlockedSkills() const { return unlockedSkills_; }
 

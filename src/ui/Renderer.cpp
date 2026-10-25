@@ -2086,15 +2086,7 @@ void Renderer::drawSkillTree(TerminalScreen& scr, const Player& player,
     int innerX = boxX + 1;
 
     // Determinar tier pendiente (el que el jugador debe elegir)
-    int pendingTier = -1;
-    if (player.hasPendingSkillUnlock()) {
-        for (int t = 0; t < static_cast<int>(tree.tiers.size()); t++) {
-            bool already = false;
-            for (const auto& us : unlocked)
-                if (us.tier == t) { already = true; break; }
-            if (!already) { pendingTier = t; break; }
-        }
-    }
+    int pendingTier = player.nextPendingTier();
 
     // Cabecera del cuadro
     scr.put(boxX, boxRow, 0x2554, COL_YELLOW);

@@ -899,7 +899,9 @@ void Game::processInput()
 
     // Carácter Unicode — interceptar +, - y F antes de dispatch
     GameState st = state_.load();
-    bool moveState = st == GameState::Exploration || st == GameState::Village;
+    // En los menús de la aldea WASD sigue navegando aunque el movimiento sea con flechas
+    bool moveState = st == GameState::Exploration
+                  || (st == GameState::Village && villageMenu_ == VillageMenu::None);
     int cp = GetCharPressed();
     if (cp > 0 && cp < 128) cp = std::tolower(cp);
     while (moveState && (cp == 'w' || cp == 'a' || cp == 's' || cp == 'd')) {
@@ -983,8 +985,13 @@ bool Game::processHeldMovement()
     // Vaciar la cola de caracteres para que la pulsación no llegue al estado siguiente
     // (p. ej. tienda o combate) si este movimiento provoca una transición.
     while (GetCharPressed() > 0) {}
+    VillageMenu menuBefore = villageMenu_;
+    bool confirmBefore = villageConfirmDescend_;
     dispatchInput(key);
-    if (state_.load() != st)
+    // Al llegar a la escalera o a un edificio se suelta la tecla mantenida: hace
+    // falta volver a pulsarla, para que la repetición no cierre la pregunta o el menú
+    if (state_.load() != st || villageMenu_ != menuBefore
+        || (villageConfirmDescend_ && !confirmBefore))
         heldMoveKey_ = 0;
     return true;
 }
@@ -1620,16 +1627,7 @@ void Game::inputHudSelect(int key)
 void Game::inputSkillTree(int key)
 {
     if (!player_) return;
-    const auto& unlocked = player_->getUnlockedSkills();
-
-    // Encontrar tier pendiente
-    int pendingTier = -1;
-    if (player_->hasPendingSkillUnlock()) {
-        // Importar getSkillTree aquí — necesitamos conocer cuántos tiers hay
-        // Usamos el número de habilidades ya desbloqueadas como índice de tier pendiente
-        int nextTierIdx = static_cast<int>(unlocked.size());
-        pendingTier = nextTierIdx; // el siguiente tier sin desbloquear
-    }
+    int pendingTier = player_->nextPendingTier();
 
     const auto& tiers = getSkillTree(player_->getClass()).tiers;
     int choiceCount = (pendingTier >= 0 && pendingTier < static_cast<int>(tiers.size()))
@@ -1650,7 +1648,7 @@ void Game::inputSkillTree(int key)
         state_.store(preSkillTreeState_);
         break;
     case 27: // ESC — cerrar sin elegir (solo si no es obligatorio)
-        if (!player_->hasPendingSkillUnlock()) {
+        if (pendingTier < 0) {
             state_.store(preSkillTreeState_);
         }
         break;
@@ -1682,14 +1680,14 @@ void Game::update()
     }
 
     // Abrir árbol de habilidades cuando hay un desbloqueo pendiente
-    if (player_ && player_->hasPendingSkillUnlock()
+    if (player_ && player_->nextPendingTier() >= 0
         && state_.load() != GameState::SkillTree
         && state_.load() != GameState::MainMenu)
     {
         preSkillTreeState_ = state_.load();
         skillTreeChoiceCursor_ = 0;
         // Determinar el tier que se va a desbloquear
-        skillTreeTierCursor_ = static_cast<int>(player_->getUnlockedSkills().size());
+        skillTreeTierCursor_ = player_->nextPendingTier();
         state_.store(GameState::SkillTree);
     }
 
@@ -3065,8 +3063,13 @@ bool Game::canThrowCorpses() const
 int Game::carriedCorpse(const Dungeon::Lock& acc) const
 {
     const auto& enemies = acc.enemies();
+    // Un cadáver en vuelo sigue marcado como cargado hasta el impacto
+    auto inFlight = [&](int i) {
+        return std::any_of(projectiles_.begin(), projectiles_.end(),
+                           [i](const Projectile& p) { return p.corpseIdx == i; });
+    };
     for (int i = 0; i < static_cast<int>(enemies.size()); i++)
-        if (enemies[i].carried) return i;
+        if (enemies[i].carried && !inFlight(i)) return i;
     return -1;
 }
 

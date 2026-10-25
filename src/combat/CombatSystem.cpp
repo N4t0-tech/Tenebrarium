@@ -382,10 +382,17 @@ void CombatSystem::processEnemyTurn() {
             auto heavyIt = std::find_if(playerEffects_.begin(), playerEffects_.end(),
                 [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::DefendingHeavy; });
             if (heavyIt != playerEffects_.end()) {
-                rawDmg = std::max(1, rawDmg * 30 / 100);
+                int blockPct = heavyIt->magnitude;
                 playerEffects_.erase(heavyIt);
-                logMessage("Escudo Total! Daño reducido 70%.");
                 Sfx::play(SfxId::Blocked, sfxDelay_);
+                // Escudo Arcano (100%) absorbe el golpe entero; Escudo Total (70%) lo reduce
+                if (blockPct >= 100) {
+                    logMessage("Escudo Arcano! Absorbe el golpe de " + enemy->getName() + ".");
+                    sfxDelay_ += 0.3f;
+                    continue;
+                }
+                rawDmg = std::max(1, rawDmg * (100 - blockPct) / 100);
+                logMessage("Escudo Total! Daño reducido " + ts(blockPct) + "%.");
             } else {
                 bool defending = std::any_of(playerEffects_.begin(), playerEffects_.end(),
                     [](const StatusEffect& fx) { return fx.type == StatusEffect::Type::Defending; });
@@ -880,11 +887,21 @@ bool CombatSystem::resolveArt(ArtEffect effect) {
         case ArtEffect::CampoEquilibrio: {
             int avg  = (player_.getHp() + target->getHp()) / 2;
             int diff = avg - player_.getHp();
+            int enemyDmg = std::max(0, target->getHp() - avg);
+            // Los jefes resisten: como mucho pierden el 15% de su vida actual
+            // y la curación no supera lo que se les quita
+            if (target->isBoss()) {
+                enemyDmg = std::min(enemyDmg, target->getHp() * 15 / 100);
+                if (diff > 0) diff = std::min(diff, enemyDmg);
+            }
             if (diff > 0) player_.heal(diff);
             else          hurtPlayer(-diff);
-            int enemyDmg = std::max(0, target->getHp() - avg);
             if (enemyDmg > 0) target->takeDamageRaw(enemyDmg);
-            logMessage("Campo de Equilibrio! Vuestras vidas se igualan en " + ts(avg) + ".");
+            if (target->isBoss())
+                logMessage("Campo de Equilibrio! " + target->getName() + " resiste: pierde " +
+                           ts(enemyDmg) + " HP.");
+            else
+                logMessage("Campo de Equilibrio! Vuestras vidas se igualan en " + ts(avg) + ".");
             break;
         }
         case ArtEffect::ColapsoDimensional: {
