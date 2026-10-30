@@ -52,6 +52,16 @@ static const char32_t kCp437[256] = {
     0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0, 0x00A0,
 };
 
+int unicodeToCp437(int codepoint) {
+    static const std::unordered_map<int, int> kRev = [] {
+        std::unordered_map<int, int> m;
+        for (int i = 1; i < 256; i++) m.emplace(static_cast<int>(kCp437[i]), i);
+        return m;
+    }();
+    auto it = kRev.find(codepoint);
+    return it != kRev.end() ? it->second : -1;
+}
+
 static int32_t readInt32(const uint8_t* data, size_t& offset) {
     int32_t val;
     std::memcpy(&val, data + offset, 4);

@@ -48,6 +48,8 @@ public:
     // Atlas CP437 de 16×16 glifos, blancos con alfa
     static void setTileAtlas(Texture2D atlas) { tileAtlas_ = atlas; }
     static bool hasTileAtlas() { return tileAtlas_.id != 0; }
+    // Dibuja los glifos de las celdas con el atlas CP437 en vez de la fuente (celdas cuadradas)
+    void setAtlasCells(bool on) { atlasCells_ = on; }
     // Dibuja el buffer (llamar entre BeginDrawing/EndDrawing)
     void render(int offsetX = 0, int offsetY = 0) const;
 
@@ -59,6 +61,7 @@ private:
     Font  fontItalic_;
     std::vector<Cell> buf_;
     std::vector<GlyphTile> tiles_;
+    bool atlasCells_ = false;
     static inline Texture2D tileAtlas_{};
 
     bool inBounds(int col, int row) const {

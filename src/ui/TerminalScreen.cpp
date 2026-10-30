@@ -3,6 +3,7 @@
 // El buffer se llena por la lógica de juego/renderer y se vuelca a Raylib en render().
 
 #include "TerminalScreen.hpp"
+#include "XpLoader.hpp"
 #include <raylib.h>
 
 TerminalScreen::TerminalScreen(int cols, int rows, int cellW, int cellH, Font font, Font fontItalic, int fontH)
@@ -86,6 +87,7 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
     }
 
     // Pasada 2: glifos
+    float g = tileAtlas_.width / 16.0f;
     for (int row = 0; row < rows_; row++) {
         for (int col = 0; col < cols_; col++) {
             const Cell& c = buf_[idx(col, row)];
@@ -98,7 +100,12 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
             if (c.flags & CELL_INVERTED) fg = c.bg;
             if (c.flags & CELL_DIM)      fg = dimColor(fg);
 
-            DrawTextCodepoint(
+            int cp = (atlasCells_ && hasTileAtlas()) ? unicodeToCp437(c.codepoint) : -1;
+            if (cp > 0) {
+                Rectangle src{ (cp % 16) * g, (cp / 16) * g, g, g };
+                DrawTexturePro(tileAtlas_, src, { (float)px, (float)py, (float)cellW_, (float)cellH_ },
+                               { 0, 0 }, 0.0f, fg);
+            } else DrawTextCodepoint(
                 (c.flags & CELL_ITALIC) ? fontItalic_ : font_,
                 c.codepoint,
                 { (float)px, (float)(py + padY) }, fs, fg);
@@ -111,7 +118,6 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
     }
 
     // Pasada 3: glifos del atlas CP437
-    float g = tileAtlas_.width / 16.0f;
     for (const GlyphTile& t : tiles_) {
         Rectangle dst{ (float)(offsetX + t.x), (float)(offsetY + t.y), (float)t.size, (float)t.size };
         DrawRectangleRec(dst, t.bg);

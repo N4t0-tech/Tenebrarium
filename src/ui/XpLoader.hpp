@@ -21,6 +21,9 @@ struct XpFile {
     std::vector<XpLayer> layers;
 };
 
+// Byte CP437 de un codepoint Unicode; -1 si CP437 no lo tiene
+int unicodeToCp437(int codepoint);
+
 // Carga un archivo .xp REXPaint (gzip + binario)
 XpFile loadXp(const std::string& path);
 

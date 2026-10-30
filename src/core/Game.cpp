@@ -463,10 +463,12 @@ static constexpr int kPadX = 1;
             int mapCols = (hudLayout_ == HudLayout::Sidebar) ? cols - kSidebarW - 1 : cols;
             int mapRows = (hudLayout_ == HudLayout::Bottom)  ? rows - kHudBarH      : rows;
             int z = std::max(1, mapZoom_);
+            // La aldea es arte de REXPaint: casillas cuadradas como en el editor
+            int tileH = (village_ && !dungeon_) ? cellW : cellH;
             mapViewport_.originX = offX + cellW;
             mapViewport_.originY = offY + cellH;
             mapViewport_.cellW   = cellW * z;
-            mapViewport_.cellH   = cellH * z;
+            mapViewport_.cellH   = tileH * z;
             mapViewport_.viewW   = (mapCols - 2) * cellW / mapViewport_.cellW;
             mapViewport_.viewH   = (mapRows - 2) * cellH / mapViewport_.cellH;
         }
@@ -540,8 +542,8 @@ static constexpr int kPadX = 1;
             DrawRectangle(offX + cellW, offY + cellH,
                           mapPixW - 2 * cellW, mapPixH - 2 * cellH, BLACK);
 
-            int zCellW = cellW * mapZoom_;
-            int zCellH = cellH * mapZoom_;
+            int zCellW = mapViewport_.cellW;
+            int zCellH = mapViewport_.cellH;
             Font zFont  = (mapZoom_ == 3) ? font3x : (mapZoom_ == 2) ? font2x : font;
             Font zFontItalic = getFontItalic(fontSize * mapZoom_);
             int  zFontH = fontSize * mapZoom_;
@@ -555,6 +557,7 @@ static constexpr int kPadX = 1;
             TerminalScreen mapScr(innerPixW / zCellW + 1, innerPixH / zCellH + 1,
                                   zCellW, zCellH, zFont, zFontItalic, zFontH);
             mapScr.clear();
+            mapScr.setAtlasCells(!dungeon_);
 
             if (dungeon_) {
                 auto acc = dungeon_->lock();
