@@ -7,6 +7,7 @@
 
 struct XpCell {
     char32_t glyph;
+    uint8_t cp;  // byte CP437 original
     uint8_t fg_r, fg_g, fg_b;
     uint8_t bg_r, bg_g, bg_b;
 };
@@ -30,5 +31,6 @@ void clearXpCache();
 // Vuelca una capa XP en el TerminalScreen en (col, row) con half-block (▀)
 void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f, Color tint = WHITE);
 
-// Vuelca una capa XP usando los glyphs CP437 reales (conserva texturas/detalles)
+// Vuelca una capa XP con el atlas CP437 en celdas cuadradas, como se ve en REXPaint.
+// Ocupa el mismo hueco que xpDrawHalfBlock: width columnas × height/2 filas.
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale = 1.0f);

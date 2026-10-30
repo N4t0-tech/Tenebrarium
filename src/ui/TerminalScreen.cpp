@@ -17,6 +17,11 @@ void TerminalScreen::clear() {
         c.bg        = BLACK;
         c.flags     = 0;
     }
+    tiles_.clear();
+}
+
+void TerminalScreen::putTile(int px, int py, int size, uint8_t cp, Color fg, Color bg) {
+    tiles_.push_back({ px, py, size, cp, fg, bg });
 }
 
 void TerminalScreen::put(int col, int row, int codepoint,
@@ -103,5 +108,15 @@ void TerminalScreen::render(int offsetX, int offsetY) const {
                 DrawRectangle(px, lineY, cellW_, 1, fg);
             }
         }
+    }
+
+    // Pasada 3: glifos del atlas CP437
+    float g = tileAtlas_.width / 16.0f;
+    for (const GlyphTile& t : tiles_) {
+        Rectangle dst{ (float)(offsetX + t.x), (float)(offsetY + t.y), (float)t.size, (float)t.size };
+        DrawRectangleRec(dst, t.bg);
+        if (t.cp == 0 || t.cp == ' ' || !hasTileAtlas()) continue;
+        Rectangle src{ (t.cp % 16) * g, (t.cp / 16) * g, g, g };
+        DrawTexturePro(tileAtlas_, src, dst, { 0, 0 }, 0.0f, t.fg);
     }
 }

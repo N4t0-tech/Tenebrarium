@@ -372,6 +372,19 @@ static constexpr int kPadX = 1;
     Shader crtShader = LoadShader(0, (assetsDir() + "shaders/crt.frag").c_str());
     int resLoc = GetShaderLocation(crtShader, "resolution");
 
+    // Atlas CP437 para los retratos con caracteres: el png es blanco sobre negro y el negro pasa a transparente
+    Texture2D cp437Atlas{};
+    Image cp437 = LoadImage((assetsDir() + "fonts/cp437_16x16.png").c_str());
+    if (cp437.data) {
+        Image mask = ImageCopy(cp437);
+        ImageAlphaMask(&cp437, mask);
+        UnloadImage(mask);
+        cp437Atlas = LoadTextureFromImage(cp437);
+        SetTextureFilter(cp437Atlas, TEXTURE_FILTER_BILINEAR);
+        UnloadImage(cp437);
+    }
+    TerminalScreen::setTileAtlas(cp437Atlas);
+
     // Render texture offscreen
     RenderTexture2D renderTarget = LoadRenderTexture(SCREEN_W, SCREEN_H);
     SetTextureFilter(renderTarget.texture, TEXTURE_FILTER_POINT);
@@ -803,6 +816,8 @@ static constexpr int kPadX = 1;
 
     UnloadRenderTexture(renderTarget);
     UnloadShader(crtShader);
+    TerminalScreen::setTileAtlas({});
+    UnloadTexture(cp437Atlas);
     for (auto& [size, f] : fontCache)
         UnloadFont(f);
     Sfx::shutdown();

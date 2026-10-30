@@ -19,6 +19,13 @@ struct Cell {
     uint8_t  flags     = 0;
 };
 
+// Glifo del atlas CP437 en una celda cuadrada, en píxeles relativos al grid
+struct GlyphTile {
+    int     x, y, size;
+    uint8_t cp;
+    Color   fg, bg;
+};
+
 // Buffer de celdas que el Renderer escribe y Raylib dibuja.
 class TerminalScreen {
 public:
@@ -36,6 +43,11 @@ public:
     // Escribe string UTF-8; devuelve columnas consumidas
     int  putStr(int col, int row, const std::string& utf8,
                 Color fg, Color bg = BLACK, uint8_t flags = 0);
+    // Encola un glifo del atlas CP437; se dibuja encima de las celdas
+    void putTile(int px, int py, int size, uint8_t cp, Color fg, Color bg);
+    // Atlas CP437 de 16×16 glifos, blancos con alfa
+    static void setTileAtlas(Texture2D atlas) { tileAtlas_ = atlas; }
+    static bool hasTileAtlas() { return tileAtlas_.id != 0; }
     // Dibuja el buffer (llamar entre BeginDrawing/EndDrawing)
     void render(int offsetX = 0, int offsetY = 0) const;
 
@@ -46,6 +58,8 @@ private:
     Font  font_;
     Font  fontItalic_;
     std::vector<Cell> buf_;
+    std::vector<GlyphTile> tiles_;
+    static inline Texture2D tileAtlas_{};
 
     bool inBounds(int col, int row) const {
         return col >= 0 && col < cols_ && row >= 0 && row < rows_;

@@ -459,7 +459,7 @@ void Renderer::drawPortrait(TerminalScreen& scr, int col, int row,
     try {
         XpFile& xp = loadXpCached(assetsDir() + "art/" + filename);
         if (xp.layers.empty()) throw std::runtime_error("vacío");
-        if (useGlyphs)
+        if (useGlyphs && TerminalScreen::hasTileAtlas())
             xpDrawGlyphs(scr, xp.layers[0], col, row, scale);
         else
             xpDrawHalfBlock(scr, xp.layers[0], col, row, scale, tint);
@@ -841,6 +841,7 @@ struct ClassInfo {
     const char* portrait;  // archivo .xp para la pantalla de selección
     int hp, atk, def, mana;
     PlayerClass cls;
+    bool glyphPortrait = false;  // dibujar los caracteres del .xp en celdas cuadradas en vez de píxeles
 };
 
 // Índices 0-2: clases normales (Física, Mágica, Distancia).
@@ -848,7 +849,7 @@ struct ClassInfo {
 static const ClassInfo kClasses[5] = {
     // Física
     {"GUERRERO", "Física",    "Maestro del combate cuerpo a cuerpo.",
-     "warrior.xp", 120,20,8,100, PlayerClass::Warrior},
+     "warrior.xp", 120,20,8,100, PlayerClass::Warrior, true},
     // Mágica
     {"MAGO",     "Mágica",    "Domina las artes mágicas. Poder devastador.",
      "mago.xp",   100,10,3,100, PlayerClass::Mage},
@@ -974,7 +975,8 @@ void Renderer::drawClassSelect(TerminalScreen& scr, int category,
         int portCol = spaceStart + (scr.cols() - spaceStart - portW) / 2;
         if (portCol < spaceStart) portCol = spaceStart;
         drawBorder(scr, portCol - 1, 3, portW + 2, portH + 2, COL_YELLOW);
-        drawPortrait(scr, portCol, 4, kClasses[category].portrait, kPortScale);
+        drawPortrait(scr, portCol, 4, kClasses[category].portrait, kPortScale,
+                     WHITE, kClasses[category].glyphPortrait);
     }
 
     drawCentered(scr, scr.rows() - 2, 0, scr.cols(),

@@ -89,6 +89,7 @@ XpFile loadXp(const std::string& path) {
                 int32_t glyphVal = readInt32(data.data(), offset);
                 uint8_t cp = static_cast<uint8_t>(glyphVal & 0xFF);
                 cell.glyph = kCp437[cp];  // convertir CP437 → Unicode
+                cell.cp    = cp;
                 cell.fg_r = data[offset++];
                 cell.fg_g = data[offset++];
                 cell.fg_b = data[offset++];
@@ -141,19 +142,20 @@ void xpDrawHalfBlock(TerminalScreen& scr, const XpLayer& layer, int col, int row
     }
 }
 
-// Renderiza capa .xp con glyphs CP437 reales (conserva detalles/texturas)
+// Renderiza capa .xp con el atlas CP437 en celdas cuadradas (conserva detalles/texturas)
 void xpDrawGlyphs(TerminalScreen& scr, const XpLayer& layer, int col, int row, float scale) {
-    int dstW = static_cast<int>(layer.width  * scale);
-    int dstH = static_cast<int>(layer.height * scale);
-    for (int dy = 0; dy < dstH; dy++) {
-        for (int dx = 0; dx < dstW; dx++) {
-            int sx = std::min(static_cast<int>(dx / scale), layer.width  - 1);
-            int sy = std::min(static_cast<int>(dy / scale), layer.height - 1);
-            const XpCell& cell = layer.cells[sy * layer.width + sx];
-            if (cell.glyph == 0 || cell.glyph == U' ') continue;
+    int boxW = static_cast<int>(layer.width  * scale) * scr.cellW();
+    int boxH = static_cast<int>(layer.height * scale) / 2 * scr.cellH();
+    int size = std::min(boxW / layer.width, boxH / layer.height);
+    if (size <= 0) return;
+    int x0 = col * scr.cellW() + (boxW - size * layer.width)  / 2;
+    int y0 = row * scr.cellH() + (boxH - size * layer.height) / 2;
+    for (int y = 0; y < layer.height; y++) {
+        for (int x = 0; x < layer.width; x++) {
+            const XpCell& cell = layer.cells[y * layer.width + x];
             Color fg = { cell.fg_r, cell.fg_g, cell.fg_b, 255 };
             Color bg = { cell.bg_r, cell.bg_g, cell.bg_b, 255 };
-            scr.put(col + dx, row + dy, cell.glyph, fg, bg);
+            scr.putTile(x0 + x * size, y0 + y * size, size, cell.cp, fg, bg);
         }
     }
 }
