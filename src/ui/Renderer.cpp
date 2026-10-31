@@ -852,7 +852,7 @@ static const ClassInfo kClasses[5] = {
      "warrior.xp", 120,20,8,100, PlayerClass::Warrior, true},
     // Mágica
     {"MAGO",     "Mágica",    "Domina las artes mágicas. Poder devastador.",
-     "mago.xp",   100,10,3,100, PlayerClass::Mage},
+     "mago.xp",   100,10,3,100, PlayerClass::Mage, true},
     // Distancia
     {"ARQUERA",  "Distancia", "Ágil y versátil. Experta en trampas y arco.",
      "ranger.xp",  100,12,5,50,  PlayerClass::Ranger},
