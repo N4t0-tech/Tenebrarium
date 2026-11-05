@@ -337,9 +337,8 @@ bool GameSerializer::load(Game& g)
     }
 
     // Recreate dungeon (solo si el save estaba en la mazmorra)
-    g.dungeon_.reset();
-    if (inDungeon)
-        g.dungeon_ = std::make_shared<Dungeon>();
+    std::atomic_store(&g.dungeon_, inDungeon ? std::make_shared<Dungeon>()
+                                             : std::shared_ptr<Dungeon>{});
 
     if (inDungeon)
     {
@@ -586,7 +585,7 @@ bool GameSerializer::load(Game& g)
         g.dungeon_->message.clear();
         g.state_.store(GameState::Exploration);
     } else {
-        g.dungeon_.reset();
+        std::atomic_store(&g.dungeon_, std::shared_ptr<Dungeon>{});
         g.village_ = std::make_unique<VillageLayout>(buildVillage());
         if (g.player_)
             g.village_->map.setPlayerPos(g.village_->spawn.x, g.village_->spawn.y);

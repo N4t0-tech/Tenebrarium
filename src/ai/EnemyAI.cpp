@@ -15,7 +15,7 @@ void EnemyAI::run(Game& g)
         if (g.aiming_.load(std::memory_order_acquire))
             continue;
 
-        auto dungeon = g.dungeon_;
+        auto dungeon = std::atomic_load(&g.dungeon_);
         if (!dungeon)
             continue;
 

@@ -1984,7 +1984,7 @@ void Game::setState(GameState newState)
         hudSelection_ = 0;
         playerName_.clear();
         player_.reset();
-        dungeon_.reset();
+        std::atomic_store(&dungeon_, std::shared_ptr<Dungeon>{});
         village_.reset();
         combat_.reset();
     }
@@ -1997,7 +1997,7 @@ void Game::setState(GameState newState)
         pendingCombatEnemy_.store(-1);
         mimicCombat_ = false;
         combat_.reset();
-        dungeon_.reset();
+        std::atomic_store(&dungeon_, std::shared_ptr<Dungeon>{});
         villageMenu_ = VillageMenu::None;
         villageConfirmDescend_ = false;
         villageMessage_.clear();
@@ -2018,8 +2018,10 @@ void Game::setState(GameState newState)
         PlayerClass cls = player_ ? player_->getClass() : PlayerClass::Warrior;
         int inc = player_ ? player_->getIncursions() : 0;
 
-        dungeon_ = std::make_shared<Dungeon>();
-        dungeon_->generate(floor, cls, inc);
+        // El hilo de IA lee dungeon_ a la vez: se cambia de forma atómica
+        auto next = std::make_shared<Dungeon>();
+        next->generate(floor, cls, inc);
+        std::atomic_store(&dungeon_, next);
         Sfx::play(SfxId::Stairs);
     }
 
