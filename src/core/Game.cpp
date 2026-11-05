@@ -399,7 +399,17 @@ static constexpr int kPadX = 1;
         {
             pendingRedraw_.store(false, std::memory_order_release);
             int combatIdx = pendingCombatEnemy_.load();
-            if (combatIdx >= 0 && state_.load() == GameState::Exploration)
+            // El índice puede venir de la mazmorra anterior o de un enemigo ya muerto
+            bool validIdx = false;
+            if (combatIdx >= 0 && dungeon_) {
+                auto acc = dungeon_->lock();
+                const auto& es = acc.enemies();
+                Position p = acc.playerPos();
+                validIdx = combatIdx < static_cast<int>(es.size()) && es[combatIdx].alive
+                        && std::abs(es[combatIdx].pos.x - p.x) <= 1
+                        && std::abs(es[combatIdx].pos.y - p.y) <= 1;
+            }
+            if (validIdx && state_.load() == GameState::Exploration)
             {
                 combatWorldEnemyIdx_ = combatIdx;
                 pendingCombatEnemy_.store(-1);
