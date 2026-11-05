@@ -177,6 +177,11 @@ void CombatSystem::doEndTurn() {
 
 void CombatSystem::doFlee() {
     if (phase_ != CombatPhase::PlayerTurn) return;
+    if (std::any_of(enemies_.begin(), enemies_.end(),
+            [](const std::unique_ptr<Enemy>& e) { return e->isAlive() && e->isBoss(); })) {
+        logMessage("No puedes huir de un jefe!");
+        return;
+    }
     if (!hasEnoughAp(3)) {
         logMessage("PA insuficientes para huir (necesitas 3 PA).");
         return;
