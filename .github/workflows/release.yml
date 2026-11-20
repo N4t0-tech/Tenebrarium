@@ -96,7 +96,6 @@ jobs:
           cp -r assets package/tenebrarium-windows/
           # Copiar DLLs de MinGW necesarias para ejecutar en Windows sin MinGW instalado
           MINGW_BIN=/mingw64/bin
-          cp "$MINGW_BIN/zlib1.dll"            package/tenebrarium-windows/
           cp "$MINGW_BIN/libz-1.dll"           package/tenebrarium-windows/
           cp "$MINGW_BIN/libstdc++-6.dll"      package/tenebrarium-windows/
           cp "$MINGW_BIN/libwinpthread-1.dll"  package/tenebrarium-windows/
